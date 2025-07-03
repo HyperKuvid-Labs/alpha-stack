@@ -943,7 +943,6 @@ def get_project_files(metadata_dict, project_name) -> set:
     return project_files
 
 def validate_python_syntax(file_path: str, content: str) -> List[str]:
-    """Validate Python syntax and return list of issues"""
     issues = []
     
     try:
