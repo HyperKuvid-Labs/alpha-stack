@@ -1,260 +1,249 @@
-# Technical Stack Documentation: High-Performance File & Folder Processing Application
+# Technical Stack Documentation
 
-This document outlines the technical architecture, requirements, and implementation plan for a high-performance application designed to handle large-scale file and folder processing tasks, leveraging the strengths of both Python and Rust.
-
-## Technical Stack Analysis
+### Project Title
+**Project FusionFlow: High-Performance Data & File Processor**
 
 ### Core Technologies
 
-#### Programming Languages
-*   **Python (3.11+)**
-    *   **Justification:** Python will serve as the primary application layer. Its rich ecosystem of libraries, ease of use, and rapid development capabilities make it ideal for building the user interface (API or GUI), orchestrating tasks, and handling application-level logic. It acts as the user-friendly "glue" for the high-performance core.
-*   **Rust (Latest Stable Version)**
-    *   **Justification:** Rust will be used to build the core processing engine. Its focus on performance, memory safety, and fearless concurrency is perfectly suited for CPU-bound and I/O-bound tasks like scanning massive directories, processing file contents, and multi-threaded operations. This avoids Python's Global Interpreter Lock (GIL) limitations for true parallelism.
+#### **Programming Languages**
+-   **Python (3.11+)**
+    -   **Justification:** Python will serve as the primary language for the application's high-level logic, web API, and user interface. Its extensive ecosystem of libraries, rapid development cycle, and ease of integration make it ideal for building the user-facing components and orchestrating the overall workflow.
+-   **Rust (Latest Stable)**
+    -   **Justification:** Rust is chosen for performance-critical backend modules responsible for file and data processing. Its compile-time memory safety guarantees, fearless concurrency, and C-like performance without a garbage collector make it the perfect choice for CPU-bound and I/O-bound tasks involving large datasets, ensuring maximum throughput and efficiency.
 
-#### Frameworks and Libraries
-*   **Python Application Layer:**
-    *   **Web API Framework:** **FastAPI (0.104+)**
-        *   **Reasoning:** Provides a high-performance, asynchronous API framework that is easy to learn and integrates seamlessly with modern Python type hints. Ideal for building a web-based user interface or providing a programmatic API.
-    *   **CLI Framework:** **Typer (0.9+)**
-        *   **Reasoning:** Built on top of Click, Typer makes creating powerful and user-friendly Command Line Interfaces (CLIs) incredibly simple, using standard Python type hints. This is an excellent option for a developer-focused or automation-centric interface.
-    *   **Python-Rust Bridge:** **PyO3 (0.20+)**
-        *   **Reasoning:** The de-facto standard for creating Python extension modules in Rust. It provides safe, ergonomic, and efficient bindings between the two languages.
-    *   **Build & Packaging:** **Maturin**
-        *   **Reasoning:** A build tool specifically designed for building and publishing Rust-powered Python packages. It integrates with `cargo` and `pip`, dramatically simplifying the complex process of compiling the Rust core into a Python-installable wheel.
+#### **Frameworks & Libraries**
+-   **Python Stack**
+    -   **FastAPI:** A modern, high-performance web framework for building the REST API. Its asynchronous nature (built on Starlette and Uvicorn) allows for high concurrency, and its automatic data validation (via Pydantic) and API documentation (Swagger/OpenAPI) significantly accelerate development.
+    -   **PyO3 & Maturin:** The cornerstone for Python-Rust integration. `PyO3` provides Rust bindings for Python, allowing us to expose Rust functions and data structures as a native Python module. `Maturin` is the build tool used to compile the Rust code into a Python wheel for seamless distribution and installation.
+    -   **Celery & Redis:** A robust distributed task queue system. `Celery` will be used to offload long-running file processing jobs to background workers, preventing the API from blocking. `Redis` will serve as the fast, in-memory message broker for Celery and as a general-purpose cache.
+    -   **Streamlit:** A framework for building interactive web applications for data science and machine learning. It's chosen for its simplicity and speed in creating a user-friendly interface for uploading files, triggering jobs, and visualizing results.
+    -   **Pydantic:** Used for data validation, serialization, and settings management. It integrates seamlessly with FastAPI and ensures data integrity throughout the application.
 
-*   **Rust Core Engine:**
-    *   **Parallelism:** **Rayon (1.8+)**
-        *   **Reasoning:** A data-parallelism library that makes it incredibly easy to convert sequential computations (like iterating over a list of files) into parallel ones, automatically leveraging all available CPU cores.
-    *   **Asynchronous I/O:** **Tokio (1.33+)**
-        *   **Reasoning:** An asynchronous runtime for Rust. Crucial for non-blocking file I/O, allowing the application to handle thousands of concurrent file operations efficiently without waiting for each one to complete.
-    *   **Directory Traversal:** **Walkdir (2.4+)** or **ignore (0.4+)**
-        *   **Reasoning:** `walkdir` is a highly efficient library for recursively walking directory trees. The `ignore` crate builds on this with built-in support for respecting `.gitignore`-like rules, which is often a desirable feature.
+-   **Rust Stack**
+    -   **Rayon:** A data-parallelism library for Rust. It makes it incredibly easy to convert sequential computations (like processing lines in a file or items in a collection) into parallel ones, fully leveraging multi-core processors.
+    -   **Tokio:** An asynchronous runtime for Rust. It will be used for high-performance, non-blocking file I/O, enabling the system to handle thousands of concurrent file operations efficiently.
+    -   **Serde:** A powerful framework for serializing and deserializing Rust data structures efficiently. It will be used for handling data formats like JSON, Bincode, or others when passing data or reading structured files.
+    -   **jwalk / walkdir:** High-performance libraries for recursively walking directory trees. `jwalk` is particularly well-suited for parallel traversal.
 
-#### Database Systems and Data Storage Solutions
-*   **Primary Data:** The **local or network file system** is the primary data source. The architecture is designed to operate directly on files and folders.
-*   **Metadata & Caching:** **SQLite (via Python's `sqlite3` or Rust's `rusqlite`)**
-    *   **Reasoning:** For storing metadata, caching results of previous scans, or managing application state, SQLite offers a lightweight, serverless, and highly reliable embedded database solution. It requires no separate server setup and is perfect for both desktop and server-side applications.
-*   **Scalable Storage (Optional):** **Amazon S3 / Google Cloud Storage**
-    *   **Reasoning:** If the application needs to process datasets stored in the cloud, the Rust core can use the official cloud provider SDKs (e.g., `aws-sdk-rust`) for direct, high-performance access to object storage.
+#### **Databases & Storage**
+-   **Object Storage: MinIO / AWS S3**
+    -   **Rationale:** For storing large, unstructured datasets (the files to be processed), an object storage solution is ideal. It offers virtually limitless scalability, high durability, and is cost-effective. MinIO provides an S3-compatible interface that can be self-hosted for development or on-premise deployments, while AWS S3 (or GCP/Azure equivalents) offers a managed, scalable cloud solution.
+-   **Metadata Database: PostgreSQL (15+)**
+    -   **Rationale:** A relational database is required to store structured metadata about files, processing jobs, user information, and results. PostgreSQL is chosen for its robustness, reliability (ACID compliance), and powerful feature set, including JSONB support for semi-structured data and full-text search capabilities for querying file metadata.
+-   **Cache & Message Broker: Redis (7.x)**
+    -   **Rationale:** Redis serves two critical roles: as a high-speed, in-memory message broker for the Celery task queue and as a distributed cache for frequently accessed data (e.g., job statuses, user sessions), reducing load on the primary PostgreSQL database.
 
-#### Infrastructure and Deployment Platforms
-*   **Containerization:** **Docker**
-    *   **Reasoning:** Encapsulates the application, its Python environment, and the compiled Rust library into a portable, reproducible container. This simplifies development, testing, and deployment across different environments. A multi-stage Dockerfile is recommended to keep the final image lean.
-*   **Orchestration (for Web Service):** **Kubernetes** or **AWS ECS/Google Cloud Run**
-    *   **Reasoning:** If the FastAPI-based application needs to scale to handle high request volumes, a container orchestrator can manage deploying, scaling, and networking multiple instances of the application container.
-*   **CI/CD:** **GitHub Actions / GitLab CI**
-    *   **Reasoning:** To automate the entire build, test, and deployment pipeline. This includes linting, running unit and integration tests for both Python and Rust, building the Rust wheel with `maturin`, building the Docker image, and deploying to the target platform.
+#### **Infrastructure & Deployment**
+-   **Containerization: Docker & Docker Compose**
+    -   **Rationale:** Docker will be used to containerize the Python application, Rust build environment, and all backing services (PostgreSQL, Redis). This ensures a consistent, reproducible environment across development, testing, and production. Docker Compose will orchestrate multi-container setups for local development.
+-   **Orchestration: Kubernetes (K8s)**
+    -   **Rationale:** For production deployments, Kubernetes is the de-facto standard for container orchestration. It will manage the deployment, scaling, and health of our application components. Its Horizontal Pod Autoscaler can be configured to automatically scale the number of Celery worker pods based on the length of the Redis queue, ensuring efficient resource utilization.
+-   **CI/CD: GitHub Actions / GitLab CI**
+    -   **Rationale:** A CI/CD pipeline is essential for automation and quality assurance. GitHub Actions or GitLab CI will be used to automate the process of linting, testing, building the Rust-Python wheel, containerizing the application, and deploying it to staging and production environments.
 
 ---
 
 ## Architecture Overview
 
-### System Architecture Pattern
-The recommended architecture is a **Monolithic Application with a Core Library**.
+### System Design Pattern
+The architecture will follow a **Hybrid Monolith with a Worker/Queue Pattern**. The main application (API server and UI) is developed as a single, cohesive unit for simplicity, while the computationally expensive processing tasks are decoupled and handled by a scalable pool of background workers. This design provides a good balance between development velocity and operational scalability.
 
-*   **Description:** The main application logic, API endpoints, and user interaction are handled by a single Python service (the monolith). The performance-intensive, low-level file operations are delegated to a tightly integrated, high-performance Rust library (the core).
-*   **Justification:** This pattern combines the rapid development speed of Python with the raw performance of Rust without the operational complexity of a full microservices architecture. It's a pragmatic and highly effective approach for this specific use case.
+### Components & Data Flow
+
+1.  **Client (Web UI / CLI):** A user interacts with the Streamlit web UI to select a directory or upload files for processing.
+2.  **API Server (FastAPI):**
+    -   Receives the API request (e.g., `/jobs`).
+    -   Authenticates the user and validates the request payload using Pydantic.
+    -   Creates a new job record in the **PostgreSQL** database with a `PENDING` status.
+    -   Pushes a task message containing the job ID and parameters onto the **Redis** queue.
+    -   Returns the job ID to the client immediately.
+3.  **Task Queue (Celery & Redis):** Redis holds the queue of tasks. Celery brokers manage distributing these tasks to available workers.
+4.  **Celery Workers (Python & Rust):**
+    -   A pool of worker processes constantly listens for new tasks on the Redis queue.
+    -   Upon receiving a task, a worker fetches the job details from PostgreSQL.
+    -   The Python worker code invokes the high-performance **Rust Core Library** via PyO3 bindings, passing file paths or data references.
+    -   The **Rust Core Library** performs the heavy lifting: parallel directory traversal (`jwalk`), multi-threaded file parsing (`Rayon`), and data transformation. It reads source files from and writes processed files to **Object Storage (S3/MinIO)**.
+    -   As processing progresses, the worker updates the job status and any resulting metadata in the **PostgreSQL** database.
+5.  **Data Flow for Status Update:**
+    -   The Client UI periodically polls an API endpoint (e.g., `/jobs/{job_id}/status`).
+    -   The API Server queries the PostgreSQL database for the current job status and returns it to the client, providing real-time feedback.
 
 
 
 
-### Component Relationships and Data Flow
-1.  **User Interaction:** The user interacts with the system via a defined interface (e.g., a Web UI, a CLI, or a REST API call).
-2.  **Python Application Layer:** The Python (FastAPI/Typer) application receives the user's request (e.g., "Find all `.log` files over 100MB in `/var/data`"). It validates the input and prepares the parameters for the core engine.
-3.  **Python-to-Rust Call (FFI):** The Python layer calls a function in the compiled Rust library via the `PyO3` bridge, passing arguments like the target path and filtering criteria.
-4.  **Rust Core Engine:**
-    *   The Rust function takes control. It uses `walkdir` to efficiently traverse the directory structure.
-    *   It uses a `rayon` parallel iterator to process directory entries across multiple CPU cores simultaneously.
-    *   For each file, it checks if it meets the filter criteria (extension, size, etc.).
-    *   Results are collected into a Rust data structure that is designed to be efficiently converted back to a Python object.
-5.  **Rust-to-Python Return:** The Rust engine returns the results (e.g., a list of file paths) back to the Python layer. Errors from the Rust side are properly converted into Python exceptions.
-6.  **Response to User:** The Python application layer receives the data, formats it as needed (e.g., as a JSON response), and returns it to the user.
-
-### Integration Patterns and APIs
-*   **Primary Integration:** The Foreign Function Interface (FFI) between Python and Rust is the critical integration point. `PyO3` handles the translation of data types (e.g., Python `str` to Rust `String`, Python `list` to Rust `Vec`).
-*   **External API:** If a web interface is chosen, the application will expose a **RESTful API** over HTTP. Endpoints will be designed around resources (e.g., `/scan`, `/jobs`, `/results`).
+### Integration & APIs
+-   **Internal API (Python <> Rust):** The integration between Python and Rust will be achieved through **PyO3**. This creates a low-overhead, in-process binding, where Python can call Rust functions as if they were native Python functions. This avoids network latency and is critical for performance.
+-   **External API (REST):** The **FastAPI** application will expose a RESTful API for all external interactions. This includes job submission, status tracking, results retrieval, and user management. The API will be self-documenting via OpenAPI, making it easy for the frontend UI or third-party applications to consume.
 
 ---
 
 ## Requirements Documentation
 
 ### Functional Requirements
-*   **FR-1: Directory Scanning:** The system must be able to recursively scan a given directory path.
-*   **FR-2: File Filtering:** Users must be able to filter files based on criteria such as:
-    *   File extension (e.g., `.txt`, `.jpg`).
-    *   File size (e.g., greater than, less than).
-    *   Modification date (e.g., modified in the last 7 days).
-    *   File name patterns (regex or glob).
-*   **FR-3: Batch Operations:** The system must be able to perform batch operations on filtered files, including:
-    *   Batch renaming.
-    *   Batch moving/copying.
-    *   Generating a manifest or report of the files.
-*   **FR-4: Progress Reporting:** For long-running tasks, the system should provide progress feedback (e.g., via a callback mechanism from Rust to Python).
-*   **FR-5: Error Handling:** The system must gracefully handle errors like permission denied, file not found, and invalid user input.
+-   **File/Directory Ingestion:** Users can upload individual files, multiple files, or specify a path to a directory in object storage for processing.
+-   **Configurable Processing Jobs:** Users can define and select different processing pipelines (e.g., "extract text", "resize images", "aggregate CSV data").
+-   **Real-time Job Monitoring:** The UI provides a dashboard to view the status (pending, in-progress, completed, failed) and progress percentage of submitted jobs.
+-   **Results Management:** Users can view, filter, and download the output files and a summary report of completed jobs.
+-   **User Authentication:** A simple user authentication system to secure access to the application.
 
-#### User Stories
-*   **As a Data Scientist,** I want to quickly find all CSV files larger than 1GB in a nested project directory so that I can prepare them for analysis.
-*   **As a System Administrator,** I want to generate a report of all duplicate files on a shared network drive to identify wasted space.
-*   **As a Photographer,** I want to batch-rename thousands of RAW image files based on their creation date to organize my archive.
+#### Sample User Stories
+1.  **As a Data Analyst,** I want to specify a folder containing 10,000 CSV files and run an aggregation job, so that I can get a single summary file without crashing my local machine.
+2.  **As a System Administrator,** I want to point the application to a directory of server logs and run a "grep" job to extract all lines containing "ERROR" or "FATAL", so that I can quickly diagnose system issues.
+3.  **As a User,** I want to be notified via the UI when my long-running (30+ minutes) job is complete, so I do not have to keep the tab open and check manually.
 
 ### Non-Functional Requirements
-*   **NFR-1: Performance:** The system must be able to scan a directory containing 1 million files on a standard SSD in under 30 seconds. Batch processing should utilize all available CPU cores to maximize throughput.
-*   **NFR-2: Scalability:** The core engine must scale vertically with the number of CPU cores. The web application (if built) must be stateless to allow for horizontal scaling behind a load balancer.
-*   **NFR-3: Security:**
-    *   **Path Traversal:** All user-provided paths must be sanitized and validated to prevent path traversal attacks (`/../../../etc/passwd`).
-    *   **Permissions:** The application must operate with the minimum necessary file system permissions and handle access errors gracefully.
-    *   **Resource Management:** Implement safeguards against operations that could exhaust disk space or memory (e.g., "zip bomb" type scenarios).
-*   **NFR-4: Maintainability:**
-    *   Code must be well-documented, especially the Python-Rust interface.
-    *   A comprehensive test suite with high coverage for both Python and Rust codebases is required.
-    *   Dependency management must be strictly handled by `poetry` (or similar) for Python and `cargo` for Rust.
-*   **NFR-5: Monitoring:**
-    *   The application must produce structured logs (e.g., JSON format) for easy parsing.
-    *   For web services, expose a `/health` endpoint for health checks and a `/metrics` endpoint for Prometheus scraping.
+-   **Performance:**
+    -   API Response Time: < 200ms for all non-processing endpoints.
+    -   Throughput: The system must be able to process at least 1 TB of data per day. The Rust core should be able to saturate I/O and CPU resources on a worker node.
+-   **Scalability:**
+    -   The number of Celery workers must autoscale horizontally based on the size of the task queue.
+    -   The system should support up to 100 concurrent users submitting and monitoring jobs without performance degradation.
+-   **Security:**
+    -   **Data at Rest:** All data in object storage and the database must be encrypted.
+    -   **Data in Transit:** All communication (API, database connections) must be encrypted using TLS.
+    -   **Access Control:** Implement Role-Based Access Control (RBAC) to differentiate between user and admin roles.
+    -   **Secrets Management:** Use a secure vault (e.g., HashiCorp Vault, AWS Secrets Manager) for storing database credentials, API keys, and other secrets.
+-   **Reliability & Availability:**
+    -   The system should achieve 99.9% uptime.
+    -   Processing jobs must be durable. Failed jobs due to transient errors should be automatically retried up to 3 times.
+-   **Monitoring & Observability:**
+    -   **Metrics:** Instrument the application with Prometheus to collect key metrics (e.g., job queue length, processing time, error rates).
+    -   **Dashboards:** Use Grafana to visualize metrics from Prometheus.
+    -   **Logging:** Centralized logging using an ELK Stack (Elasticsearch, Logstash, Kibana) or Grafana Loki for easy searching and analysis.
+    -   **Alerting:** Configure Alertmanager to send notifications (e.g., via Slack or PagerDuty) for critical events like high failure rates or a stalled queue.
 
 ### Technical Constraints
-*   The primary interface between Python and Rust must be managed via `PyO3` and `maturin` to ensure maintainability.
-*   The project will be developed in a monorepo to simplify dependency management and cross-language development.
-*   Initial development will target Linux and macOS environments, with Windows support as a secondary goal.
+-   **Core Technology Mandate:** The solution must use Python for high-level orchestration and Rust for performance-critical processing modules.
+-   **Resource Limitations:** The initial deployment will be on a fixed budget, necessitating a focus on cost-effective cloud services and efficient resource utilization (e.g., using spot instances for worker nodes).
+-   **Time-to-Market:** The initial MVP with core processing capabilities should be delivered within 3 months.
 
 ---
 
 ## Implementation Recommendations
 
 ### Development Approach
-*   **Methodology: Agile (Scrum)**
-    *   Work will be organized into 2-week sprints.
-    *   Each sprint will aim to deliver a small, vertical slice of functionality (e.g., implementing a single filter option from the UI down to the Rust core).
-    *   This iterative approach allows for continuous feedback and adaptation.
-*   **Testing Strategy:**
-    *   **Rust Unit Tests:** Use `#[test]` modules within the Rust source to test individual functions and logic in isolation (e.g., testing a regex filter function).
-    *   **Python Unit Tests:** Use `pytest` to test the API endpoints, input validation, and Python-side logic. Mock the Rust library calls during these tests.
-    *   **Integration Tests:** Write tests in `pytest` that call the actual compiled Rust library to verify the end-to-end correctness of the Python-Rust bridge.
-    *   **Performance Benchmarking:** Use tools like `hyperfine` to benchmark the Rust core functions and track performance regressions over time.
-*   **Deployment Pipeline (CI/CD):**
-    1.  **Commit:** Developer pushes code to a feature branch.
-    2.  **Pull Request:** A PR triggers the CI pipeline.
-    3.  **Lint & Format:** Run `clippy` and `rustfmt` on Rust code; run `ruff` and `black` on Python code.
-    4.  **Test:** Run `cargo test` and `pytest`.
-    5.  **Build:** If tests pass, the pipeline builds the release-optimized Rust wheel using `maturin build --release`.
-    6.  **Containerize:** A multi-stage Dockerfile copies the built wheel and Python source code into a clean image.
-    7.  **Push:** The final Docker image is tagged and pushed to a container registry (e.g., Docker Hub, AWS ECR).
-    8.  **Deploy:** Merging to the `main` branch triggers a deployment of the new image to the staging/production environment.
+-   **Methodology: Agile (Scrum)**
+    -   Work will be organized into 2-week sprints.
+    -   Each sprint will aim to deliver a vertical slice of functionality (e.g., from UI button to Rust processing and back).
+    -   Daily stand-ups, sprint planning, and retrospectives will ensure alignment and continuous improvement.
+-   **Testing Practices:**
+    -   **Rust Unit & Integration Tests:** Use `#[cfg(test)]` modules in Rust. Test business logic and edge cases thoroughly. Use property-based testing (`proptest`) for robust input validation.
+    -   **Python Unit & Integration Tests:** Use `pytest`. Mock external services (database, S3) to isolate components during testing.
+    -   **Python-Rust Boundary Tests:** Create Python tests that specifically invoke the compiled Rust module to ensure the `PyO3` interface works as expected.
+    -   **End-to-End (E2E) Tests:** Use a framework like `Playwright` to automate browser interactions and test complete user flows.
+    -   **CI-Driven Testing:** All tests must be executed automatically in the CI pipeline on every commit.
+
+### CI/CD Design
+-   **Tool:** **GitHub Actions**
+-   **Workflow Stages:**
+    1.  **Lint & Format:** On every push, run linters (`clippy` for Rust, `ruff`/`black` for Python).
+    2.  **Test:** Run all unit and integration tests for both languages in parallel jobs.
+    3.  **Build:**
+        -   Compile the Rust library into a Python wheel using `maturin build --release`.
+        -   Build the final application Docker image, copying the Python source code and the compiled Rust wheel.
+    4.  **Publish:** Push the tagged Docker image to a container registry (e.g., AWS ECR, Docker Hub).
+    5.  **Deploy:** On a merge to `main` or a git tag, trigger a deployment script (e.g., `kubectl apply`) to update the application in the staging/production Kubernetes cluster.
 
 ### Risk Assessment
-*   **Technical Risk 1: Python-Rust FFI Complexity**
-    *   **Description:** Managing data types, error handling, and memory across the FFI boundary can be error-prone.
-    *   **Mitigation:**
-        *   Define clear, simple data structures for communication. Avoid complex nested types where possible.
-        *   Implement a robust error-handling strategy where Rust errors are converted into specific Python exceptions.
-        *   Thoroughly document the function signatures and expected data types in the `lib.rs` file.
-*   **Technical Risk 2: Build and Dependency Hell**
-    *   **Description:** Juggling two languages, two package managers, and a compiler can lead to a complex and fragile build environment.
-    *   **Mitigation:**
-        *   Strictly use `maturin` as the single source of truth for building the mixed-language package.
-        *   Use a `pyproject.toml` file to define the project structure for `maturin`.
-        *   Keep Python and Rust dependencies locked (`poetry.lock`, `Cargo.lock`) and committed to version control.
-        *   Automate the entire build process in the CI/CD pipeline to ensure consistency.
-*   **Alternative Technology Options:**
-    *   **Go (Golang):** Another high-performance language. While fast, its CGO-based FFI with Python is generally considered less ergonomic and performant than Rust's `PyO3`.
-    *   **Cython:** Allows writing C-like extensions directly in a Python-like syntax. It's a good option but doesn't offer the same level of memory safety guarantees and modern tooling as Rust.
+-   **Risk 1: Python-Rust Interface Overhead**
+    -   **Description:** Inefficient data serialization/deserialization between Python and Rust can become a performance bottleneck, negating the benefits of using Rust.
+    -   **Mitigation:**
+        -   Avoid passing large data structures by value. Instead, pass file paths and let Rust handle the I/O.
+        -   For in-memory data, use efficient, zero-copy formats like **Apache Arrow** which has excellent support in both Python and Rust.
+-   **Risk 2: Build & Dependency Complexity**
+    -   **Description:** Managing a hybrid Rust/Python build environment can be complex and a source of friction for new developers.
+    -   **Mitigation:**
+        -   Use `maturin` to standardize the build process.
+        -   Heavily document the development setup and build process in the `README.md`.
+        -   Provide a `docker-compose.yml` that fully encapsulates the development environment, removing the need for local toolchain installation.
+-   **Risk 3: Premature Optimization**
+    -   **Description:** Spending too much time optimizing Rust code that is not a real-world bottleneck.
+    -   **Mitigation:**
+        -   Implement profiling early in the development cycle. Use tools like `perf` on Linux and `flamegraph` to identify actual hot spots in the Rust code before attempting optimization.
+        -   Focus first on a correct and clean implementation, then optimize based on data.
+
+#### Alternate Technologies
+-   **Instead of Celery:** **Dask**
+    -   **Pros:** Better suited for complex, graph-based numerical computations and native to the Python data science ecosystem.
+    -   **Cons:** More complex to set up and manage than Celery for simple, independent task queuing.
+-   **Instead of Streamlit:** **Dash** or **React/Vue**
+    -   **Pros:** Dash offers more control over component layout. A full frontend framework like React provides maximum flexibility for a bespoke UI.
+    -   **Cons:** Both have a much steeper learning curve than Streamlit and would increase development time for the UI.
 
 ---
 
 ## Getting Started
 
-### Prerequisites and Setup
-1.  Install **Python 3.11+**.
-2.  Install the **Rust toolchain** via `rustup`: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-3.  Install **Poetry** for Python dependency management: `pip install poetry`
-4.  Install **Maturin** in a global or virtual environment: `pip install maturin`
+### Prerequisites
+-   **Local Machine:** Python 3.11+, Rust toolchain (`rustup`), Docker, and Docker Compose.
+-   **Python Tools:** `pip install "poetry>=1.2"` and `pip install "maturin>=1.0"`.
+-   **Required Skills:** Proficiency in Python and Rust, familiarity with Docker and basic shell commands.
 
-### Initial Project Structure
+### Project Structure
+A monorepo structure is recommended to keep the Python and Rust code in a single repository.
 
-A monorepo structure is recommended. Use `poetry new --src my_app` and `cargo new --lib rust_core` to start.
-
-```plaintext
-/high-performance-filer/
-├── .github/
-│   └── workflows/
-│       └── ci.yml             # GitHub Actions CI/CD pipeline
-├── pyproject.toml             # Poetry and Maturin configuration
-├── rust_core/
-│   ├── Cargo.toml             # Rust dependencies (pyo3, rayon, etc.)
-│   └── src/
-│       └── lib.rs             # Core Rust logic and PyO3 bindings
-└── src/
-    └── my_app/
-        ├── __init__.py
-        ├── main.py              # FastAPI or Typer application entrypoint
-        └── api/                 # API modules
+```
+fusionflow/
+├── .github/workflows/ci.yml   # CI/CD pipeline definition
+├── .vscode/                   # Recommended editor settings
+├── app/                       # Python application source
+│   ├── api/                   # FastAPI routes and schemas
+│   ├── core/                  # Core logic, settings, db models
+│   ├── workers/               # Celery worker task definitions
+│   └── ui.py                  # Streamlit application entrypoint
+├── crates/                    # Rust workspace for all crates
+│   └── fusionflow-core/       # The core Rust processing library
+│       ├── src/
+│       └── Cargo.toml
+├── tests/                     # Python tests
+├── .env.example               # Example environment variables
+├── .gitignore
+├── docker-compose.yml         # For local development environment
+├── Dockerfile                 # For building the production application
+├── pyproject.toml             # Python project definition (PEP 621, maturin)
+└── README.md                  # Project overview and setup instructions
 ```
 
-### Key Configuration Requirements
-
-**`pyproject.toml` (Root Directory):**
-This file configures both the Python project (with Poetry) and the Rust extension (with Maturin).
+### Initial Scaffolding
+1.  Initialize the Python project with `poetry new --src fusionflow`.
+2.  Inside `fusionflow/`, create the `crates/fusionflow-core` directory and initialize it with `cargo new fusionflow-core --lib`.
+3.  Configure `pyproject.toml` to use `maturin` as the build system and link it to the `fusionflow-core` crate.
 
 ```toml
-[tool.poetry]
-name = "my-app"
-version = "0.1.0"
-description = "High-performance file processing."
-authors = ["Your Name <you@example.com>"]
-packages = [{include = "my_app", from = "src"}]
+# In pyproject.toml
+[build-system]
+requires = ["maturin>=1.0"]
+build-backend = "maturin"
 
-[tool.poetry.dependencies]
-python = "^3.11"
-fastapi = "^0.104.1"
-uvicorn = "^0.24.0"
-# The rust_core extension will be added here after the first build
-
-[tool.maturin]
-features = ["pyo3/extension-module"]
-module-name = "my_app.rust_core" # How python will import it
+[project]
+name = "fusionflow"
+requires-python = ">=3.11"
+# ... other metadata
 ```
 
-**`rust_core/Cargo.toml`:**
-This file defines the Rust crate's dependencies and tells Cargo to build a C-compatible dynamic library for Python.
+### Configuration
+-   **Environment Variables:** Application configuration will be managed via environment variables. Use `pydantic-settings` to load them into a typed settings object.
+-   **Local Development:** Create a `.env` file in the project root by copying `.env.example`. This file will be loaded by Docker Compose to configure the local services.
+-   **Secrets:** For production, environment variables should be injected securely into the Kubernetes pods using K8s Secrets, which can be populated by a tool like HashiCorp Vault or AWS Secrets Manager.
 
-```toml
-[package]
-name = "rust_core"
-version = "0.1.0"
-edition = "2021"
+```sh
+# .env.example
+# Application Settings
+LOG_LEVEL=INFO
 
-[lib]
-name = "rust_core"
-crate-type = ["cdylib"]  # Compile to a C-style dynamic library
+# PostgreSQL
+POSTGRES_USER=fusionflow
+POSTGRES_PASSWORD=secret
+POSTGRES_DB=fusionflow_db
+DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
 
-[dependencies]
-pyo3 = { version = "0.20.0", features = ["extension-module"] }
-rayon = "1.8.0"
-walkdir = "2.4.0"
-```
+# Redis
+REDIS_URL=redis://redis:6379/0
 
-**`rust_core/src/lib.rs` (Initial Example):**
-
-```rust
-use pyo3::prelude::*;
-use std::fs;
-
-/// A simple function to count files in a directory.
-#[pyfunction]
-fn count_files(path: &str) -> PyResult<usize> {
-    // In a real implementation, use walkdir for recursion and rayon for parallelism.
-    let count = fs::read_dir(path)?
-        .filter_map(Result::ok)
-        .filter(|entry| entry.path().is_file())
-        .count();
-    Ok(count)
-}
-
-/// A Python module implemented in Rust.
-#[pymodule]
-fn rust_core(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(count_files, m)?)?;
-    Ok(())
-}
+# Object Storage (MinIO)
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=minioadmin
+S3_ENDPOINT_URL=http://minio:9000
+AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER}
+AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
 ```
