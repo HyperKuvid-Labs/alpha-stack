@@ -111,7 +111,7 @@ def get_project_name(ts: str) -> str:
 
     return only the project name, no additional text or explanations.
     """
-    resp = genai.GenerativeModel("gemini-2.5-pro-preview-05-06").generate_content(
+    resp = genai.GenerativeModel("gemini-2.5-flash-preview-05-20").generate_content(
         contents=prompt
     )
     return resp.text
