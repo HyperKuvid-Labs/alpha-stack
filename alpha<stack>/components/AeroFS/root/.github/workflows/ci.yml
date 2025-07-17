@@ -1,0 +1,112 @@
+name: AeroFS CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Poetry
+      run: |
+        pip install poetry
+        poetry config virtualenvs.in-project true
+        poetry env use python3.11
+
+    - name: Set up Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+        components: rustfmt, clippy
+
+    - name: Cache Cargo dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          rust_core/target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('rust_core/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+
+    - name: Cache Poetry dependencies
+      uses: actions/cache@v4
+      with:
+        path: .venv
+        key: ${{ runner.os }}-poetry-${{ hashFiles('pyproject.toml', 'poetry.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-poetry-
+
+    - name: Install Python dependencies
+      run: poetry install --no-root --sync
+
+    - name: Lint and Format Python code
+      run: |
+        poetry run black --check app/ tests/
+        poetry run ruff check app/ tests/
+
+    - name: Lint and Format Rust code
+      run: |
+        cargo fmt --check --manifest-path rust_core/Cargo.toml
+        cargo clippy -- -D warnings --manifest-path rust_core/Cargo.toml
+
+    - name: Run Python tests
+      run: poetry run pytest
+
+    - name: Run Rust tests
+      run: cargo test --manifest-path rust_core/Cargo.toml
+
+    - name: Build Rust library and Python wheel
+      run: |
+        pip install maturin
+        maturin build --release -m rust_core --interpreter python --out dist
+
+    - name: Build Docker image
+      run: docker build -t aerofs-app:${{ github.sha }} .
+
+    - name: Configure AWS credentials
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+
+    - name: Log in to Amazon ECR
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Push Docker image to ECR
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: |
+        ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY="aerofs-app"
+        IMAGE_TAG=${{ github.sha }}
+        docker tag aerofs-app:${{ github.sha }} $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker tag aerofs-app:${{ github.sha }} $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+    - name: Deploy to AWS ECS
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: |
+        echo "ECS deployment step would be configured here."
+        echo "Example: aws ecs update-service --cluster <your-cluster> --service <your-service> --force-new-deployment"

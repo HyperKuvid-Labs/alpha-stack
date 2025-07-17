@@ -1211,59 +1211,6 @@ def refine_for_comprehensive_fixes(file_content, changes_needed, validation_issu
     cleaned_content = clean_ai_generated_code(response.text)
 
     return cleaned_content
-    prompt = f"""
-    You are an expert Django developer.
-
-    Your task is to correct the following Django project file so that its **imports and references** properly match the declared couplings and dependency expectations, based on feedback from a static analysis and metadata validation.
-
-    ---
-
-    **Original File Content**:
-    {file_content}
-
-    ---
-
-    **Correction Feedback**:
-    {changes_needed}
-
-    ---
-
-    **Requirements**:
-    - Fix **only the issues mentioned in the Correction Feedback** — including:
-        - Missing or incorrect imports.
-        - Imports of non-existent files or modules — these should be removed.
-        - Typographical errors in import statements or class/function names.
-        - Syntactical errors in the file that prevent it from running correctly.
-    - Ensure that all imports and references are logically correct and semantically aligned with the metadata.
-    - If an import is missing, **add it**.
-    - If an import is incorrect, **correct it**.
-    - If an import is redundant or not used, **remove it**.
-    - If an import references a file/module that does not exist in the project, **remove or replace it** as appropriate.
-    - Do **not**:
-        - Add any new functionality unrelated to the correction.
-        - Modify logic outside of the specified corrections.
-        - Introduce any new features or classes beyond what's mentioned.
-    - Maintain original indentation, code structure, and Django best practices.
-
-    ---
-
-    **Output Format**:
-    - Return the corrected file content as raw Python code.
-    - No markdown, no comments, no extra text.
-
-    ---
-
-    **Reminder**: Be conservative and minimal. Fix only what’s necessary to make the file **logically correct and semantically aligned with the metadata**.
-    """
-
-    response = genai.GenerativeModel("gemini-2.5-flash-preview-05-20").generate_content(
-        contents=prompt
-    )
-
-    # Clean AI-generated code to remove markdown artifacts
-    cleaned_content = clean_ai_generated_code(response.text)
-
-    return cleaned_content
 
 def dfs_feedback_loop(
     root: TreeNode,

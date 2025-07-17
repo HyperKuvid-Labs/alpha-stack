@@ -38,12 +38,99 @@ class TreeNode:
                 show_descriptions
             )
 
-    def dfsTraverse(self):
-        print("Current node value: ", self.value)
-        for child in self.children:
-            child.dfsTraverse()
+    def dfs_traverse_debug(self, level=0, prefix="", show_stats=True):
 
-def generate_descriptions_for_tree(tree_root: TreeNode, project_context: str = ""):
+        indent = "  " * level
+        type_indicator = "📄 FILE" if self.is_file else "📁 DIR "
+        
+        # Truncate description for readability
+        desc_preview = ""
+        if self.description:
+            desc_preview = f" | {self.description[:40]}..." if len(self.description) > 40 else f" | {self.description}"
+        
+        # Show node information
+        print(f"{indent}{type_indicator} [{level:2d}] {self.value}{desc_preview}")
+        
+        # Show potential issues
+        issues = []
+        if not self.value or self.value.strip() == "":
+            issues.append("⚠️  EMPTY VALUE")
+        if self.is_file and self.children:
+            issues.append("⚠️  FILE HAS CHILDREN")
+        if not self.is_file and not self.children and self.value != "root":
+            issues.append("⚠️  EMPTY DIRECTORY")
+        if "#" in self.value:
+            issues.append("⚠️  CONTAINS HASH CHARACTER")
+        
+        if issues:
+            for issue in issues:
+                print(f"{indent}    {issue}")
+        
+        # Traverse children
+        for i, child in enumerate(self.children):
+            is_last = i == len(self.children) - 1
+            child_prefix = prefix + ("└── " if is_last else "├── ")
+            child.dfs_traverse_debug(level + 1, prefix + ("    " if is_last else "│   "), show_stats)
+        
+        # Show statistics at root level
+        if level == 0 and show_stats:
+            self._print_tree_statistics()
+
+    def _print_tree_statistics(self):
+        """Print comprehensive tree statistics"""
+        total_nodes = self._count_nodes()
+        file_nodes = self._count_files()
+        dir_nodes = total_nodes - file_nodes
+        max_depth = self._get_max_depth()
+        
+        print("\n" + "="*60)
+        print("TREE STATISTICS")
+        print("="*60)
+        print(f"📊 Total Nodes: {total_nodes}")
+        print(f"📁 Directories: {dir_nodes}")
+        print(f"📄 Files: {file_nodes}")
+        print(f"🔢 Max Depth: {max_depth}")
+        print(f"🌳 Tree Structure: {'✅ BALANCED' if max_depth <= 8 else '⚠️  VERY DEEP'}")
+        
+        # Check for common issues
+        issues_found = []
+        if total_nodes < 10:
+            issues_found.append("⚠️  Very few nodes - possible parsing failure")
+        if file_nodes == 0:
+            issues_found.append("⚠️  No files found - nothing will be generated")
+        if dir_nodes > file_nodes * 2:
+            issues_found.append("⚠️  Too many directories relative to files")
+        
+        if issues_found:
+            print("\n🚨 POTENTIAL ISSUES:")
+            for issue in issues_found:
+                print(f"   {issue}")
+        else:
+            print("\n✅ Tree structure looks healthy for file generation")
+        
+        print("="*60)
+
+    def _count_nodes(self):
+        """Count total nodes in tree"""
+        count = 1
+        for child in self.children:
+            count += child._count_nodes()
+        return count
+
+    def _count_files(self):
+        """Count file nodes in tree"""
+        count = 1 if self.is_file else 0
+        for child in self.children:
+            count += child._count_files()
+        return count
+
+    def _get_max_depth(self, current_depth=0):
+        """Get maximum depth of tree"""
+        if not self.children:
+            return current_depth
+        return max(child._get_max_depth(current_depth + 1) for child in self.children)
+
+def generate_descriptions_for_tree(tree_root: TreeNode, project_context: str, project_name: str):
     def get_file_description(node: TreeNode, full_path: str, project_context: str):
         try:
             genai.configure(api_key="AIzaSyAb56f8gsiKgrg7ry3UWcuiDbGQsLMFJj0")
@@ -59,7 +146,7 @@ def generate_descriptions_for_tree(tree_root: TreeNode, project_context: str = "
             Type: {'Directory' if is_directory else 'File'}
             Extension: {file_extension if file_extension else 'N/A'}
             
-            Project Context: {project_context}
+            Folder structure: {project_context}
             
             Parent Directory: {'/'.join(full_path.split('/')[:-1])}
             
@@ -67,6 +154,9 @@ def generate_descriptions_for_tree(tree_root: TreeNode, project_context: str = "
             1. Its name and location in the project structure
             2. Common software development patterns
             3. File extension and naming conventions
+
+            Or if needed to make it brief, please provide a brief description of the file/folder, focusing on its purpose and expected content.
+            If the file is a configuration or script file, include its expected role in the project.
             
             Focus on the purpose and responsibility, not implementation details.
             """
@@ -83,7 +173,7 @@ def generate_descriptions_for_tree(tree_root: TreeNode, project_context: str = "
     def traverse_and_describe(node: TreeNode, current_path: str = ""):
         full_path = f"{current_path}/{node.value}" if current_path else node.value
         
-        if node.value != "root":
+        if node.value != project_name and node.is_file:
             print(f"Generating description for: {full_path}")
             description = get_file_description(node, full_path, project_context)
             node.set_description(description)
@@ -229,7 +319,7 @@ def save_tree_with_descriptions(tree: TreeNode, project_name: str):
     
     print(f"Tree with descriptions saved to: {path}")
 
-def generate_fs(project_name : str, add_descriptions: bool = False):
+def generate_fs(project_name : str, add_descriptions: bool = True):
     path = pathlib.Path(os.getcwd()) / "docs" / "folder_structure.md"
     content = ""
     
@@ -255,13 +345,13 @@ def generate_fs(project_name : str, add_descriptions: bool = False):
     #this was useless, i will just use the project name from the ts file
     
     print("Generating file system tree from content...")
-    tree = generate_tree(content, project_name="root")
+    tree = generate_tree(content, project_name=project_name)
     
     if add_descriptions:
         print("Getting project context...")
         project_context = get_project_context()
         print("Generating AI descriptions for tree nodes...")
-        tree = generate_descriptions_for_tree(tree, project_context)
+        tree = generate_descriptions_for_tree(tree, project_context=content, project_name=project_name)
         
         save_tree_with_descriptions(tree, project_name)
     

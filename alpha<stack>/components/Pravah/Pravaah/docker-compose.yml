@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .  # Build context is the root of the project, enabling access to app/ and pravah_core/
+      dockerfile: Dockerfile # Refers to the main Dockerfile at the project root
+    container_name: pravah_app
+    ports:
+      - "8000:8000" # Expose FastAPI port
+    environment:
+      # Database connection details, sourced from the local .env file
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      # MinIO (S3-compatible) storage details, sourced from the local .env file
+      S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      # General application settings (example)
+      LOG_LEVEL: INFO
+      # Add any other application-specific environment variables required by config/settings.py
+    volumes:
+      # Mount the Python application source code for live reloading during development
+      - ./app:/app/app
+      # Mount the configuration directory for development changes
+      - ./config:/app/config
+      # Mount the Rust core engine source code. While Rust changes require a container rebuild,
+      # mounting allows easier local development and compilation.
+      - ./pravah_core:/app/pravah_core
+      # Optional: Mount a local data directory if the application writes files locally
+      # - ./data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy # Ensure the database is healthy before starting the app
+      minio:
+        condition: service_healthy # Ensure MinIO is healthy before starting the app
+    # Command to start the FastAPI application with live reloading
+    # This assumes the Dockerfile sets WORKDIR /app and copies Python code into /app/app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  db:
+    image: postgres:15-alpine # Use a lightweight PostgreSQL image
+    container_name: pravah_db
+    ports:
+      - "5432:5432" # Expose PostgreSQL port
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pravah_db_data:/var/lib/postgresql/data # Persist database data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s # Give the database a grace period to start up
+
+  minio:
+    image: quay.io/minio/minio:latest # Use the official MinIO Docker image
+    container_name: pravah_minio
+    ports:
+      - "9000:9000" # MinIO API endpoint
+      - "9001:9001" # MinIO Console (browser UI)
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - pravah_minio_data:/data # Persist MinIO data
+    command: server /data --console-address ":9001" # Start MinIO server and console
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  adminer: # Optional: A lightweight web-based database management tool
+    image: adminer:latest
+    container_name: pravah_adminer
+    ports:
+      - "8080:8080" # Expose Adminer UI port
+    depends_on:
+      db:
+        condition: service_healthy # Ensure the database is healthy before Adminer starts
+    environment:
+      ADMINER_DEFAULT_SERVER: db # Connects to the 'db' service name within the Docker network
+
+volumes:
+  pravah_db_data: # Named volume for PostgreSQL persistent data
+  pravah_minio_data: # Named volume for MinIO persistent data

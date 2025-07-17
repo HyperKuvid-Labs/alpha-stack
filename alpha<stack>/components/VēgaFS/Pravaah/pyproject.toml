@@ -1,0 +1,36 @@
+[project]
+name = "vegafs"
+version = "0.1.0"
+description = "VēgaFS: High-Performance File & Data Processing Engine"
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "sqlalchemy",
+    "psycopg2-binary",
+    "redis",
+    "aiofiles",
+    "typer[all]",
+]
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+module-name = "vegafs.rust_core"
+manifest-path = "../rust_core/Cargo.toml"
+
+[tool.pytest.ini_options]
+addopts = "--doctest-modules --durations=10"
+python_files = "test_*.py"
+
+[tool.black]
+line-length = 88
+target-version = ['py310']
+
+[tool.isort]
+profile = "black"

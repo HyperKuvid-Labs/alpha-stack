@@ -1,0 +1,108 @@
+[project]
+name = "pravah"
+version = "0.1.0"
+description = "High-Performance File & Data Processing Engine"
+authors = [{ name = "Pravah Team", email = "info@pravah.dev" }]
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+keywords = ["file-processing", "data-engine", "rust", "python", "fastapi"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering",
+    "Topic :: System :: Filesystems",
+]
+
+dependencies = [
+    "fastapi>=0.100.0,<0.101",
+    "uvicorn[standard]>=0.22.0,<0.23",
+    "pydantic>=2.0.0,<3.0.0",
+    "pydantic-settings>=2.0.0,<3.0.0",
+    "SQLAlchemy>=2.0.0,<3.0.0",
+    "psycopg2-binary>=2.9.0,<3.0.0",
+    "alembic>=1.11.0,<2.0.0",
+    "typer[all]>=0.9.0,<0.10",
+    "aiofiles>=23.1.0,<24.0.0",
+    "python-multipart>=0.0.6,<0.1.0",
+    "python-jose[cryptography]>=3.3.0,<4.0.0",
+    "passlib[bcrypt]>=1.7.0,<2.0.0",
+    "tenacity>=8.2.0,<9.0.0",
+    "boto3>=1.28.0,<2.0.0",
+    "python-dotenv>=1.0.0,<2.0.0",
+    "loguru>=0.7.0,<0.8.0",
+]
+
+[project.scripts]
+pravah = "app.cli:app"
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[tool.maturin]
+# Specifies the location of the Python source code to be included in the wheel.
+# The `app` directory will be packaged as a Python module.
+python-source = "app"
+# Defines the binding type for the Rust crate (PyO3 for Python bindings).
+bindings = "pyo3"
+# The name of the Python module that the Rust library will expose.
+# This should match the `name` field in `pravah_core/Cargo.toml`.
+module-name = "pravah_core"
+# Path to the Cargo.toml file for the Rust project.
+manifest-path = "pravah_core/Cargo.toml"
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+select = [
+    "E",  # Error
+    "F",  # Pyflakes
+    "B",  # Bugbear
+    "I",  # Isort
+    "W",  # Warning
+    "N",  # Naming convention
+    "D",  # Pydocstyle (optional, can be noisy, adjust as needed)
+    "UP", # Pyupgrade
+    "PL", # Pylint
+    "RUF", # Ruff-specific rules
+]
+ignore = [
+    "D100", # Missing docstring in public module
+    "D104", # Missing docstring in public package
+    "D105", # Missing docstring in public method
+    "D107", # Missing docstring in __init__
+    "PLR0913", # Too many arguments in function call (configurable)
+    "PLR0912", # Too many branches
+]
+src = ["app", "tests"]
+fix = true
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+strict_optional = true
+ignore_missing_imports = true # Temporarily set to true, should be resolved for prod
+
+[tool.pytest.ini_options]
+min_version = "7.0"
+addopts = "--strict-markers --no-header -q"
+testpaths = [
+    "tests",
+]
+pythonpath = ["."]
+asyncio_mode = "auto" # Required for pytest-asyncio to auto-detect and run async tests

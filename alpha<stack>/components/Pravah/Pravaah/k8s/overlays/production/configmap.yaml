@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pravah-config-production
+data:
+  APP_LOG_LEVEL: "INFO"
+  APP_S3_BUCKET_NAME: "pravah-production-data"
+  APP_MAX_CONCURRENT_FILE_PROCESSORS: "100"
+  APP_ENABLE_ADVANCED_METRICS: "true"

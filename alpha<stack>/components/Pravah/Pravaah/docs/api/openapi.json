@@ -1,0 +1,748 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Pravah: High-Performance File & Data Processing Engine API",
+    "version": "1.0.0",
+    "description": "API for Pravah, a high-performance engine for file and data processing. It allows users to submit, monitor, and retrieve results for various data processing jobs, leveraging Rust for core performance and Python for orchestration."
+  },
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "API Version 1"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Checks the health status of the API. Returns 'ok' if the service is running.",
+        "operationId": "health_check",
+        "tags": ["Monitoring"],
+        "responses": {
+          "200": {
+            "description": "API is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/register": {
+      "post": {
+        "summary": "Register a new user",
+        "description": "Creates a new user account with a unique username and email.",
+        "operationId": "register_user",
+        "tags": ["Users", "Authentication"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserRegisterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User successfully registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or user already exists (e.g., username/email taken)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/login": {
+      "post": {
+        "summary": "User login",
+        "description": "Authenticates a user with username and password, returning an access token.",
+        "operationId": "login_user",
+        "tags": ["Users", "Authentication"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserLoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/me": {
+      "get": {
+        "summary": "Get current user information",
+        "description": "Retrieves details of the authenticated user based on their JWT token.",
+        "operationId": "get_current_user",
+        "tags": ["Users"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current user details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized (missing or invalid token)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs": {
+      "post": {
+        "summary": "Create and start a new processing job",
+        "description": "Submits a new job to be processed by the Pravah engine. Returns the job ID and initial status.",
+        "operationId": "create_job",
+        "tags": ["Jobs"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Job successfully created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input (e.g., source/destination path format, unknown pipeline)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized (missing or invalid token)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}": {
+      "get": {
+        "summary": "Get job status",
+        "description": "Retrieves the current status and progress of a specific job by its ID.",
+        "operationId": "get_job_status",
+        "tags": ["Jobs"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The unique identifier of the job."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job status retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized (missing or invalid token)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Job not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/results": {
+      "get": {
+        "summary": "Get job results",
+        "description": "Retrieves the detailed results and summary statistics of a completed job.",
+        "operationId": "get_job_results",
+        "tags": ["Jobs"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The unique identifier of the job."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job results retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResultResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized (missing or invalid token)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Job not found or not yet completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/config": {
+      "get": {
+        "summary": "Get processing configurations",
+        "description": "Retrieves available processing pipelines and their configurable options, including JSON schema for parameters.",
+        "operationId": "get_processing_config",
+        "tags": ["Configuration"],
+        "responses": {
+          "200": {
+            "description": "Processing configurations retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessingConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "JobCreateRequest": {
+        "title": "JobCreateRequest",
+        "type": "object",
+        "required": ["source_path", "destination_path", "pipeline_name"],
+        "properties": {
+          "source_path": {
+            "type": "string",
+            "description": "Path to the source data (local filesystem path or S3 URI, e.g., 's3://my-bucket/input/').",
+            "example": "s3://my-bucket/input/data/"
+          },
+          "destination_path": {
+            "type": "string",
+            "description": "Path where processed data should be stored (local filesystem path or S3 URI, e.g., 's3://my-bucket/output/').",
+            "example": "s3://my-bucket/output/processed/"
+          },
+          "pipeline_name": {
+            "type": "string",
+            "description": "The name of the processing pipeline to apply (e.g., 'extract_headers', 'resize_images', 'compress_logs').",
+            "example": "extract_headers"
+          },
+          "options": {
+            "type": "object",
+            "description": "Additional pipeline-specific options in key-value pairs (follows the schema defined in /config for the chosen pipeline).",
+            "nullable": true,
+            "example": {
+              "image_quality": 85,
+              "target_size": "1024x1024"
+            }
+          }
+        }
+      },
+      "JobResponse": {
+        "title": "JobResponse",
+        "type": "object",
+        "required": ["job_id", "status", "source_path", "destination_path", "pipeline_name", "started_at"],
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the job.",
+            "example": "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["PENDING", "RUNNING", "COMPLETED", "FAILED"],
+            "description": "Current status of the job.",
+            "example": "RUNNING"
+          },
+          "source_path": {
+            "type": "string",
+            "description": "Path to the source data.",
+            "example": "s3://my-bucket/input/data/"
+          },
+          "destination_path": {
+            "type": "string",
+            "description": "Path where processed data should be stored.",
+            "example": "s3://my-bucket/output/processed/"
+          },
+          "pipeline_name": {
+            "type": "string",
+            "description": "Name of the processing pipeline applied.",
+            "example": "extract_headers"
+          },
+          "progress": {
+            "type": "number",
+            "format": "float",
+            "description": "Completion progress of the job (0.0 to 100.0).",
+            "minimum": 0,
+            "maximum": 100,
+            "example": 75.5
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the job started (ISO 8601 format).",
+            "example": "2023-10-27T10:00:00Z"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the job completed (ISO 8601 format, null if not completed).",
+            "nullable": true,
+            "example": null
+          },
+          "error_message": {
+            "type": "string",
+            "description": "Error message if the job failed.",
+            "nullable": true,
+            "example": null
+          }
+        }
+      },
+      "JobResultResponse": {
+        "title": "JobResultResponse",
+        "type": "object",
+        "required": ["job_id", "status", "output_location", "summary_statistics"],
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the job.",
+            "example": "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["COMPLETED", "FAILED"],
+            "description": "Final status of the job.",
+            "example": "COMPLETED"
+          },
+          "output_location": {
+            "type": "string",
+            "description": "Final destination path where results are stored.",
+            "example": "s3://my-bucket/output/processed/job_a1b2c3d4/"
+          },
+          "summary_statistics": {
+            "type": "object",
+            "description": "Summary of processed files, errors, and other metrics specific to the job.",
+            "properties": {
+              "total_files_processed": {
+                "type": "integer",
+                "example": 1500
+              },
+              "files_succeeded": {
+                "type": "integer",
+                "example": 1495
+              },
+              "files_failed": {
+                "type": "integer",
+                "example": 5
+              },
+              "total_size_processed_bytes": {
+                "type": "integer",
+                "example": 1024567890
+              },
+              "processing_time_seconds": {
+                "type": "number",
+                "format": "float",
+                "example": 360.75
+              },
+              "custom_metrics": {
+                "type": "object",
+                "description": "Optional: Additional metrics specific to the pipeline.",
+                "nullable": true
+              }
+            },
+            "example": {
+              "total_files_processed": 1500,
+              "files_succeeded": 1495,
+              "files_failed": 5,
+              "total_size_processed_bytes": 1024567890,
+              "processing_time_seconds": 360.75
+            }
+          },
+          "error_message": {
+            "type": "string",
+            "description": "Error message if the job failed.",
+            "nullable": true,
+            "example": null
+          }
+        }
+      },
+      "ProcessingConfigResponse": {
+        "title": "ProcessingConfigResponse",
+        "type": "object",
+        "required": ["pipelines"],
+        "properties": {
+          "pipelines": {
+            "type": "array",
+            "description": "List of available processing pipelines, each with its name, description, and accepted parameters schema.",
+            "items": {
+              "type": "object",
+              "required": ["name", "description", "parameters_schema"],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Unique name of the processing pipeline.",
+                  "example": "extract_headers"
+                },
+                "description": {
+                  "type": "string",
+                  "description": "A brief description of what the pipeline does.",
+                  "example": "Extracts the header row from CSV files, useful for schema analysis."
+                },
+                "parameters_schema": {
+                  "type": "object",
+                  "description": "A JSON Schema (OpenAPI Schema Object) defining the structure and validation rules for the 'options' parameter when creating a job with this pipeline.",
+                  "example": {
+                    "type": "object",
+                    "properties": {
+                      "delimiter": {
+                        "type": "string",
+                        "default": ",",
+                        "description": "The character used to separate fields in the CSV file."
+                      },
+                      "encoding": {
+                        "type": "string",
+                        "default": "utf-8",
+                        "description": "Character encoding of the CSV file."
+                      }
+                    },
+                    "required": ["delimiter"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "UserRegisterRequest": {
+        "title": "UserRegisterRequest",
+        "type": "object",
+        "required": ["username", "email", "password"],
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 50,
+            "example": "john_doe"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "john.doe@example.com"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "format": "password",
+            "description": "Minimum 8 characters, should include numbers and special characters.",
+            "example": "SecurePa$$w0rd123"
+          }
+        }
+      },
+      "UserLoginRequest": {
+        "title": "UserLoginRequest",
+        "type": "object",
+        "required": ["username", "password"],
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "Username or email of the user.",
+            "example": "john_doe"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "example": "SecurePa$$w0rd123"
+          }
+        }
+      },
+      "TokenResponse": {
+        "title": "TokenResponse",
+        "type": "object",
+        "required": ["access_token", "token_type"],
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "description": "JWT access token.",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+          },
+          "token_type": {
+            "type": "string",
+            "description": "Type of token (e.g., 'bearer').",
+            "example": "bearer"
+          }
+        }
+      },
+      "UserResponse": {
+        "title": "UserResponse",
+        "type": "object",
+        "required": ["id", "username", "email", "roles"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier of the user.",
+            "example": "f0e1d2c3-b4a5-6789-0123-456789abcdef"
+          },
+          "username": {
+            "type": "string",
+            "example": "john_doe"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "john.doe@example.com"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of roles assigned to the user (e.g., 'admin', 'user').",
+            "example": ["user", "job_submitter"]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the user account was created.",
+            "example": "2023-10-26T14:30:00Z"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the user account was last updated.",
+            "nullable": true,
+            "example": null
+          }
+        }
+      },
+      "HTTPError": {
+        "title": "HTTPError",
+        "type": "object",
+        "properties": {
+          "detail": {
+            "type": "string",
+            "example": "Invalid authentication credentials"
+          }
+        }
+      },
+      "HTTPValidationError": {
+        "title": "ValidationError",
+        "type": "object",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidationErrorItem"
+            }
+          }
+        }
+      },
+      "ValidationErrorItem": {
+        "title": "ValidationErrorItem",
+        "type": "object",
+        "required": ["loc", "msg", "type"],
+        "properties": {
+          "loc": {
+            "title": "Location",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT Authorization header using the Bearer scheme. Example: 'Bearer YOUR_TOKEN_HERE'"
+      }
+    }
+  }
+}

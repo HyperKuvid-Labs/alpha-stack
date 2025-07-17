@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vegafs-config-production
+data:
+  LOG_LEVEL: "INFO"
+  APP_ENVIRONMENT: "production"
+  DATABASE_HOST: "vegafs-postgresql"
+  REDIS_HOST: "vegafs-redis"
+  MAX_CONCURRENT_JOBS: "50"

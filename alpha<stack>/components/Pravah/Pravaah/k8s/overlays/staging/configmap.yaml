@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pravah-config
+data:
+  APP_ENVIRONMENT: "staging"
+  LOG_LEVEL: "INFO"
+  S3_BUCKET_NAME: "pravah-staging-bucket"
+  S3_ENDPOINT_URL: ""
+  # Other non-sensitive staging specific configurations can be added here
+  # E.g., FEATURE_FLAG_ALPHA: "true"

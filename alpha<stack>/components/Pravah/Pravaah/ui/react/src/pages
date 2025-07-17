@@ -1,0 +1,83 @@
+import Head from 'next/head';
+import Link from 'next/link';
+
+const HomePage: React.FC = () => {
+  return (
+    <>
+      <Head>
+        <title>Pravah - High-Performance Data Processing</title>
+        <meta name="description" content="Pravah: High-Performance File & Data Processing Engine" />
+        <link rel="icon" href="/favicon.ico" />
+      </Head>
+
+      <main style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: '2rem',
+        textAlign: 'center',
+        backgroundColor: '#f8f9fa',
+        color: '#343a40',
+        fontFamily: 'Arial, sans-serif'
+      }}>
+        <h1 style={{
+          fontSize: '3rem',
+          fontWeight: '700',
+          marginBottom: '1rem',
+          color: '#007bff'
+        }}>
+          Welcome to Pravah
+        </h1>
+
+        <p style={{
+          fontSize: '1.2rem',
+          maxWidth: '700px',
+          lineHeight: '1.6',
+          marginBottom: '2.5rem',
+          color: '#495057'
+        }}>
+          Pravah (Sanskrit for "flow" or "stream") is a cutting-edge, high-performance engine
+          designed for efficient file and data processing. Leveraging the power of Python for
+          orchestration and Rust for lightning-fast core operations, Pravah empowers you to
+          manage and transform large-scale data workflows seamlessly and reliably.
+        </p>
+
+        <div style={{
+          display: 'flex',
+          gap: '1.5rem'
+        }}>
+          <Link href="/jobs" style={{
+            padding: '0.9rem 1.8rem',
+            backgroundColor: '#007bff',
+            color: 'white',
+            borderRadius: '0.375rem',
+            textDecoration: 'none',
+            fontSize: '1.1rem',
+            fontWeight: '600',
+            transition: 'background-color 0.2s ease-in-out, transform 0.2s ease-in-out',
+            boxShadow: '0 4px 6px rgba(0, 123, 255, 0.2)'
+          }}>
+            Get Started with Jobs
+          </Link>
+          <Link href="/documentation" style={{
+            padding: '0.9rem 1.8rem',
+            backgroundColor: '#6c757d',
+            color: 'white',
+            borderRadius: '0.375rem',
+            textDecoration: 'none',
+            fontSize: '1.1rem',
+            fontWeight: '600',
+            transition: 'background-color 0.2s ease-in-out, transform 0.2s ease-in-out',
+            boxShadow: '0 4px 6px rgba(108, 117, 125, 0.2)'
+          }}>
+            Learn More
+          </Link>
+        </div>
+      </main>
+    </>
+  );
+};
+
+export default HomePage;

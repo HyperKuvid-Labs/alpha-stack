@@ -10,65 +10,70 @@ def generate_structure()->str:
         content = f.read()
     
     prompt = f"""
-    Based on the following tech stack and requirements documentation, generate a comprehensive, modular folder structure for the application:
+    You are a **senior software architect** and build-systems engineer.
 
-    {content}
+    Objective  
+    Generate a **complete, modular folder structure** that matches the project’s technology stack and requirements.
 
-    Requirements for the folder structure:
-    1. **Technology-Specific Organization**: Structure should reflect the actual tech stack mentioned (e.g., React frontend, Node.js backend, Python services)
-    2. **Modular Architecture**: Clear separation of concerns with logical grouping of related functionality
-    3. **Scalability**: Structure should support future growth and feature additions
-    4. **Industry Standards**: Follow best practices for the identified technology stack
-    5. **Environment Configuration**: Include proper setup for development, testing, and production environments
+    Inputs  
+    {content}   ← this it the full markdown from *tech_stack_reqs.md* here.
 
-    Include the following essential directories based on the tech stack:
-    - **Application Core**: Main business logic and application entry points
-    - **Frontend Components**: UI components, pages, assets, and styling (if applicable)
-    - **Backend Services**: API routes, controllers, middleware, and business logic
-    - **Database Layer**: Models, schemas, migrations, and database utilities
-    - **Authentication & Authorization**: User management, auth middleware, and security
-    - **Configuration Management**: Environment configs, settings, and constants
-    - **Testing Suite**: Unit tests, integration tests, and test utilities
-    - **Documentation**: API docs, user guides, and technical documentation
-    - **Deployment & DevOps**: Docker files, CI/CD configs, and deployment scripts
-    - **Utilities & Helpers**: Shared utilities, common functions, and helper modules
-    - **Static Assets**: Images, fonts, and other static resources (if needed)
-    - **External Integrations**: Third-party service integrations and API clients
+    Constraints  
+    1. **Technology-Specific** – Reflect every major language, framework, and tool called out.  
+    2. **Modular & Scalable** – Group related functionality; allow effortless future expansion.  
+    3. **Industry Standards** – Follow established best practices for each technology.  
+    4. **Environment Separation** – Distinct areas for development, testing, and production settings.  
+    5. **Essential Directories** – The tree **must include**:  
+    - Application Core  
+    - Frontend Components  
+    - Backend Services  
+    - Database Layer  
+    - Authentication & Authorization  
+    - Configuration Management  
+    - Testing Suite  
+    - Documentation  
+    - Deployment & DevOps  
+    - Utilities & Helpers  
+    - Static Assets (if applicable)  
+    - External Integrations  
 
-    Output Format:
-    - Use clear hierarchical indentation (2 spaces per level)
-    - Include relevant file extensions and key files
-    - Add brief inline comments for clarity where needed
-    - Structure should be immediately implementable
-    - Include __init__.py files for Python packages where appropriate
-    - Show configuration files, package.json, requirements.txt, etc. as relevant
+    Output Format  
+    • Use **exactly 2 spaces** per nesting level.  
+    • Start with a single top-level folder named **{{project-root}}/**.  
+    • Use **ASCII tree glyphs** (`├──`, `└──`) for readability.  
+    • End lines representing **files** with brief `# inline comments` (≤ 60 chars).  
+    • Include file extensions, config files (`package.json`, `pyproject.toml`, etc.), and every required `__init__.py`.  
+    • **Do NOT** add explanations, markdown fences, or extra commentary—return **only the tree**.
 
-    Example structure format:
-    project-root/
-    src/
-    core/
-    init.py
-    models.py
-    services.py
-    api/
-    init.py
-    routes/
-    init.py
-    auth.py
-    users.py
-    tests/
-    unit/
-    integration/
-    config/
-    settings.py
-    database.py
-    docs/
-    api/
-    user-guide/
+    Example (pattern only)  
+    project-root/  
+    src/  
+        core/  
+        __init__.py  
+        models.py            # Pydantic models  
+        services.py          # Business logic  
+        api/  
+        __init__.py  
+        routes/  
+            __init__.py  
+            auth.py            # Auth endpoints  
+    tests/  
+        unit/  
+        integration/  
+    config/  
+        settings.py            # Central settings  
+        database.py            # DB connections  
+    docs/  
+        api/  
+        user-guide/  
 
-    text
+    Process Guidance (internal)  
+    1. **Silently analyse** the tech stack and extract all tiers (frontend, backend, infra, etc.).  
+    2. Plan the hierarchy, ensuring each constraint is satisfied.  
+    3. Write the tree in the specified format.  
+    4. Double-check: no missing essential directories, no stray text.
 
-    Generate ONLY the folder structure - no additional explanations or text. And no comments besides the inline comments in the structure.
+    Return the folder structure **now**.
     """
 
     resp = genai.GenerativeModel("gemini-2.5-pro-preview-05-06").generate_content(

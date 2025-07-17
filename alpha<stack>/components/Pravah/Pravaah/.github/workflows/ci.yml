@@ -1,0 +1,90 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint_and_test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'poetry' # Cache Poetry's virtual environment
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: clippy # Install clippy for linting
+
+      - name: Install system dependencies for Rust/Python bindings
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-dev libssl-dev # python3-dev for maturin, libssl-dev for some Rust crates
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install Python dependencies
+        working-directory: ./pravah
+        run: poetry install --with dev --sync # Install project dependencies and dev dependencies, synchronize environment
+
+      - name: Run Python Linter (ruff)
+        working-directory: ./pravah
+        run: poetry run ruff check app tests config
+
+      - name: Run Rust Linter (clippy)
+        working-directory: ./pravah/pravah_core
+        run: cargo clippy --all-targets -- -D warnings # Check all targets (lib, bins, tests), treat warnings as errors
+
+      - name: Run Rust Tests
+        working-directory: ./pravah/pravah_core
+        run: cargo test # Run tests for the Rust crate
+
+      - name: Build Rust Wheel (pravah_core)
+        # Maturin builds the Python wheel from the Rust crate.
+        # It needs to be run from the `pravah_core` directory.
+        # The output wheel will be in `pravah_core/target/wheels/`.
+        working-directory: ./pravah/pravah_core
+        run: maturin build --release --locked --strip # Build in release mode, ensure lockfile, strip debug info
+
+      - name: Install pravah_core wheel into Python environment
+        working-directory: ./pravah
+        run: |
+          # Find the built wheel and install it into the current Python environment.
+          # The wheel is located relative to the `pravah` directory (where pyproject.toml is).
+          PIP_BREAK_SYSTEM_PACKAGES=1 pip install ./pravah_core/target/wheels/*.whl --force-reinstall
+
+      - name: Run Python Tests
+        working-directory: ./pravah
+        run: poetry run pytest tests/unit tests/integration # Run unit and integration tests for Python
+
+  build_docker_image:
+    runs-on: ubuntu-latest
+    needs: lint_and_test # This job depends on lint_and_test passing
+    # This job only runs on push events to the main branch (e.g., after a PR merge)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        # Build the Docker image for the Pravah application.
+        # The Dockerfile is located at `./pravah/Dockerfile`.
+        # The build context is the `./pravah/` directory.
+        # Tag the image with a short commit SHA for unique identification.
+        run: |
+          docker build \
+            -t pravah-app:$(echo $GITHUB_SHA | cut -c1-7) \
+            -f ./pravah/Dockerfile \
+            ./pravah

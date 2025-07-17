@@ -1,0 +1,141 @@
+#!/usr/bin/env python
+
+import typer
+import httpx
+import json
+import os
+from typing import Optional
+from rich.console import Console
+
+console = Console()
+app = typer.Typer(name="aero-fs", help="AeroFS: High-Performance File & Data Orchestration Engine CLI.")
+
+API_BASE_URL_ENV = "AEROFS_API_URL"
+DEFAULT_API_URL = "http://localhost:8000/api/v1" 
+
+def get_api_client(api_url: str):
+    return httpx.Client(base_url=api_url)
+
+def get_effective_api_url(api_url_override: Optional[str]) -> str:
+    return api_url_override or os.environ.get(API_BASE_URL_ENV, DEFAULT_API_URL)
+
+@app.command(name="submit")
+def submit_job(
+    task_type: str = typer.Argument(..., help="Type of task to submit (e.g., 'file_hashing', 'duplicate_finder', 'text_search')."),
+    path: str = typer.Argument(..., help="Root path for the file processing job."),
+    filters: Optional[str] = typer.Option(None, "--filters", "-f", help="JSON string of filters (e.g., '{\"extensions\":[\".csv\", \".txt\"]}', '{\"min_size_kb\": 10240}')."),
+    api_url: Optional[str] = typer.Option(None, "--api-url", envvar=API_BASE_URL_ENV, help="Base URL of the AeroFS API."),
+    auth_token: Optional[str] = typer.Option(None, "--token", "-t", envvar="AEROFS_AUTH_TOKEN", help="Authentication token for the API."),
+):
+    """
+    Submits a new file processing job to the AeroFS engine.
+    """
+    console.print(f"Submitting [bold blue]{task_type}[/bold blue] job for path: [bold cyan]{path}[/bold cyan]...")
+    
+    url = get_effective_api_url(api_url)
+    headers = {"Authorization": f"Bearer {auth_token}"} if auth_token else {}
+    client = get_api_client(url)
+
+    job_data = {
+        "task_type": task_type,
+        "path": path,
+        "filters": json.loads(filters) if filters else {}
+    }
+
+    try:
+        with client:
+            response = client.post("/jobs/", json=job_data, headers=headers)
+            response.raise_for_status()
+            job_id = response.json().get("job_id")
+            console.print(f"[bold green]Job submitted successfully![/bold green] Job ID: [bold magenta]{job_id}[/bold magenta]")
+            console.print(f"You can check its status using: [cyan]aero-fs status {job_id}[/cyan]")
+    except httpx.HTTPStatusError as e:
+        console.print(f"[bold red]Error submitting job:[/bold red] {e.response.status_code} - {e.response.text}")
+    except httpx.RequestError as e:
+        console.print(f"[bold red]Network error submitting job:[/bold red] {e}")
+    except json.JSONDecodeError:
+        console.print("[bold red]Error:[/bold red] Invalid JSON format for filters. Please ensure it's a valid JSON string.")
+    except Exception as e:
+        console.print(f"[bold red]An unexpected error occurred:[/bold red] {e}")
+
+@app.command(name="status")
+def get_job_status(
+    job_id: str = typer.Argument(..., help="The ID of the job to check status for."),
+    api_url: Optional[str] = typer.Option(None, "--api-url", envvar=API_BASE_URL_ENV, help="Base URL of the AeroFS API."),
+    auth_token: Optional[str] = typer.Option(None, "--token", "-t", envvar="AEROFS_AUTH_TOKEN", help="Authentication token for the API."),
+):
+    """
+    Retrieves the current status of a submitted job.
+    """
+    console.print(f"Fetching status for Job ID: [bold magenta]{job_id}[/bold magenta]...")
+
+    url = get_effective_api_url(api_url)
+    headers = {"Authorization": f"Bearer {auth_token}"} if auth_token else {}
+    client = get_api_client(url)
+
+    try:
+        with client:
+            response = client.get(f"/jobs/{job_id}", headers=headers)
+            response.raise_for_status()
+            job_info = response.json()
+            
+            status = job_info.get("status", "UNKNOWN")
+            results_summary = job_info.get("results_summary", "No summary available.")
+
+            console.print(f"[bold yellow]Job ID:[/bold yellow] {job_id}")
+            console.print(f"[bold yellow]Status:[/bold yellow] {status}")
+            if "error_message" in job_info and status == "FAILED":
+                console.print(f"[bold red]Error Details:[/bold red] {job_info['error_message']}")
+            elif results_summary:
+                console.print(f"[bold yellow]Summary:[/bold yellow] {results_summary}")
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            console.print(f"[bold red]Error:[/bold red] Job with ID '[bold magenta]{job_id}[/bold magenta]' not found.")
+        else:
+            console.print(f"[bold red]Error fetching status:[/bold red] {e.response.status_code} - {e.response.text}")
+    except httpx.RequestError as e:
+        console.print(f"[bold red]Network error fetching status:[/bold red] {e}")
+    except Exception as e:
+        console.print(f"[bold red]An unexpected error occurred:[/bold red] {e}")
+
+
+@app.command(name="results")
+def get_job_results(
+    job_id: str = typer.Argument(..., help="The ID of the job to retrieve results for."),
+    api_url: Optional[str] = typer.Option(None, "--api-url", envvar=API_BASE_URL_ENV, help="Base URL of the AeroFS API."),
+    auth_token: Optional[str] = typer.Option(None, "--token", "-t", envvar="AEROFS_AUTH_TOKEN", help="Authentication token for the API."),
+):
+    """
+    Retrieves detailed results for a completed job.
+    """
+    console.print(f"Fetching results for Job ID: [bold magenta]{job_id}[/bold magenta]...")
+
+    url = get_effective_api_url(api_url)
+    headers = {"Authorization": f"Bearer {auth_token}"} if auth_token else {}
+    client = get_api_client(url)
+
+    try:
+        with client:
+            response = client.get(f"/jobs/{job_id}/results", headers=headers)
+            response.raise_for_status()
+            results = response.json()
+            
+            console.print(f"[bold green]Detailed Results for Job ID {job_id}:[/bold green]")
+            console.print(json.dumps(results, indent=4))
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            console.print(f"[bold red]Error:[/bold red] Job with ID '[bold magenta]{job_id}[/bold magenta]' not found, or results not available yet.")
+        elif e.response.status_code == 400:
+            console.print(f"[bold red]Error:[/bold red] Job is not yet completed or results are not retrievable: {e.response.text}")
+        else:
+            console.print(f"[bold red]Error fetching results:[/bold red] {e.response.status_code} - {e.response.text}")
+    except httpx.RequestError as e:
+        console.print(f"[bold red]Network error fetching results:[/bold red] {e}")
+    except Exception as e:
+        console.print(f"[bold red]An unexpected error occurred:[/bold red] {e}")
+
+
+if __name__ == "__main__":
+    app()

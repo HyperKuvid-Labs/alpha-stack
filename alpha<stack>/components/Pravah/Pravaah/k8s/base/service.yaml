@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pravah
+  labels:
+    app: pravah
+spec:
+  selector:
+    app: pravah
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+      name: http
+  type: ClusterIP

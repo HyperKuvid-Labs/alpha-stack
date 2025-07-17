@@ -1,0 +1,68 @@
+# Gitignore for VēgaFS Project (Python/Rust/Docker)
+
+# Python compiled files and bytecode
+__pycache__/
+*.py[co]
+
+# Python virtual environments
+venv/
+.venv/
+env/
+
+# Python distribution artifacts
+*.egg-info/
+build/
+dist/
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# Rust compiled files and artifacts
+target/
+*.dSYM # macOS debug symbols
+*.profdata # Profiling data
+
+# PyO3 specific artifacts (compiled Rust as Python module)
+*.pyd # Windows specific
+*.so  # Linux/macOS specific
+
+# Local environment variables
+.env
+.env.*
+# Exclude the example file from being ignored
+!.env.example
+
+# Database and cache data volumes for local Docker Compose development
+# Assuming these are mounted into a 'data' directory at the project root
+data/
+# Alternatively, if more specific names are used:
+# pgdata/
+# redisdata/
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+
+# IDE and Editor specific files
+.idea/          # IntelliJ / PyCharm
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
+
+# VS Code specific files
+.vscode/
+# Un-ignore common workspace configuration files that should be committed
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# Temporary files created by editors or OS
+*~
+#*#
+\#*#
+*.swp
+*.bak

@@ -1,0 +1,141 @@
+# VēgaFS Database Migrations (Alembic)
+
+This directory contains the configuration and scripts for managing the VēgaFS PostgreSQL database schema using [Alembic](https://alembic.sqlalchemy.org/en/latest/). Alembic is a lightweight database migration tool for usage with the SQLAlchemy ORM.
+
+## Table of Contents
+- [Prerequisites](#prerequisites)
+- [Configuration](#configuration)
+- [Common Alembic Commands](#common-alembic-commands)
+  - [Generating a New Migration](#generating-a-new-migration)
+  - [Applying Migrations (Upgrade)](#applying-migrations-upgrade)
+  - [Reverting Migrations (Downgrade)](#reverting-migrations-downgrade)
+  - [Viewing Current Database Revision](#viewing-current-database-revision)
+  - [Stamping the Database](#stamping-the-database)
+- [Best Practices](#best-practices)
+- [Troubleshooting](#troubleshooting)
+
+---
+
+## Prerequisites
+
+Before running Alembic commands, ensure you have:
+
+1.  **Python 3.10+** installed.
+2.  The VēgaFS Python dependencies installed. It is recommended to use a virtual environment:
+    ```bash
+    python -m venv venv
+    source venv/bin/activate
+    pip install -e .
+    # Ensure alembic is installed, it should be part of the 'vegafs' dependencies via pyproject.toml
+    # If not, you may need: pip install alembic
+    ```
+3.  **A PostgreSQL database running** and accessible via the `DATABASE_URL` environment variable. For local development, you can use the `docker-compose.yml` setup.
+
+## Configuration
+
+Alembic's behavior is controlled by two main files located in this directory:
+
+*   **`alembic.ini`**: The primary configuration file for Alembic itself. It specifies the path to the `env.py` script, the script directory (`versions`), and various other settings. **Do not modify this file unless absolutely necessary for core Alembic behavior.**
+*   **`env.py`**: This Python script is executed by Alembic. It's responsible for:
+    *   Loading your application's SQLAlchemy models (from `app/db/models`).
+    *   Configuring the database connection (retrieving the `DATABASE_URL` from environment variables).
+    *   Defining how migrations are applied (e.g., autogenerate options, custom render functions).
+
+**Database URL:**
+Alembic connects to the database using the `DATABASE_URL` environment variable. Ensure this variable is set before running any Alembic command.
+
+```bash
+# Example for local development (adjust as per your docker-compose setup or local Postgres)
+export DATABASE_URL="postgresql://user:password@localhost:5432/vegafs_dev"
+
+# In production, this will be handled by your secrets management solution (e.g., Kubernetes secrets, AWS Secrets Manager).
+```
+
+## Common Alembic Commands
+
+All Alembic commands should be executed from the `Pravaah/db/migrations` directory where the `alembic.ini` file resides.
+
+To start, navigate to this directory:
+```bash
+cd Pravaah/db/migrations
+```
+
+Then, execute the `alembic` commands as described below.
+
+### Generating a New Migration
+
+After making changes to your SQLAlchemy models (e.g., adding a new table, modifying a column, changing relationships), you need to generate a new migration script.
+
+```bash
+alembic revision --autogenerate -m "Descriptive message about your schema changes"
+```
+*   `--autogenerate`: Alembic will compare your current SQLAlchemy models to the database schema and attempt to generate the necessary `create_table`, `add_column`, `alter_column`, etc., statements.
+*   `-m "Descriptive message..."`: A brief, meaningful description for the migration. This will be included in the migration script filename and comments.
+
+**Important:** Always review the generated migration script (found in the `versions/` subdirectory) before applying it. Autogeneration is a best-effort process and might not always capture complex changes correctly, or might miss data migrations.
+
+### Applying Migrations (Upgrade)
+
+To apply pending migrations to your database, bringing its schema up to the latest revision defined in your scripts:
+
+```bash
+alembic upgrade head
+```
+*   `head`: Upgrades the database schema to the most recent revision available in your `versions/` directory.
+
+You can also upgrade to a specific revision by its ID:
+```bash
+alembic upgrade <revision_id>
+```
+Or upgrade by a certain number of steps (e.g., one step forward):
+```bash
+alembic upgrade +1
+```
+
+### Reverting Migrations (Downgrade)
+
+To revert the last applied migration, or downgrade to a specific revision:
+
+```bash
+alembic downgrade -1 # Downgrade one step
+alembic downgrade base # Downgrade all the way to an empty database
+alembic downgrade <revision_id>
+```
+*   Use with caution, especially in production environments, as downgrading might involve data loss if columns or tables are dropped.
+
+### Viewing Current Database Revision
+
+To see which migration revision is currently applied to your database:
+
+```bash
+alembic current
+```
+To view the entire migration history, including applied and pending scripts:
+```bash
+alembic history
+```
+
+### Stamping the Database
+
+If you are deploying VēgaFS to a new database that already has the correct schema (e.g., restored from a backup, or schema was manually created to match the latest version), you can "stamp" the database to reflect the latest revision without actually running any migrations. This tells Alembic that the database is already at that state.
+
+```bash
+alembic stamp head
+```
+*   This command does **not** modify the database schema; it only updates the `alembic_version` table to record the `head` revision.
+
+## Best Practices
+
+*   **Review Autogenerated Scripts:** Always inspect the generated migration script carefully before applying it. Autogeneration isn't perfect; manually add or modify operations if necessary.
+*   **Data Migrations:** For migrations that involve complex data transformations (e.g., moving data between columns, reformatting), it's often best to handle these manually within the migration script or as separate one-off data scripts.
+*   **No Edits to Applied Migrations:** Once a migration script has been applied to *any* shared environment (e.g., staging, production), **do not modify it**. Changes to existing, applied migrations can lead to inconsistencies and errors when others try to apply or revert. If a change is needed, create a *new* migration script.
+*   **Version Control:** Always commit your generated migration scripts to your version control system (e.g., Git) alongside your code changes. This ensures that the database schema evolution is tracked with the application code.
+*   **Environment Variables for DB Connection:** Always use environment variables (`DATABASE_URL`) for specifying the database connection string. Never hardcode credentials.
+*   **Database Backups:** Always perform a database backup before applying migrations in production environments.
+
+## Troubleshooting
+
+*   **`ModuleNotFoundError` or `ImportError`:** Ensure your Python virtual environment is activated and that the VēgaFS package and its dependencies are installed. Alembic's `env.py` needs to be able to import your application's SQLAlchemy models.
+    *   If models are not importable, you might need to adjust `sys.path` in `env.py` to include your project's root directory.
+*   **`Autogenerate` Misses Changes:** This can happen with complex changes, or if SQLAlchemy isn't aware of a change (e.g., a custom type, enum, or constraint). Manually add the missing operations to the generated script.
+*   **`DATABASE_URL` Not Set:** You will receive a database connection error. Ensure the `DATABASE_URL` environment variable is correctly set before running any command.

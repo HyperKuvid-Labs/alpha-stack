@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # Reference the common base configuration for VēgaFS.
+  # Assumes the 'base' directory is located at '../../base' relative to this overlay.
+  - ../../base
+
+  # Add staging-specific resources to the build.
+  # This configmap will typically contain environment variables or
+  # other configurations unique to the staging environment.
+  - configmap.yaml
+
+# Apply strategic merge patches to modify resources inherited from the base.
+# These patches allow for environment-specific overrides, such as
+# scaling down replicas, changing image tags, or updating resource limits.
+patchesStrategicMerge:
+  - patch-app-deployment.yaml

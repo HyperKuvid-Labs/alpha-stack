@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Apply a name suffix to all resources defined in this overlay,
+# helping to differentiate staging resources from others.
+nameSuffix: -staging
+
+# Reference the common base manifests that this overlay builds upon.
+resources:
+  - ../../base
+
+# Generate a ConfigMap specific to the staging environment.
+# The content for this ConfigMap will be sourced from the adjacent 'configmap.yaml' file.
+configMapGenerator:
+  - name: pravah-app-config
+    files:
+      - configmap.yaml
+
+# Apply strategic merge patches to modify resources from the base.
+# This might include changes like image tags, replica counts, or resource limits for staging.
+patchesStrategicMerge:
+  - deployment-patch.yaml # Assuming this file exists and contains staging-specific patches for the deployment.

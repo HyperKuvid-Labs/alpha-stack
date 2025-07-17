@@ -1,0 +1,81 @@
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pravah-app
+  labels:
+    app: pravah
+spec:
+  replicas: 1 # Base replica count, typically overridden by kustomize overlays for specific environments
+  selector:
+    matchLabels:
+      app: pravah
+  template:
+    metadata:
+      labels:
+        app: pravah
+    spec:
+      containers:
+        - name: pravah-app
+          image: pravah-app:latest # Image will be built and tagged by CI/CD; specific tag patched by kustomize overlays
+          ports:
+            - containerPort: 8000 # FastAPI application listens on port 8000
+          env:
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: pravah-config # Assumes a ConfigMap named 'pravah-config' exists
+                  key: LOG_LEVEL
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: pravah-secrets # Assumes a Secret named 'pravah-secrets' exists
+                  key: DATABASE_URL
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: pravah-secrets
+                  key: AWS_ACCESS_KEY_ID
+                  optional: true # S3 credentials are optional if using local storage or MinIO without specific credentials
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pravah-secrets
+                  key: AWS_SECRET_ACCESS_KEY
+                  optional: true
+            - name: S3_BUCKET_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: pravah-config
+                  key: S3_BUCKET_NAME
+                  optional: true # S3 bucket name is optional if not using S3
+            - name: S3_ENDPOINT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: pravah-config
+                  key: S3_ENDPOINT_URL
+                  optional: true # S3 endpoint URL (for MinIO) is optional
+          resources:
+            requests:
+              cpu: "250m" # Request 0.25 CPU core
+              memory: "256Mi" # Request 256 Megabytes of memory
+            limits:
+              cpu: "1000m" # Limit to 1 CPU core
+              memory: "1Gi" # Limit to 1 Gigabyte of memory
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health # Health check endpoint defined in app/api/v1/endpoints/health.py
+              port: 8000
+            initialDelaySeconds: 15 # Give the application some time to start up
+            periodSeconds: 10 # Check every 10 seconds
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8000
+            initialDelaySeconds: 20 # Longer delay for readiness to ensure all internal services are ready
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+```

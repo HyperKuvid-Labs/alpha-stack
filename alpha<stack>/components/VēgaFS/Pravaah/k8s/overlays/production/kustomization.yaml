@@ -1,0 +1,47 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Reference the common base manifests for the VēgaFS application.
+# This points to the shared Kubernetes resource definitions.
+bases:
+  - ../../base
+
+# Add production-specific resources to the overlay.
+# The 'configmap.yaml' typically defines environment variables and
+# application configurations tailored for the production environment.
+resources:
+  - configmap.yaml
+
+# Apply patches to modify specific fields within resources inherited from the base.
+patches:
+  # Patch the main VēgaFS application deployment.
+  # This patch commonly adjusts replica counts, sets robust resource limits/requests,
+  # and ensures environment variables from the production config map are injected.
+  - path: deployment-patch.yaml
+    target:
+      kind: Deployment
+      name: vegafs-app # Assumes the base deployment's name for the VēgaFS app is 'vegafs-app'
+
+  # Optional: Patch the Ingress resource.
+  # This is used to define production-specific hostnames, enable TLS (e.g., via cert-manager),
+  # or apply other routing rules relevant only to the production environment.
+  - path: ingress-patch.yaml
+    target:
+      kind: Ingress
+      name: vegafs-ingress # Assumes the base ingress resource's name is 'vegafs-ingress'
+
+# Define image overrides for production.
+# This ensures that the deployment uses a specific, stable, and versioned Docker image
+# for the VēgaFS application in production, typically from a private registry.
+images:
+  - name: vegafs-app-image-placeholder # This should match the placeholder image name in the base Deployment
+    newName: your-docker-registry.com/vegafs/app # Replace with your actual production image path
+    newTag: v1.0.0-stable # Use a specific, production-ready tag (e.g., semantic versioning)
+
+# Apply common labels to all resources managed by this kustomization.
+# These labels help in identifying and managing production resources within the cluster.
+commonLabels:
+  app.kubernetes.io/name: vegafs
+  app.kubernetes.io/instance: vegafs-production
+  environment: production
+  managed-by: kustomize

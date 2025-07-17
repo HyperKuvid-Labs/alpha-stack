@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - app-deployment.yaml
+  - app-service.yaml
+  - postgres-deployment.yaml
+  - postgres-service.yaml
+  - postgres-pvc.yaml
+  - redis-deployment.yaml
+  - redis-service.yaml
+  - app-configmap.yaml
+  # Optionally include app-secret.yaml here if secrets are managed within Kustomize.
+  # For production, external secret management (e.g., K8s Secrets Store CSI Driver, Vault) is recommended.
+  # - app-secret.yaml
+
+commonLabels:
+  app.kubernetes.io/name: vegafs
+  app.kubernetes.io/instance: vegafs-app
+  app.kubernetes.io/part-of: vegafs
+  app.kubernetes.io/managed-by: kustomize
+
+images:
+  - name: vegafs-app # Name used in app-deployment.yaml's container image field
+    newName: vegafs/vegafs-core # The actual image repository, e.g., Docker Hub or ECR
+    newTag: latest # Default tag, overridden by environment-specific overlays (e.g., dev, prod)

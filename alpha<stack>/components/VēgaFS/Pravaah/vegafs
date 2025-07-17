@@ -1,0 +1,156 @@
+# VēgaFS: High-Performance File & Data Processing Engine
+
+## Overview
+*Vēga (वेग)* is a Sanskrit word for "speed" or "velocity," reflecting the project's core focus on high-performance file operations. "FS" clarifies its domain in file systems.
+
+VēgaFS is designed to provide a robust, scalable, and high-performance solution for parallel file and data processing. It leverages the strengths of Python for application orchestration and user-facing interfaces, and Rust for computationally intensive, performance-critical core operations.
+
+## Core Technologies
+
+### Programming Languages
+*   **Python (3.10+)**: Serves as the primary "glue" language for the application layer, REST API, and Command-Line Interface (CLI). Its extensive ecosystem and rapid development capabilities are ideal for orchestrating complex workflows and building user-facing components.
+*   **Rust (Latest Stable)**: Utilized for the core processing engine to deliver maximum performance and safety. Rust's advantages include C/C++ level speeds, compile-time memory safety, and efficient concurrency for highly parallel data processing.
+
+### Frameworks & Libraries
+*   **Python Ecosystem**:
+    *   `FastAPI`: High-performance web framework for the REST API, with automatic OpenAPI documentation and data validation.
+    *   `PyO3`: The crucial bridge enabling seamless, low-overhead calls from Python into the Rust core.
+    *   `Maturin`: A build tool to package the Rust core as a standard Python wheel, simplifying distribution.
+    *   `Typer` / `Click`: For building a powerful and user-friendly CLI.
+    *   `Aiofiles`: For asynchronous file I/O in the Python layer, ensuring non-blocking operations.
+*   **Rust Ecosystem**:
+    *   `Rayon`: Simplifies data-parallelism, ideal for processing collections of files across multiple CPU cores.
+    *   `Tokio`: An asynchronous runtime for non-blocking, I/O-bound operations, enabling handling of thousands of concurrent file tasks.
+    *   `Serde`: For high-performance serialization/deserialization of data formats and configurations.
+    *   `thiserror` & `anyhow`: For robust and ergonomic error handling.
+
+### Databases & Storage
+*   **Primary Data Storage**: Operates directly on user-provided **File Systems** (e.g., ext4, NTFS) or **Cloud Object Storage** services (AWS S3, Google Cloud Storage, Azure Blob Storage).
+*   **Metadata & Job Queueing**: `PostgreSQL 14+` for storing structured metadata about files, processing jobs, status, and results, leveraging `JSONB` for flexibility.
+*   **Caching**: `Redis` for caching frequent file system queries or intermediate processing results, significantly boosting performance for repeated tasks.
+
+### Infrastructure & Deployment
+*   **Cloud Provider**: Cloud-agnostic (AWS, Google Cloud Platform, or Azure).
+*   **Containerization**: `Docker` & `Docker Compose` for consistent development and local orchestration.
+*   **Container Orchestration**: `Kubernetes (K8s)` for scalable, highly available production deployments.
+*   **CI/CD Pipeline**: `GitHub Actions` or `GitLab CI` for automated build, test, and deployment.
+
+## Architecture Overview
+
+VēgaFS employs a **Modular Monolith with a Core Library** design pattern. This approach combines the deployment simplicity of a monolith with the clean separation of concerns typically found in microservices. The system is composed of two primary, distinct parts:
+
+1.  **Python Application Layer**: Responsible for all external communication (REST API, CLI), business logic, job orchestration, and database interactions.
+2.  **Rust Core Library**: A self-contained, high-performance library (`.so` or `.pyd` file) encapsulating all computationally intensive file and data processing logic.
+
+The Python application layer makes direct, in-process function calls to the Rust Core Library via `PyO3` bindings. This Foreign Function Interface (FFI) ensures high-speed, low-overhead communication. The Rust core performs heavy I/O and parallel computations directly on the underlying storage, returning results back to Python for persistence in PostgreSQL or caching in Redis.
+
+## Key Features
+
+*   **F1: Parallel File Processing**: Apply user-defined operations (e.g., search, transform, validate) across thousands or millions of files in parallel.
+*   **F2: Directory Analysis**: Efficiently calculate statistics for large directory trees, including total size, file/folder count, largest/smallest files, and file type distribution.
+*   **F3: Bulk File Operations**: Support for atomic and high-throughput bulk operations like renaming, moving, and copying based on user-defined patterns and rules.
+*   **F4: Job Management**: Users can submit, monitor the status of, and retrieve the results of long-running processing jobs via a robust REST API.
+
+## Getting Started
+
+### Prerequisites
+*   **Languages**: Python 3.10+, Rust (installed via `rustup`).
+*   **Build Tools**: `pip`, `maturin` (`pip install maturin`).
+*   **Containerization**: `Docker` and `Docker Compose`.
+*   **IDE**: VS Code with recommended extensions: `rust-analyzer` and `Python (Microsoft)`.
+
+### Project Structure
+The project adopts a monorepo structure to keep Python and Rust codebases synchronized and facilitate unified builds.
+
+```
+vegafs/
+├── .github/workflows/         # CI/CD pipelines (e.g., ci.yml)
+├── app/                       # Python application source
+│   ├── __init__.py
+│   ├── main.py                # FastAPI application entrypoint
+│   ├── api/                   # API endpoint definitions (e.g., v1/jobs.py)
+│   └── core/                  # Orchestration logic (e.g., processor.py)
+├── rust_core/                 # Rust core library crate
+│   ├── Cargo.toml             # Rust dependencies and project info
+│   └── src/
+│       ├── lib.rs             # PyO3 module definition and Python-facing functions
+│       ├── file_ops.rs        # Core file operations logic
+│       └── error.rs           # Custom error types
+├── tests/                     # Python tests (unit, integration, e.g., test_api.py)
+├── .env.example               # Example environment variables for local dev
+├── .gitignore
+├── docker-compose.yml         # Local development environment setup (PostgreSQL, Redis)
+├── Dockerfile                 # Production Docker build configuration
+├── pyproject.toml             # Unified project definition (PEP 621) and maturin config
+└── README.md                  # This file
+```
+
+### Configuration
+Application configuration is managed via environment variables. For local development, create a `.env` file based on `.env.example`:
+
+```dotenv
+# .env
+DATABASE_URL="postgresql://user:password@localhost:5432/vegafs_dev"
+REDIS_URL="redis://localhost:6379"
+LOG_LEVEL="INFO"
+```
+**Important**: In production, secrets (like database credentials) must *not* be hardcoded or stored in `.env` files. Instead, inject them securely into the container's environment using a secrets management service (e.g., AWS Secrets Manager, HashiCorp Vault).
+
+### Local Development Setup
+
+1.  **Clone the repository**:
+    ```bash
+    git clone <repository-url>
+    cd vegafs
+    ```
+2.  **Prepare `.env` file**:
+    ```bash
+    cp .env.example .env
+    # Edit .env to adjust values if needed
+    ```
+3.  **Start required services with Docker Compose**:
+    This will bring up the PostgreSQL database and Redis cache containers.
+    ```bash
+    docker-compose up -d postgres redis
+    ```
+4.  **Install Python dependencies and build the Rust core**:
+    Ensure you are in the `vegafs/` root directory. `maturin` will automatically handle the Rust compilation into a Python-compatible wheel.
+    ```bash
+    pip install maturin  # If not already installed
+    pip install -e .     # Installs Python dependencies and builds/links the Rust core
+    ```
+    The `-e .` (editable install) command is convenient for development as it rebuilds the Rust core when changes are detected and links it directly.
+5.  **Run database migrations (if applicable)**:
+    *(Placeholder: Specific migration commands for SQLAlchemy/Alembic will go here once implemented.)*
+    ```bash
+    # Example: alembic upgrade head
+    ```
+6.  **Start the FastAPI application**:
+    ```bash
+    uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ```
+    The API will be accessible at `http://localhost:8000`. You can view the automatically generated OpenAPI documentation (Swagger UI) at `http://localhost:8000/docs`.
+
+## Testing
+
+A comprehensive testing strategy is employed to ensure reliability and correctness:
+*   **Rust Unit Tests**: Focused on individual functions and modules within the `rust_core` library.
+*   **Python Unit Tests**: For the FastAPI API endpoints and Python orchestration logic; the Rust core is typically mocked during these tests.
+*   **Integration Tests**: Verify the seamless interaction and data flow across the Python-Rust bridge (`PyO3`) using a sample dataset.
+*   **End-to-End (E2E) Tests**: Simulate real-world usage scenarios by interacting with the public-facing REST API and CLI.
+
+To run tests:
+```bash
+# From the vegafs/ root directory
+pytest
+```
+
+## CI/CD
+
+The project leverages `GitHub Actions` for its CI/CD pipeline, defined in `.github/workflows/ci.yml`. The automated workflow includes the following stages:
+
+1.  **Lint & Format**: Ensures code quality and consistency using `black`, `isort` (Python) and `cargo fmt`, `clippy` (Rust).
+2.  **Test**: Executes all unit and integration tests for both Python and Rust in parallel.
+3.  **Build**: Compiles the Rust core into a Python wheel using `maturin`, then builds the final production `Docker` image which incorporates all Python dependencies and the compiled Rust wheel.
+4.  **Push**: Pushes the versioned Docker image to a configured container registry (e.g., Docker Hub, AWS ECR).
+5.  **Deploy**: Automatically deploys the new image to a staging environment, with manual approval required for production deployments.

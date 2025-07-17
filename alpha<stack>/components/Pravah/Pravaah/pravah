@@ -1,0 +1,187 @@
+# Pravah: High-Performance File & Data Processing Engine
+
+Pravah (Sanskrit for "flow" or "stream") is a robust, high-performance engine designed for efficient file and data processing. It leverages the strengths of Python for high-level orchestration, API, and UI, and Rust for its core, performance-critical processing logic, ensuring lightning-fast and memory-safe operations.
+
+## Core Technologies
+
+### Programming Languages
+*   **Python (3.11+):** For high-level logic, API, UI, and workflow orchestration.
+*   **Rust (Latest Stable):** For the core processing engine, enabling performance, memory safety, and concurrency.
+
+### Frameworks & Libraries
+*   **Python Stack:**
+    *   **FastAPI (v0.100.0+):** Modern web framework for the REST API.
+    *   **PyO3 (v0.20.0+):** Seamless bridge between Python and Rust.
+    *   **Typer (v0.9.0+):** For building a powerful CLI.
+    *   **Pydantic-settings:** For configuration management.
+    *   **SQLAlchemy:** ORM for database interactions.
+*   **Rust Stack:**
+    *   **Tokio (v1.28.0+):** Asynchronous runtime for high-performance I/O.
+    *   **Rayon (v1.7.0+):** Data-parallelism for CPU-bound tasks.
+    *   **Serde (v1.0.0+):** Serialization/deserialization for data formats.
+    *   **walkdir (v2.3.0+):** Efficient recursive directory traversal.
+
+### Databases & Storage
+*   **Primary Storage:** Filesystem / Object Storage (Amazon S3, MinIO)
+*   **Metadata & Job Queue:** PostgreSQL (v15+), with SQLite as a lightweight alternative.
+
+### Infrastructure & Deployment
+*   **Cloud Provider:** AWS (Recommended)
+*   **Containerization:** Docker & Docker Compose
+*   **Orchestration:** Kubernetes (e.g., AWS EKS)
+*   **CI/CD Pipeline:** GitHub Actions
+
+## Architecture Overview
+
+Pravah follows a **Modular Monolith with a Core-Plugin Architecture**. The main application logic and API are built with Python (FastAPI), acting as an orchestrator. The performance-critical file and data processing tasks are offloaded to a Rust core engine, which is integrated as a Python module via **PyO3**.
+
+**Key Components & Data Flow:**
+1.  **User Interface (CLI / Web UI):** Initiates processing jobs.
+2.  **API Layer (FastAPI):** Receives requests, validates input, and orchestrates jobs.
+3.  **Job Orchestrator (Python):** Manages job lifecycle, persists status in PostgreSQL.
+4.  **Python-Rust Bridge (PyO3):** Passes job parameters to the Rust core.
+5.  **Rust Core Engine:** Performs high-speed directory scanning (`walkdir`, `tokio`), parallel file processing (`rayon`), and communicates results.
+6.  **Data Persistence:** Writes processed data to Filesystem/S3, updates job status in PostgreSQL.
+
+## Features
+
+*   **High-Speed Directory Traversal:** Efficiently scan millions of files and subdirectories.
+*   **Parallel File Processing:** Leverage all available CPU cores and I/O capacity for concurrent processing.
+*   **Configurable Processing Pipelines:** Define or select predefined processing tasks (e.g., format conversion, data extraction, compression).
+*   **Job Management & Status Tracking:** Create, monitor, and query job status (pending, running, completed, failed).
+*   **Support for Local and Cloud Storage:** Read from and write to local filesystems and S3-compatible object storage.
+
+## Getting Started
+
+### Prerequisites
+Ensure you have the following installed on your development machine:
+*   **Python 3.11+**
+*   **Rust toolchain:** Install via `rustup.rs` (`curl --tlsv1.2 -sSf https://sh.rustup.rs | sh`).
+*   **Docker & Docker Compose:** For running local services (PostgreSQL, MinIO).
+*   **`make` or `just`:** For convenient command running (Makefile is provided).
+
+### Setup
+
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/your-org/pravah.git
+    cd pravah
+    ```
+
+2.  **Install Rust build tools for Python:**
+    Pravah uses `maturin` to build the Rust core into a Python wheel.
+    ```bash
+    pip install maturin poetry
+    ```
+
+3.  **Build the Rust core:**
+    The Rust core is located in `pravah_core/`. Use `maturin` to build and link it for Python development.
+    ```bash
+    maturin develop --release -m pravah_core
+    # This compiles the Rust code and makes it available as a Python module.
+    ```
+
+4.  **Install Python dependencies:**
+    Pravah uses `pyproject.toml` and `poetry` for dependency management.
+    ```bash
+    poetry install
+    ```
+
+5.  **Set up environment variables:**
+    Copy the example environment file and configure it with your local settings.
+    ```bash
+    cp .env.example .env
+    # Edit .env with your local database and storage credentials.
+    ```
+    For local development, ensure `DATABASE_URL` is set correctly for your PostgreSQL container.
+
+6.  **Start local services (PostgreSQL, MinIO):**
+    Use Docker Compose to spin up necessary services.
+    ```bash
+    docker-compose up -d postgres minio
+    ```
+    Wait for services to be healthy before proceeding.
+
+7.  **Run database migrations:**
+    ```bash
+    poetry run alembic upgrade head
+    ```
+
+### Usage
+
+#### Running the FastAPI Application
+After setup, you can start the FastAPI server:
+```bash
+poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+The API documentation (Swagger UI) will be available at `http://localhost:8000/docs`.
+
+#### Command Line Interface (CLI)
+Pravah includes a CLI for common operations, built with Typer.
+```bash
+poetry run python app/cli.py --help
+# Example: poetry run python app/cli.py jobs create --path /data/my_files --action extract_headers
+```
+
+#### Interacting with the API
+You can use `curl`, Postman, or any HTTP client to interact with the FastAPI endpoints:
+*   `POST /api/v1/jobs`: Create and start a new processing job.
+*   `GET /api/v1/jobs/{job_id}`: Check job status and progress.
+*   `GET /api/v1/jobs/{job_id}/results`: Retrieve the results of a completed job.
+
+## Project Structure
+
+Pravah is organized as a monorepo, containing both Python and Rust source code, along with all associated configuration, documentation, and deployment artifacts.
+
+```
+pravah/
+├── .github/workflows/       # CI/CD pipelines
+├── app/                     # Python FastAPI application
+│   ├── api/                 # REST API layer (v1, dependencies, endpoints, schemas)
+│   ├── auth/                # Authentication and Authorization
+│   ├── core/                # Core business logic and job orchestration
+│   ├── db/                  # Database interaction (models, sessions, migrations)
+│   ├── services/            # Clients for external services (storage)
+│   ├── utils/               # Shared utility functions (logging)
+│   ├── cli.py               # Typer CLI entrypoint
+│   └── main.py              # FastAPI application entrypoint
+├── config/                  # Application configuration management
+├── docs/                    # Project documentation
+├── k8s/                     # Kubernetes manifests for deployment
+├── pravah_core/             # High-performance Rust engine (Cargo crate)
+│   ├── src/                 # Rust source (engine, error, models, lib.rs for PyO3 bindings)
+│   └── Cargo.toml           # Rust project manifest
+├── scripts/                 # Helper scripts for development and operations
+├── tests/                   # Test suite for the Python application (unit, integration, e2e)
+├── ui/                      # Frontend components (React or Streamlit)
+├── docker-compose.yml       # Orchestrates local dev environment
+├── Dockerfile               # Multi-stage Dockerfile for production image
+├── Makefile                 # Convenient command runner
+├── pyproject.toml           # Python project metadata and dependencies
+└── README.md                # Project overview, setup, and usage
+```
+
+## Testing
+
+Pravah employs a comprehensive testing strategy:
+*   **Rust Unit Tests:** Run `cargo test` within the `pravah_core/` directory.
+*   **Python Unit & Integration Tests:** Run `poetry run pytest` from the project root.
+*   **End-to-End (E2E) Tests:** Located under `tests/e2e/`, run with `poetry run pytest tests/e2e/`.
+
+All tests are automatically executed via GitHub Actions on every pull request and merge to `main`.
+
+## Deployment
+
+Pravah is designed for containerized deployment using Docker and Kubernetes.
+
+*   **Docker:** A multi-stage `Dockerfile` is provided to build a production-ready image.
+*   **Kubernetes:** `k8s/` contains base and overlay manifests for deploying to environments like AWS EKS.
+*   **CI/CD:** Automated deployment pipelines are defined in `.github/workflows/` to build, test, and deploy the application.
+
+## Contributing
+
+We welcome contributions to Pravah! Please refer to the `CONTRIBUTING.md` (to be added) for guidelines on how to contribute.
+
+## License
+
+This project is licensed under the MIT License. See the `LICENSE` file for details.

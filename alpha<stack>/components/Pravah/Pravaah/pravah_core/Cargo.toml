@@ -1,0 +1,29 @@
+[package]
+name = "pravah_core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.20", features = ["extension-module"] }
+tokio = { version = "1.28", features = ["full"] } # "full" includes io, fs, net, etc.
+rayon = "1.7"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0" # Commonly used with Serde for JSON data
+walkdir = "2.3"
+anyhow = "1.0" # For easy error handling
+thiserror = "1.0" # For creating custom error types
+log = "0.4" # Logging facade
+env_logger = "0.10" # Simple logging implementation for development
+
+[dev-dependencies]
+tempfile = "3.8" # For creating temporary files/directories in tests
+
+[profile.release]
+lto = true             # Link Time Optimization
+codegen-units = 1      # Optimize for smaller and faster code (can increase compile time)
+opt-level = 3          # Optimize for speed
+debug = false          # Do not include debug information
+strip = "symbols"      # Strip all symbols from the binary for smaller size

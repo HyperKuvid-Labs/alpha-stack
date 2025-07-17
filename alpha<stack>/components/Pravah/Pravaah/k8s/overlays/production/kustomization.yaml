@@ -1,0 +1,41 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+# Generate or update a ConfigMap with production-specific settings
+configMapGenerator:
+  - name: pravah-config
+    behavior: merge # Merge with any existing ConfigMap named 'pravah-config'
+    files:
+      - configmap.yaml
+
+# Apply patches to the base resources for production environment
+patches:
+  # Increase replica count for the Pravah application in production
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3 # Set to 3 replicas for high availability and load distribution
+    target:
+      kind: Deployment
+      name: pravah-app # Assumes the base Deployment is named 'pravah-app'
+
+  # Set higher resource requests and limits for the application container
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "750m" # Request 750 millicores of CPU
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "1.5Gi" # Request 1.5 Gigabytes of memory
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "1500m" # Limit to 1.5 CPU cores
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "3Gi" # Limit to 3 Gigabytes of memory
+    target:
+      kind: Deployment
+      name: pravah-app

@@ -1,0 +1,187 @@
+name: Continuous Deployment
+
+on:
+  push:
+    branches:
+      - main # Deploy to staging on pushes to main
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+' # Deploy to production on new semantic version tags (e.g., v1.0.0)
+  workflow_dispatch: # Allows manual trigger for specific branches/tags
+
+env:
+  # Default AWS region. This can be overridden by environment-specific configurations
+  AWS_REGION: us-east-1 
+  # Name of your ECR repository. This should match the image name in k8s/base/deployment.yaml
+  ECR_REPOSITORY: pravah-app 
+
+jobs:
+  build_and_push_image:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    outputs:
+      # The exact image tag used for this build (e.g., 'v1.0.0' or 'main-abcdef1')
+      specific_image_tag: ${{ steps.set_image_tag.outputs.tag }}
+      # The full image name with the specific tag (e.g., '123456789012.dkr.ecr.us-east-1.amazonaws.com/pravah-app:v1.0.0')
+      full_image_name_with_tag: ${{ steps.build_and_push.outputs.full_image }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY should be stored as GitHub Secrets
+          # These credentials need permissions to push images to ECR.
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+        
+      - name: Set image tag based on trigger
+        id: set_image_tag
+        run: |
+          IMAGE_TAG=""
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            # For tags (e.g., v1.0.0), use the tag name directly as the image tag
+            IMAGE_TAG="${{ github.ref_name }}"
+          else
+            # For branches (e.g., main), use 'main-' followed by a short SHA for uniqueness
+            IMAGE_TAG="main-${{ github.sha }}"
+          fi
+          echo "tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "Determined image tag: $IMAGE_TAG"
+
+      - name: Build and Push Docker Image
+        id: build_and_push
+        env:
+          # ECR registry URL is dynamically determined from login-ecr step output
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ steps.set_image_tag.outputs.tag }}
+        run: |
+          FULL_IMAGE_NAME="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          
+          echo "Building Docker image: $FULL_IMAGE_NAME"
+          # Build the Docker image from the root Dockerfile
+          docker build -t "$FULL_IMAGE_NAME" -f Dockerfile .
+          
+          echo "Pushing Docker image: $FULL_IMAGE_NAME"
+          docker push "$FULL_IMAGE_NAME"
+          
+          # If it's a production tag (e.g., v1.0.0), also push with 'latest' tag for convenience
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            LATEST_IMAGE_NAME="${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
+            echo "Also tagging and pushing as: $LATEST_IMAGE_NAME"
+            docker tag "$FULL_IMAGE_NAME" "$LATEST_IMAGE_NAME"
+            docker push "$LATEST_IMAGE_NAME"
+          fi
+          
+          echo "full_image=$FULL_IMAGE_NAME" >> "$GITHUB_OUTPUT"
+          echo "Successfully built and pushed $FULL_IMAGE_NAME"
+
+  deploy_staging:
+    name: Deploy to Staging
+    needs: build_and_push_image # This job depends on the image being built and pushed
+    # This job runs only if the trigger was a push to the 'main' branch
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: Staging # Links to a GitHub Environment for secrets and approvals
+      url: https://pravah-staging.example.com # Example URL for the deployed application
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials for Staging
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # Use distinct AWS credentials for staging environment, stored as GitHub Secrets
+          # These credentials need permissions to deploy to the staging EKS cluster.
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_STAGING }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_STAGING }}
+          aws-region: ${{ env.AWS_REGION }}
+          # For enhanced security, consider using OIDC and IAM Role for Service Accounts (IRSA) with EKS
+          # role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-eks-deployer-role-staging
+          # role-duration-seconds: 900 # Max 15 minutes for short-lived credentials
+
+      - name: Install kubectl and kustomize
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest' # Or a specific stable version like '1.28.2' for stability
+        
+      - name: Update kubeconfig for Staging EKS Cluster
+        run: |
+          # The cluster name for the staging environment.
+          aws eks update-kubeconfig --name ${{ secrets.K8S_CLUSTER_NAME_STAGING }} --region ${{ env.AWS_REGION }}
+
+      - name: Set Kustomize image for Staging
+        # Use kustomize to dynamically update the image tag in the staging overlay before deployment
+        run: |
+          cd k8s/overlays/staging
+          # The format is 'image_name=full_image_name_with_tag'
+          # 'ECR_REPOSITORY' (e.g., 'pravah-app') should be the base name used in your kustomization.yaml
+          kustomize edit set image ${{ env.ECR_REPOSITORY }}=${{ needs.build_and_push_image.outputs.full_image_name_with_tag }}
+          echo "Updated k8s/overlays/staging/kustomization.yaml with image: ${{ needs.build_and_push_image.outputs.full_image_name_with_tag }}"
+          cat kustomization.yaml # Log the updated kustomization.yaml for debugging purposes
+
+      - name: Deploy to Staging EKS
+        # Apply the kustomized manifests to the EKS cluster
+        run: |
+          kubectl apply -k k8s/overlays/staging
+          echo "Deployment to staging environment triggered successfully."
+
+  deploy_production:
+    name: Deploy to Production
+    needs: build_and_push_image
+    # This job runs only if the trigger was a push of a Git tag (e.g., v1.0.0)
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    environment:
+      name: Production # Links to a GitHub Environment for secrets and approvals
+      url: https://pravah.example.com # Example URL for the deployed application
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials for Production
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # Use distinct AWS credentials for production environment, stored as GitHub Secrets
+          # These credentials need permissions to deploy to the production EKS cluster.
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
+          aws-region: ${{ env.AWS_REGION }}
+          # HIGHLY RECOMMENDED for production: use OIDC and IAM Role for Service Accounts (IRSA) with EKS
+          # This provides ephemeral credentials and eliminates the need for long-lived secrets.
+          # role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-eks-deployer-role-production
+          # role-duration-seconds: 900 # Max 15 minutes for short-lived credentials
+
+      - name: Install kubectl and kustomize
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+        
+      - name: Update kubeconfig for Production EKS Cluster
+        run: |
+          # The cluster name for the production environment.
+          aws eks update-kubeconfig --name ${{ secrets.K8S_CLUSTER_NAME_PRODUCTION }} --region ${{ env.AWS_REGION }}
+
+      - name: Set Kustomize image for Production
+        # Use kustomize to dynamically update the image tag in the production overlay before deployment
+        run: |
+          cd k8s/overlays/production
+          # 'ECR_REPOSITORY' (e.g., 'pravah-app') should be the base name used in your kustomization.yaml
+          kustomize edit set image ${{ env.ECR_REPOSITORY }}=${{ needs.build_and_push_image.outputs.full_image_name_with_tag }}
+          echo "Updated k8s/overlays/production/kustomization.yaml with image: ${{ needs.build_and_push_image.outputs.full_image_name_with_tag }}"
+          cat kustomization.yaml # Log the updated kustomization.yaml for debugging purposes
+
+      - name: Deploy to Production EKS
+        # Apply the kustomized manifests to the EKS cluster
+        run: |
+          kubectl apply -k k8s/overlays/production
+          echo "Deployment to production environment triggered successfully."

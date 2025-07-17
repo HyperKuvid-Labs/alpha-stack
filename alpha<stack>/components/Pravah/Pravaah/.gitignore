@@ -1,0 +1,66 @@
+```
+# Dependency management / Virtual Environments
+.venv/
+venv/
+env/
+# For pyenv/poetry version management if used inside project
+.python-version
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyd
+*.so
+*.egg
+*.egg-info/
+.eggs/
+
+# Rust artifacts
+target/
+
+# Node.js artifacts (for React/Next.js UI)
+node_modules/
+.next/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build and distribution artifacts
+build/
+dist/
+
+# Configuration and secrets
+.env
+.env.*.local
+.DS_Store # macOS specific
+Thumbs.db # Windows specific
+ehthumbs.db # Windows specific
+.directory # Linux/Windows for KDE
+*.bak # Backup files
+
+# IDE specific files
+.idea/ # IntelliJ / PyCharm
+.vscode/ # VS Code workspace and user settings
+
+# Logs and runtime data
+*.log
+logs/
+tmp/
+temp/
+output/ # Directory for processed output files
+data/   # Temporary data directories
+
+# Testing artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/ # Ruff cache
+.linter_cache/ # Generic linter cache
+
+# Database files (if local SQLite is used as an option)
+*.sqlite
+*.sqlite3
+*.db
+```
