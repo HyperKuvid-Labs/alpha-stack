@@ -1,0 +1,46 @@
+@startuml
+!include C4_Container.puml
+
+' Layout options
+LAYOUT_WITH_LEGEND()
+
+Title Karyaksham - Level 2: Container Diagram
+
+Person(user, "User", "Data Analyst, Data Scientist, Administrator")
+
+System_Boundary(karyaksham_system, "Karyaksham System") {
+
+    Container(karyaksham_ui, "User Interface", "React/Vue.js Single-Page Application", "Allows users to manage files, configure processing jobs, and view results.")
+
+    Container(api_gateway, "API Gateway", "Nginx / Traefik", "Entry point for all incoming HTTP/S traffic. Handles SSL termination, load balancing, and request routing.")
+
+    Container(fastapi_api, "Python API", "FastAPI (Python)", "Provides REST endpoints for user authentication, job creation, and status updates. Dispatches tasks to the message broker.")
+
+    Container(celery_workers, "Processing Workers", "Celery (Python) with embedded Rust Engine", "Asynchronously processes large datasets by invoking the high-performance Rust engine via PyO3.")
+
+}
+
+Container_Ext(redis, "Message Broker / Cache", "Redis", "Queues processing tasks for workers and provides a fast in-memory cache for frequently accessed data.")
+
+Container_Ext(postgresql, "Primary Database", "PostgreSQL", "Stores user accounts, job metadata, application state, and configuration.")
+
+Container_Ext(object_storage, "Object Storage", "AWS S3 / Google Cloud Storage / MinIO", "Scalable and durable storage for raw input files and processed output files.")
+
+
+' Relationships
+Rel(user, karyaksham_ui, "Uses", "HTTPS")
+Rel(karyaksham_ui, api_gateway, "Makes API calls to", "HTTPS (REST/JSON)")
+Rel(api_gateway, fastapi_api, "Forwards API requests to", "HTTPS (REST/JSON)")
+
+Rel(fastapi_api, postgresql, "Reads from and Writes to", "SQL (SQLAlchemy)")
+Rel(fastapi_api, redis, "Dispatches processing tasks to", "Redis Protocol")
+Rel(fastapi_api, object_storage, "Generates presigned URLs for", "AWS S3 API / MinIO API")
+
+Rel(karyaksham_ui, object_storage, "Uploads/Downloads files directly via presigned URLs", "HTTPS")
+
+Rel(celery_workers, redis, "Retrieves tasks from", "Redis Protocol")
+Rel(celery_workers, postgresql, "Updates job status in", "SQL (SQLAlchemy)")
+Rel(celery_workers, object_storage, "Streams input files from and output files to", "AWS S3 API / MinIO API")
+
+
+@enduml

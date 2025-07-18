@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: karyaksham-worker
+  labels:
+    app: karyaksham
+    component: worker
+spec:
+  replicas: 2 # Default number of replicas for workers, can be patched via overlays or HPA
+  selector:
+    matchLabels:
+      app: karyaksham
+      component: worker
+  template:
+    metadata:
+      labels:
+        app: karyaksham
+        component: worker
+    spec:
+      containers:
+        - name: worker
+          image: karyaksham-backend:latest # Replace with actual image tag in CI/CD (e.g., commit SHA or version)
+          imagePullPolicy: Always # Ensures the latest image is pulled from the registry
+          command: ["/app/infrastructure/scripts/entrypoint.sh", "worker"] # Command to execute the worker entrypoint
+          envFrom:
+            - configMapRef:
+                name: karyaksham-config # Refers to the ConfigMap containing non-sensitive configuration
+            - secretRef:
+                name: karyaksham-secrets # Refers to the Secret containing sensitive environment variables
+          resources:
+            requests:
+              cpu: 500m # Request 0.5 CPU core
+              memory: 2Gi # Request 2 GB of memory
+            limits:
+              cpu: 2 # Limit to 2 CPU cores
+              memory: 4Gi # Limit to 4 GB of memory
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pgrep -f 'celery -A karyaksham_workers.celery_app worker'"] # Check if Celery worker process is running
+            initialDelaySeconds: 30 # Give the worker time to start up
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pgrep -f 'celery -A karyaksham_workers.celery_app worker'"] # Worker is ready if its process is running
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+      restartPolicy: Always # Always attempt to restart containers if they exit

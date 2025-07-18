@@ -1,0 +1,79 @@
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: karyaksham-api-hpa
+  labels:
+    app.kubernetes.io/name: karyaksham-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/environment: production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: karyaksham-api # Refers to the name of the API Deployment defined in base
+  minReplicas: 3
+  maxReplicas: 15
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 80 # Target 80% CPU utilization
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Pods
+        value: 2 # Add 2 pods at a time
+        periodSeconds: 30
+      - type: Percent
+        value: 20 # Or scale up by 20% of current replicas
+        periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 300 # Wait 5 minutes before scaling down
+      policies:
+      - type: Percent
+        value: 10 # Scale down by 10%
+        periodSeconds: 300
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: karyaksham-worker-hpa
+  labels:
+    app.kubernetes.io/name: karyaksham-worker
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/environment: production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: karyaksham-worker # Refers to the name of the Worker Deployment defined in base
+  minReplicas: 2
+  maxReplicas: 50 # Allows for significant horizontal scaling to handle large job queues
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70 # Target 70% CPU utilization for workers, scale more aggressively
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+      - type: Pods
+        value: 5 # Add 5 pods at a time for workers
+        periodSeconds: 15
+      - type: Percent
+        value: 30 # Or scale up by 30%
+        periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 300 # Wait 5 minutes before scaling down
+      policies:
+      - type: Percent
+        value: 10 # Scale down by 10%
+        periodSeconds: 300
+```

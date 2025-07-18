@@ -3,6 +3,7 @@ from rgen_fs import generate_structure
 from tree_thing import generate_fs
 from generatable_files import get_generatable_files
 from dfs_tree_and_gen import dfs_tree_and_gen
+from dependency_analyzer import DependencyAnalyzer
 import pathlib
 import os
 
@@ -29,6 +30,9 @@ if not pr.exists():
 if pr:
     with open(pr, "r") as f:
         folder_structure = f.read()
-dfs_tree_and_gen(tree, project_desc=project_desc, project_name=project_name, parent_context="", current_path="", is_top_level=True, folder_structure=folder_structure)
+
+dependency_analyzer = DependencyAnalyzer()
+dfs_tree_and_gen(tree, project_desc=project_desc, project_name=project_name, parent_context="", current_path="", is_top_level=True, folder_structure=folder_structure, dependency_analyzer=dependency_analyzer)
+dependency_analyzer.visualize_graph()
 
 

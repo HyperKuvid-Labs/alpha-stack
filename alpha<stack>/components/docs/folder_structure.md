@@ -1,112 +1,142 @@
-pravah/
-├── .dockerignore  # Specifies files to exclude from the Docker build context.
-├── .env.example  # Template for environment variables for local development.
-├── .gitignore  # Specifies intentionally untracked files to ignore.
+{project-root}/
+├── .env.example # Template for local development environment variables
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml  # Continuous integration pipeline for tests and builds.
-│       └── cd.yml  # Continuous deployment pipeline to staging/production.
-├── app/  # Main Python application source code (FastAPI).
-│   ├── __init__.py
-│   ├── api/  # REST API layer (versioned).
-│   │   ├── __init__.py
-│   │   └── v1/
-│   │       ├── __init__.py
-│   │       ├── dependencies.py  # Common FastAPI dependencies (e.g., get_db).
-│   │       ├── endpoints/  # Resource-specific API endpoints.
-│   │       │   ├── __init__.py
-│   │       │   ├── jobs.py  # Endpoints for /jobs.
-│   │       │   ├── health.py  # Health check endpoint.
-│   │       │   └── users.py  # Endpoints for /users.
-│   │       └── schemas.py  # Pydantic models for API request/response validation.
-│   ├── auth/  # Authentication and Authorization module.
-│   │   ├── __init__.py
-│   │   ├── dependencies.py  # Security dependencies for API routes.
-│   │   ├── jwt.py  # JWT token generation and validation logic.
-│   │   └── rbac.py  # Role-Based Access Control implementation.
-│   ├── core/  # Core business logic and application orchestration.
-│   │   ├── __init__.py
-│   │   ├── jobs.py  # Job orchestration and status tracking logic.
-│   │   └── processor.py  # Python-side interface to the Rust core engine.
-│   ├── db/  # Database interaction layer.
-│   │   ├── __init__.py
-│   │   ├── migrations/  # Alembic database migration scripts.
-│   │   │   ├── versions/  # Individual migration files.
-│   │   │   ├── alembic.ini  # Alembic configuration file.
-│   │   │   ├── env.py  # Alembic runtime environment configuration.
-│   │   │   └── script.py.mako  # Migration script template.
-│   │   ├── models/  # ORM models (e.g., SQLAlchemy).
+│       ├── ci.yml # Runs linting, tests, and build checks on PRs
+│       └── cd.yml # Deploys to staging/production on merge/tag
+├── .gitignore # Specifies intentionally untracked files to ignore
+├── README.md # Project overview, setup, and usage instructions
+├── backend/
+│   ├── pyproject.toml # Python project metadata and dependencies (PDM/Poetry)
+│   ├── src/
+│   │   ├── karyaksham_api/
 │   │   │   ├── __init__.py
-│   │   │   ├── base.py  # Base model class.
-│   │   │   ├── job.py  # Job model for the 'jobs' table.
-│   │   │   └── user.py  # User model for the 'users' table.
-│   │   └── session.py  # Database session management and engine setup.
-│   ├── services/  # Clients for external services and integrations.
-│   │   ├── __init__.py
-│   │   └── storage.py  # Abstracted client for S3/MinIO/local filesystem.
-│   ├── utils/  # Shared utility functions and helpers.
-│   │   ├── __init__.py
-│   │   └── logging.py  # Structured logging configuration.
-│   ├── cli.py  # Typer-based Command Line Interface entrypoint.
-│   └── main.py  # FastAPI application entrypoint and middleware setup.
-├── config/  # Application configuration management.
-│   ├── __init__.py
-│   └── settings.py  # Pydantic settings model for loading from environment.
-├── docs/  # Project documentation.
-│   ├── api/  # API documentation (e.g., OpenAPI spec).
-│   │   └── openapi.json  # Auto-generated or static OpenAPI specification.
-│   ├── architecture.md  # System architecture and design decisions.
-│   └── user_guide.md  # How-to guides for developers and users.
-├── k8s/  # Kubernetes manifests for deployment.
-│   ├── base/  # Base Kustomize manifests for all environments.
-│   │   ├── deployment.yaml
-│   │   ├── kustomization.yaml
-│   │   └── service.yaml
-│   └── overlays/  # Environment-specific patches.
-│       ├── production/
-│       │   ├── configmap.yaml
-│       │   └── kustomization.yaml
-│       └── staging/
-│           ├── configmap.yaml
-│           └── kustomization.yaml
-├── pravah_core/  # High-performance Rust engine (Cargo crate).
-│   ├── Cargo.toml  # Rust project manifest and dependencies (PyO3, Tokio).
-│   └── src/  # Rust source code.
-│       ├── engine.rs  # Core file processing and parallel computation logic.
-│       ├── error.rs  # Custom error types for the Rust engine.
-│       ├── models.rs  # Data structures for internal use (with Serde).
-│       └── lib.rs  # Main Rust library entrypoint with PyO3 bindings.
-├── scripts/  # Helper scripts for development and operations.
-│   ├── build.sh  # Script to build the Rust wheel and Docker image.
-│   ├── run_dev.sh  # Script to start the local development server.
-│   └── setup.sh  # Development environment setup script.
-├── tests/  # Test suite for the Python application.
-│   ├── __init__.py
-│   ├── conftest.py  # Pytest fixtures and test setup.
-│   ├── e2e/  # End-to-end tests simulating user workflows.
-│   │   ├── __init__.py
-│   │   └── test_full_workflow.py
-│   ├── integration/  # Tests for component interactions (e.g., API <-> DB).
-│   │   ├── __init__.py
-│   │   ├── test_api_endpoints.py
-│   │   └── test_rust_bridge.py  # Test Python-to-Rust interface.
-│   └── unit/  # Unit tests for individual components in isolation.
-│       ├── __init__.py
-│       └── test_jobs_core.py
-├── ui/  # Frontend components (choose one or develop both).
-│   ├── react/  # Option 1: React/Next.js for a full-featured UI.
-│   │   ├── package.json  # Frontend node dependencies.
-│   │   ├── next.config.js  # Next.js configuration.
-│   │   ├── public/  # Static assets like images and fonts.
-│   │   │   └── favicon.ico
-│   │   └── src/  # React source code.
-│   │       ├── components/
-│   │       └── pages/
-│   └── streamlit/  # Option 2: Streamlit for a data-centric dashboard.
-│       ├── dashboard.py  # Main Streamlit application file.
-│       └── requirements.txt  # Python dependencies for the Streamlit app.
-├── docker-compose.yml  # Orchestrates local dev environment (app, db, storage).
-├── Dockerfile  # Multi-stage Dockerfile for building a production image.
-├── Makefile  # Convenient command runner for build, test, lint, etc.
-├── pyproject.toml  # Python project metadata, dependencies, and build config.
-└── README.md  # Project overview, setup, and usage instructions.
+│   │   │   ├── api/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── v1/
+│   │   │   │       ├── __init__.py
+│   │   │   │       ├── api.py # Aggregates all v1 routers
+│   │   │   │       └── endpoints/
+│   │   │   │           ├── __init__.py
+│   │   │   │           ├── auth.py # Authentication endpoints (login, register)
+│   │   │   │           ├── jobs.py # Endpoints for managing processing jobs
+│   │   │   │           └── users.py # User management endpoints
+│   │   │   ├── auth/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── jwt.py # Logic for creating and decoding JWTs
+│   │   │   │   └── security.py # Password hashing, RBAC dependencies
+│   │   │   ├── core/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── config.py # Pydantic settings management (loads from .env)
+│   │   │   ├── crud/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── base.py # Base CRUD class with common methods
+│   │   │   │   ├── crud_job.py # Data access logic for the Job model
+│   │   │   │   └── crud_user.py # Data access logic for the User model
+│   │   │   ├── db/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── migrations/ # Alembic directory for database migrations
+│   │   │   │   │   ├── versions/ # Contains individual migration scripts
+│   │   │   │   │   ├── env.py # Alembic runtime environment configuration
+│   │   │   │   │   └── script.py.mako # Migration script template
+│   │   │   │   ├── models/
+│   │   │   │   │   ├── __init__.py
+│   │   │   │   │   ├── job.py # SQLAlchemy model for processing jobs
+│   │   │   │   │   └── user.py # SQLAlchemy model for users
+│   │   │   │   └── session.py # Database session creation and management
+│   │   │   ├── integrations/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── object_storage.py # Client for S3, GCS, or MinIO
+│   │   │   │   └── redis_client.py # Wrapper for Redis connections
+│   │   │   ├── schemas/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── job.py # Pydantic schemas for job creation and response
+│   │   │   │   ├── token.py # Pydantic schemas for JWT tokens
+│   │   │   │   └── user.py # Pydantic schemas for user data
+│   │   │   ├── static/
+│   │   │   │   └── favicon.ico # Example static asset for API docs
+│   │   │   ├── utils/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── helpers.py # Miscellaneous utility functions
+│   │   │   └── main.py # FastAPI application entry point
+│   │   └── karyaksham_workers/
+│   │       ├── __init__.py
+│   │       ├── celery_app.py # Celery application instance and configuration
+│   │       └── tasks/
+│   │           ├── __init__.py
+│   │           └── processing.py # Celery tasks that call the Rust engine
+├── docs/
+│   ├── C4/ # C4 model diagrams for architecture visualization
+│   │   ├── level-1-context.puml
+│   │   └── level-2-container.puml
+│   ├── adrs/ # Architecture Decision Records
+│   │   └── 001-hybrid-monolith-with-ffi.md
+│   ├── api.md # Details on API usage and authentication
+│   └── setup.md # Developer setup and getting started guide
+├── frontend/
+│   ├── public/
+│   │   └── index.html # Main HTML entry point for the SPA
+│   ├── src/
+│   │   ├── App.tsx # Main application component (React example)
+│   │   ├── assets/ # Static assets like images, fonts, and CSS
+│   │   ├── components/ # Reusable UI components
+│   │   ├── hooks/ # Custom React hooks
+│   │   ├── pages/ # Top-level page components
+│   │   ├── services/
+│   │   │   └── apiClient.ts # Typed client for interacting with the backend API
+│   │   └── main.tsx # Application entry point
+│   ├── .eslintrc.cjs # ESLint configuration
+│   ├── index.html # Development entry point for Vite
+│   ├── package.json # NPM dependencies and scripts
+│   └── tsconfig.json # TypeScript configuration
+├── infrastructure/
+│   ├── Dockerfile # Multi-stage Dockerfile for API and workers
+│   ├── .dockerignore # Files to exclude from the Docker build context
+│   ├── docker-compose.yml # Orchestrates services for local development
+│   ├── kubernetes/
+│   │   ├── base/ # Common Kustomize resources for all environments
+│   │   │   ├── configmap.yaml
+│   │   │   ├── deployment-api.yaml
+│   │   │   ├── deployment-worker.yaml
+│   │   │   ├── kustomization.yaml
+│   │   │   └── service.yaml
+│   │   └── overlays/
+│   │       ├── production/
+│   │       │   ├── kustomization.yaml
+│   │       │   └── scaling-patch.yaml
+│   │       └── staging/
+│   │           ├── kustomization.yaml
+│   │           └── replica-count-patch.yaml
+│   └── scripts/
+│       ├── entrypoint.sh # Container entrypoint script
+│       └── run_migrations.sh # Script to apply Alembic migrations
+├── rust_engine/
+│   ├── Cargo.toml # Rust crate manifest and dependencies
+│   ├── src/
+│   │   ├── core/
+│   │   │   ├── mod.rs # Core module declaration
+│   │   │   ├── data_processor.rs # High-performance data processing logic
+│   │   │   └── file_handler.rs # Logic for streaming from object storage
+│   │   ├── utils/
+│   │   │   ├── mod.rs # Utils module declaration
+│   │   │   └── error.rs # Custom error types and conversions
+│   │   └── lib.rs # PyO3 module definition exposing functions to Python
+└── tests/
+    ├── __init__.py
+    ├── e2e/
+    │   ├── specs/
+    │   │   └── job_submission.spec.ts # E2E test for a full user journey
+    │   └── playwright.config.ts # Configuration for Playwright
+    ├── python/
+    │   ├── __init__.py
+    │   ├── conftest.py # Global pytest fixtures and test helpers
+    │   ├── integration/
+    │   │   ├── __init__.py
+    │   │   ├── test_api_endpoints.py # Tests API routes with a test client
+    │   │   └── test_worker_integration.py # Tests the full Celery job flow
+    │   └── unit/
+    │       ├── __init__.py
+    │       ├── test_auth.py # Unit tests for security functions
+    │       └── test_crud_operations.py # Unit tests for DB operations
+    └── rust/
+        └── bridge_test.py # Python-side test to validate PyO3 bindings

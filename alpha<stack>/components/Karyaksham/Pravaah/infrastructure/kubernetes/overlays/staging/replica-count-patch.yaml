@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: karyaksham-api # Name of the base API deployment
+spec:
+  replicas: 2 # Set 2 replicas for the API in staging
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: karyaksham-worker # Name of the base worker deployment
+spec:
+  replicas: 3 # Set 3 replicas for the workers in staging to handle more load and test scaling

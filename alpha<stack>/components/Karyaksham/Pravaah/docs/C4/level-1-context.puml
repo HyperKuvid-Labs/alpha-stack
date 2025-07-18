@@ -1,0 +1,27 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+LAYOUT_WITH_LEGEND()
+
+title System Context Diagram for Karyaksham
+
+Person(user, "User", "Data Analyst, Data Scientist, Administrator")
+
+System_Boundary(karyaksham_boundary, "Karyaksham") {
+    System(frontend_app, "Frontend Application", "Web-based Single-Page Application (React/Vue.js) for managing files and jobs.")
+    System(backend_api, "Karyaksham Backend", "Python FastAPI API, Celery workers, and Rust processing engine.")
+}
+
+System_Ext(object_storage, "Object Storage", "Scalable storage for raw and processed files (AWS S3, GCS, MinIO).")
+System_Ext(database, "Relational Database", "PostgreSQL database storing user data, job metadata, and application state.")
+System_Ext(message_broker_cache, "Cache & Message Broker", "Redis for asynchronous task queuing (Celery) and caching.")
+
+Rel(user, frontend_app, "Uses", "Web browser")
+Rel(frontend_app, backend_api, "Makes API requests to", "JSON/HTTP (REST)")
+Rel(frontend_app, object_storage, "Uploads/Downloads files directly via", "Presigned URLs")
+
+Rel(backend_api, object_storage, "Manages presigned URLs, streams input/output files to/from", "S3 API")
+Rel(backend_api, database, "Reads from and writes job metadata and user data to", "SQL (PostgreSQL)")
+Rel(backend_api, message_broker_cache, "Uses for task queuing and caching", "Redis Protocol")
+
+@enduml

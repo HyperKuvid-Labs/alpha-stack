@@ -1,0 +1,96 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+.flaskenv
+*.tfvars
+
+# Python
+# Virtual environments
+backend/.venv/
+backend/venv/
+backend/env/
+# Byte-code files
+**/__pycache__/
+**/*.pyc
+**/*.pyd
+**/*.pyo
+# Distribution / build
+backend/dist/
+backend/build/
+backend/*.egg-info/
+backend/.pdm-build/
+backend/.pdm.toml
+# Test / coverage
+backend/.pytest_cache/
+backend/htmlcov/
+backend/.nox/
+backend/site/ # PDM's default site for `pdm run`
+
+# Rust
+# Cargo build outputs
+rust_engine/target/
+# Rust/PyO3 build artifacts that might be generated in the Python tree
+# The actual compiled `.so`/`.dll` will be within `rust_engine/target/` and packaged into wheel.
+# If `maturin develop` creates temporary files in `backend/src/karyaksham_api/`, ignore them
+# Example: backend/src/karyaksham_api/karyaksham_rust_engine.cpython-311-x86_64-linux-gnu.so
+
+# Node.js / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+# Log files
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+# Vite related
+frontend/.vite/
+# Frontend framework specific caches (e.g., if React/Next.js/Vue/Nuxt.js is used)
+frontend/.next/
+frontend/.nuxt/
+frontend/.svelte-kit/
+
+# E2E test artifacts
+tests/e2e/report/
+tests/e2e/screenshots/
+
+# IDE and Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+.history/ # VS Code Local History
+
+# Logs and temporary files
+*.log
+logs/
+temp/
+tmp/
+
+# Database artifacts
+*.db
+*.sqlite
+*.sqlite3
+# Alembic generated compiled files
+backend/src/karyaksham_api/db/migrations/versions/*.pyc
+
+# Docker specific local volumes / data
+infrastructure/minio_data/
+infrastructure/postgres_data/
+
+# Misc caches and temporary files
+.cache/
+.npm/
+.yarn/
+*.bak
+*.orig
+.DS_Store
+*.seed
+.project
+.classpath
+.settings/
+.env.vault
+*.envrc

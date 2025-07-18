@@ -1,0 +1,24 @@
+[package]
+name = "rust_engine"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "rust_engine"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.20.0", features = ["extension-module"] }
+tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread", "io-util"] }
+rayon = "1.8.0"
+serde = { version = "1.0.195", features = ["derive"] }
+serde_json = "1.0.111"
+polars = { version = "0.38.0", features = ["csv", "parquet", "json", "time", "dtype-datetime", "strings", "expressions", "io", "streaming"] }
+object_store = { version = "0.10.0", features = ["aws"] } # For S3 and MinIO compatibility
+anyhow = "1.0.78"
+
+[profile.release]
+lto = true
+opt-level = "s"
+codegen-units = 1
+panic = "abort"

@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # Reference the common base resources for the application
+  - ../../base
+
+patchesStrategicMerge:
+  # Apply production-specific scaling adjustments defined in scaling-patch.yaml
+  - scaling-patch.yaml
+
+images:
+  # Override the Docker image used for the backend (API and Workers) deployments.
+  # The 'name' must match the image name (without tag) as it appears in the base deployment YAMLs
+  # (e.g., deployment-api.yaml and deployment-worker.yaml).
+  # 'newName' should point to your production container registry path.
+  # 'newTag' should be a specific, immutable production release tag (e.g., v1.0.0, a Git SHA, or latest for CI/CD).
+  - name: karyaksham/backend # Assumed image name from base deployments (e.g., in Dockerfile or base/deployment-api.yaml)
+    newName: your-docker-registry.com/karyaksham/backend # Replace with your actual container registry URL
+    newTag: production-v1.0.0 # Example: Use a specific version tag for production stability

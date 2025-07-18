@@ -1,0 +1,17 @@
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: karyaksham-api-service
+  labels:
+    app: karyaksham-api
+spec:
+  selector:
+    app: karyaksham-api
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+      name: http-api
+  type: ClusterIP
+```

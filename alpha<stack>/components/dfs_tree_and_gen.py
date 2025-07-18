@@ -94,7 +94,6 @@ def gen_file_content(context, file_path, project_desc, project_name, is_top_leve
     """
 
     try:
-        # Use environment variable for API key
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             genai.configure(api_key="AIzaSyAb56f8gsiKgrg7ry3UWcuiDbGQsLMFJj0")
@@ -106,7 +105,6 @@ def gen_file_content(context, file_path, project_desc, project_name, is_top_leve
     
     except Exception as e:
         print(f"Error generating content for {file_path}: {e}")
-        # Return a basic template for the file
         file_ext = pathlib.Path(file_path).suffix
         if file_ext == '.py':
             return f'# {file_path}\n# Generated file for {project_name}\n\n# TODO: Implement functionality\npass\n'
@@ -118,7 +116,7 @@ def gen_file_content(context, file_path, project_desc, project_name, is_top_leve
             return f'// Generated file for {project_name}\n// TODO: Implement functionality\n'
 
 
-def dfs_tree_and_gen(root: TreeNode, project_desc, project_name, parent_context, current_path, folder_structure, is_top_level=True):
+def dfs_tree_and_gen(root: TreeNode, project_desc, project_name, parent_context, current_path, folder_structure, is_top_level=True, dependency_analyzer=None):
     if not isinstance(root, TreeNode):
         raise TypeError(f"Expected TreeNode, got {type(root)}. Value: {root}")
     
@@ -139,7 +137,7 @@ def dfs_tree_and_gen(root: TreeNode, project_desc, project_name, parent_context,
         if parent_dir and not os.path.exists(parent_dir):
             os.makedirs(parent_dir, exist_ok=True)
         
-        # Check if path already exists as directory
+        #check if this path already exists as directory, or else just the one line is enough
         if os.path.exists(full_path) and os.path.isdir(full_path):
             print(f"Warning: {full_path} already exists as directory, skipping file creation")
             return full_path
@@ -157,6 +155,9 @@ def dfs_tree_and_gen(root: TreeNode, project_desc, project_name, parent_context,
         try:
             with open(full_path, "w", encoding='utf-8') as f:
                 f.write(content)
+
+            if dependency_analyzer:
+                dependency_analyzer.analyze_file_dependencies(full_path, content)
             print("Generated file:", full_path)
         except Exception as e:
             print(f"Error writing file {full_path}: {e}")
@@ -171,8 +172,9 @@ def dfs_tree_and_gen(root: TreeNode, project_desc, project_name, parent_context,
                 project_name,
                 context,
                 full_path,
-                folder_structure,  # Fixed: Pass folder_structure parameter
-                is_top_level=False
+                folder_structure,  
+                is_top_level=False,
+                dependency_analyzer=dependency_analyzer
             )
 
     return full_path

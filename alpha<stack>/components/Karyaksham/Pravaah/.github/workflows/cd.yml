@@ -1,0 +1,170 @@
+name: Continuous Deployment
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*' # Matches tags like v1.0.0, v1.2.3, etc.
+
+env:
+  AWS_REGION: us-east-1 # Default AWS region for deployments, override in env if needed
+  ECR_REPOSITORY_NAME: karyaksham-backend # Name of the ECR repository
+
+jobs:
+  build_and_push_image:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Required for OIDC authentication with AWS
+
+    outputs:
+      image_tag: ${{ steps.set_image_tag.outputs.tag }}
+      image_uri: ${{ steps.build_image.outputs.image_uri }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # This role should have permissions to push images to ECR.
+          # Replace ${{ secrets.AWS_ACCOUNT_ID }} with your actual AWS Account ID.
+          # The IAM role 'github-actions-cd-role' must be created in your AWS account
+          # and configured with an OIDC trust policy for your GitHub repository.
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-cd-role
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tag
+        id: set_image_tag
+        run: |
+          IMAGE_TAG=""
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            # For 'main' branch, use the commit SHA as the tag (for staging deployments)
+            IMAGE_TAG="${{ github.sha }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            # For version tags, use the tag name itself (for production deployments)
+            IMAGE_TAG="${{ github.ref_name }}"
+          fi
+          echo "tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "Determined image tag: $IMAGE_TAG"
+
+      - name: Build and Push Docker Image
+        id: build_image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.set_image_tag.outputs.tag }}
+        run: |
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY_NAME:$IMAGE_TAG"
+          echo "Building Docker image with URI: $IMAGE_URI"
+          # The Dockerfile (infrastructure/Dockerfile) is responsible for the multi-stage build,
+          # including compiling the Rust engine.
+          docker build -f infrastructure/Dockerfile -t "$IMAGE_URI" .
+          echo "Pushing Docker image to ECR..."
+          docker push "$IMAGE_URI"
+          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+          echo "Successfully built and pushed $IMAGE_URI"
+
+  deploy_staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build_and_push_image # This job depends on the image being built and pushed
+    # This job runs only when a push occurs on the 'main' branch
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: staging # Associates with a GitHub environment, enables manual approval if configured
+      url: https://staging.karyaksham.com # Replace with your actual staging URL
+
+    permissions:
+      contents: read
+      id-token: write # Required for OIDC authentication with AWS EKS
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # This role should have permissions to access the staging EKS cluster.
+          # Replace with your actual AWS Account ID and staging EKS IAM role.
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-eks-staging-role
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update Kubeconfig for Staging Cluster
+        run: |
+          # Replace 'karyaksham-staging-cluster' with your actual EKS cluster name
+          aws eks update-kubeconfig --name karyaksham-staging-cluster --region ${{ env.AWS_REGION }}
+
+      - name: Setup Kustomize
+        uses: kodermax/setup-kustomize@v1
+        with:
+          kustomize-version: '5.x.x' # Specify a recent stable Kustomize version
+
+      - name: Deploy to Staging Kubernetes
+        env:
+          # Get the full image URI from the previous build job
+          IMAGE_URI: ${{ needs.build_and_push_image.outputs.image_uri }}
+        run: |
+          # Navigate to the Kustomize overlay for staging
+          cd infrastructure/kubernetes/overlays/staging
+          # Set the image for the 'karyaksham-backend' container in the Kustomize base
+          kustomize edit set image karyaksham-backend=$IMAGE_URI
+          # Build the Kustomize manifests and apply them to the Kubernetes cluster
+          kustomize build . | kubectl apply -f -
+          echo "Deployment to staging environment complete."
+
+  deploy_production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build_and_push_image # This job depends on the image being built and pushed
+    # This job runs only when a push occurs on a tag starting with 'v'
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: production # Associates with a GitHub environment, enables manual approval if configured
+      url: https://karyaksham.com # Replace with your actual production URL
+
+    permissions:
+      contents: read
+      id-token: write # Required for OIDC authentication with AWS EKS
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # This role should have permissions to access the production EKS cluster.
+          # Replace with your actual AWS Account ID and production EKS IAM role.
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-eks-prod-role
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update Kubeconfig for Production Cluster
+        run: |
+          # Replace 'karyaksham-prod-cluster' with your actual EKS cluster name
+          aws eks update-kubeconfig --name karyaksham-prod-cluster --region ${{ env.AWS_REGION }}
+
+      - name: Setup Kustomize
+        uses: kodermax/setup-kustomize@v1
+        with:
+          kustomize-version: '5.x.x'
+
+      - name: Deploy to Production Kubernetes
+        env:
+          # Get the full image URI from the previous build job
+          IMAGE_URI: ${{ needs.build_and_push_image.outputs.image_uri }}
+        run: |
+          # Navigate to the Kustomize overlay for production
+          cd infrastructure/kubernetes/overlays/production
+          # Set the image for the 'karyaksham-backend' container in the Kustomize base
+          kustomize edit set image karyaksham-backend=$IMAGE_URI
+          # Build the Kustomize manifests and apply them to the Kubernetes cluster
+          kustomize build . | kubectl apply -f -
+          echo "Deployment to production environment complete."

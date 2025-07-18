@@ -1,0 +1,148 @@
+import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth'; // Assumed hook for authentication context
+import { apiClient } from '../services/apiClient'; // Assumed service for API calls
+import JobCard from '../components/JobCard'; // Assumed component for displaying job summaries
+
+interface User {
+  username: string;
+  // Add other user properties as needed, e.g., email, id
+}
+
+interface Job {
+  id: string;
+  name: string;
+  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+  input_file_path?: string;
+  output_file_path?: string;
+  created_at: string;
+  updated_at: string;
+  // Add other job properties as defined in backend/schemas/job.py
+}
+
+const HomePage: React.FC = () => {
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
+  const [recentJobs, setRecentJobs] = useState<Job[]>([]);
+  const [loadingJobs, setLoadingJobs] = useState(true);
+  const [errorJobs, setErrorJobs] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchRecentJobs = async () => {
+      if (authLoading) return; // Wait for authentication status to be resolved
+
+      if (!isAuthenticated) {
+        setLoadingJobs(false);
+        return; // No authenticated user, no jobs to fetch
+      }
+
+      try {
+        setLoadingJobs(true);
+        setErrorJobs(null);
+        // Fetch up to 5 recent jobs for the current user
+        const response = await apiClient.get('/jobs', {
+          params: {
+            limit: 5,
+            order: 'desc',
+            sort_by: 'created_at',
+            status: ['COMPLETED', 'RUNNING', 'FAILED', 'PENDING'].join(',') // Fetch all relevant statuses
+          }
+        });
+        // Assuming the API returns a structure like { items: Job[], total: number }
+        setRecentJobs(response.data.items);
+      } catch (err: any) {
+        console.error('Error fetching recent jobs:', err);
+        setErrorJobs('Failed to load recent jobs. Please try again.');
+        // Optionally, check for specific error codes like 401 and redirect to login
+        if (err.response && err.response.status === 401) {
+          // Handle token expiry or unauthenticated state (e.g., redirect to login)
+          setErrorJobs('Authentication required. Please log in.');
+        }
+      } finally {
+        setLoadingJobs(false);
+      }
+    };
+
+    fetchRecentJobs();
+  }, [isAuthenticated, authLoading]); // Re-fetch when authentication status changes
+
+  if (authLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <p className="text-xl text-gray-600">Loading user data...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-6">
+        Welcome to Karyaksham{user ? `, ${user.username}` : ''}!
+      </h1>
+      <p className="text-lg md:text-xl text-gray-700 mb-10 leading-relaxed">
+        Your efficient and capable platform for large-scale data processing.
+        Leverage the power of Rust for speed and Python for flexibility.
+      </p>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+        {/* New Processing Section */}
+        <section className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white p-8 rounded-xl shadow-lg flex flex-col justify-between transform transition-all duration-300 hover:scale-[1.01]">
+          <div>
+            <h2 className="text-3xl font-bold mb-4">Start a New Processing Job</h2>
+            <p className="text-blue-100 mb-6">
+              Upload your large datasets (up to 50 GB) and define custom processing pipelines with ease.
+            </p>
+          </div>
+          <Link
+            to="/upload"
+            className="inline-flex items-center justify-center bg-white text-blue-700 font-semibold px-8 py-3 rounded-lg text-lg hover:bg-gray-100 transition-colors self-start shadow-md"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Upload File
+          </Link>
+        </section>
+
+        {/* Recent Jobs Section */}
+        <section className="bg-white p-8 rounded-xl shadow-lg flex flex-col transform transition-all duration-300 hover:scale-[1.01]">
+          <h2 className="text-3xl font-bold text-gray-900 mb-4">Your Recent Jobs</h2>
+          {isAuthenticated ? (
+            loadingJobs ? (
+              <p className="text-gray-600 text-lg">Fetching your latest processing jobs...</p>
+            ) : errorJobs ? (
+              <p className="text-red-600 text-lg">{errorJobs}</p>
+            ) : recentJobs.length === 0 ? (
+              <p className="text-gray-600 text-lg">
+                You haven't started any jobs yet. <Link to="/upload" className="text-blue-600 hover:underline">Upload a file</Link> to get started!
+              </p>
+            ) : (
+              <div className="space-y-5 flex-grow">
+                {recentJobs.map((job) => (
+                  <JobCard key={job.id} job={job} />
+                ))}
+                <Link to="/jobs" className="block text-right text-blue-600 hover:underline text-lg font-medium mt-4">
+                  View All Jobs &rarr;
+                </Link>
+              </div>
+            )
+          ) : (
+            <p className="text-gray-600 text-lg">
+              Please <Link to="/login" className="text-blue-600 hover:underline">log in</Link> to view your jobs and start new processing tasks.
+            </p>
+          )}
+        </section>
+      </div>
+
+      {/* Add more sections like "How it works", "Features" if applicable */}
+      <section className="mt-16 text-center">
+        <h2 className="text-3xl font-bold text-gray-900 mb-4">Why Karyaksham?</h2>
+        <p className="text-gray-700 text-lg max-w-3xl mx-auto">
+          Built with a hybrid Python-Rust architecture, Karyaksham delivers uncompromised performance for CPU-bound tasks
+          while providing the flexibility and rapid development of Python for the API and orchestration layers.
+        </p>
+      </section>
+    </div>
+  );
+};
+
+export default HomePage;

@@ -1,0 +1,303 @@
+# Karyaksham: An Efficient Data Processing Engine
+
+## Project Overview
+
+**Karyaksham** (Sanskrit/Hindi: कार्याक्षम, meaning "Efficient" or "Capable") is a high-performance, efficient application designed to handle demanding data processing tasks. It leverages a hybrid architecture, combining Python for its extensive ecosystem and rapid development capabilities with Rust for unparalleled performance and memory safety in CPU-bound operations.
+
+The core user requirement for this project is a high-performance, efficient application capable of handling demanding data processing tasks, especially with large datasets.
+
+## Core Technologies
+
+### Programming Languages
+
+*   **Python (3.11+)**: Primary language for the API layer, business logic orchestration, and background job management. Chosen for its ecosystem, rapid development, and readability.
+*   **Rust (Latest Stable)**: Used for the core file processing engine, compiled into a native Python module via PyO3, providing native application speed for CPU/memory-intensive tasks.
+
+### Frameworks & Libraries
+
+#### Python Stack
+*   **FastAPI**: Modern, high-performance web framework for building asynchronous APIs, with automatic OpenAPI documentation.
+*   **PyO3**: Facilitates seamless, low-overhead communication between Python and compiled Rust code.
+*   **Celery**: Distributed task queue for asynchronous background jobs, essential for offloading long-running file processing.
+*   **Polars**: A blazingly fast DataFrame library written in Rust, used for data manipulation in the Python layer.
+
+#### Rust Stack
+*   **Rayon**: Data-parallelism library for easily parallelizing computations, leveraging multi-core processors.
+*   **Tokio**: Asynchronous runtime for high-performance, non-blocking I/O operations (e.g., object storage streaming).
+*   **Serde**: Powerful framework for efficient serialization/deserialization of Rust data structures.
+
+### Databases & Storage
+
+*   **Primary Database: PostgreSQL (v15+)**: Robust RDBMS for user data, job metadata, application state, and configuration, supporting advanced data types like JSONB.
+*   **File Storage: Object Storage (AWS S3, Google Cloud Storage, or MinIO)**: Scalable and durable storage for large datasets, decoupling file storage from application servers. Utilizes presigned URLs for secure and efficient uploads/downloads.
+*   **Cache & Message Broker: Redis (v7+)**: Serves as a fast, in-memory cache and the message broker for Celery, ensuring low-latency task queuing.
+
+### Infrastructure & Deployment
+
+*   **Containerization: Docker & Docker Compose**: Ensures consistent and reproducible environments across development, testing, and production. Docker Compose orchestrates local development setup.
+*   **Orchestration: Kubernetes (K8s)**: Industry standard for automating deployment, scaling, and management of containerized applications in production.
+*   **Cloud Provider: AWS / GCP / Azure**: Major cloud providers for managed services (K8s, PostgreSQL, Object Storage, Redis).
+*   **CI/CD: GitHub Actions or GitLab CI**: Automates linting, testing, multi-stage Docker image builds (Rust compilation first), and deployments.
+
+## Architecture Overview
+
+### System Design Pattern
+
+**Hybrid Monolith with Asynchronous Task Processing**: The application starts as a single deployable unit (FastAPI API) but is designed for scalability by offloading all heavy computation to an asynchronous task queue (Celery + Rust engine). This approach reduces initial complexity while providing a clear path for future evolution into a microservices architecture.
+
+### Components & Data Flow
+
+1.  **UI (React/Vue.js)**: Single-page application for user interaction, file uploads, and job management.
+2.  **API Gateway (e.g., Nginx, Traefik)**: Entry point for traffic, handles SSL, load balancing, and routing to FastAPI.
+3.  **Python API (FastAPI)**: Manages authentication, provides REST endpoints for jobs, generates presigned URLs for direct file uploads to Object Storage, and dispatches tasks to Celery.
+4.  **Message Broker (Redis)**: Queues processing tasks, decoupling the API from workers.
+5.  **Processing Workers (Celery)**: Python processes listening for tasks, invoking the Rust Engine, and updating job status in PostgreSQL.
+6.  **Rust Engine (PyO3 Module)**: High-performance library called from Python workers. Streams data from Object Storage, performs CPU-bound transformations, and streams results back to Object Storage.
+7.  **Database (PostgreSQL)**: Source of truth for user accounts, job definitions, and status.
+8.  **Object Storage (S3/MinIO)**: Stores all raw and processed file data.
+
+#### Data Flow (Example: CSV Filtering)
+1.  User initiates upload in the UI.
+2.  UI requests a presigned upload URL from the FastAPI API.
+3.  UI uploads the file directly to Object Storage via the presigned URL.
+4.  On successful upload, UI calls the `/jobs` endpoint with file path and processing parameters.
+5.  FastAPI creates a `PENDING` job in PostgreSQL and pushes a task to Celery.
+6.  A Celery worker picks up the task, calls the Rust function `process_csv(s3_path, params)` via PyO3.
+7.  The Rust engine streams the CSV from S3, applies filters using parallel processing, and streams results to a new S3 file.
+8.  Worker updates job status in PostgreSQL to `COMPLETED` and stores the output path.
+9.  UI polls `/jobs/{id}`, sees `COMPLETED`, and displays a download link.
+
+### Integration & APIs
+
+*   **Primary API**: RESTful API served by FastAPI, self-documented via OpenAPI/Swagger UI.
+*   **Internal Integration**: Direct Foreign Function Interface (FFI) via PyO3 for highly efficient, in-process calls between Python and Rust.
+
+## Requirements
+
+### Functional Requirements
+*   **FR1: Secure Multi-User File Management:** Users can register, log in, and access only their own files and jobs.
+*   **FR2: Large Dataset Upload:** Support for files up to 50 GB via browser, without tying up API resources.
+*   **FR3: Configurable Processing Pipeline:** Users define sequential processing steps (filter, aggregate, transform, format conversion).
+*   **FR4: Asynchronous Job Execution & Monitoring:** Background jobs with real-time status (Pending, Running, Succeeded, Failed) and logs in the UI.
+*   **FR5: Results Download:** Users can download processed files upon job completion.
+
+### Non-Functional Requirements
+*   **Performance:** API response < 150ms for metadata; 1 GB CSV processing < 45 seconds.
+*   **Scalability:** Processing workers autoscale horizontally; handles > 100 concurrent jobs.
+*   **Reliability & Availability:** 99.9% API uptime; fault-tolerant job processing with auto-retries.
+*   **Security:** Data encryption in transit (TLS 1.3) and at rest; JWT authentication; RBAC; vulnerability scanning.
+*   **Monitoring & Observability:** Prometheus metrics (API latency, errors, queue depth, job times); structured logging (JSON) to centralized service; Alerting for critical conditions.
+
+### Technical Constraints
+*   **Mandatory Technologies:** Python for backend, Rust for high-performance processing.
+*   **Initial Budget:** Cost-effective cloud deployment, leveraging auto-scaling/spot instances.
+*   **Time-to-Market:** MVP for CSV with limited transformations within 3-4 months.
+
+## Implementation Recommendations
+
+### Development Approach
+*   **Methodology: Scrum**: 2-week sprints, iterative delivery, continuous feedback.
+*   **Testing Practices**: Comprehensive unit tests (Rust: `cargo test`, Python: `pytest`), integration tests (Python-Rust boundary, API-worker flow), End-to-End (E2E) tests (Playwright/Cypress), CI-driven testing.
+*   **CI/CD Design (GitHub Actions)**:
+    1.  **On Pull Request**: Linting (Python: `ruff`, `black`; Rust: `clippy`, `rustfmt`), unit/integration tests, Rust wheel build (`maturin build --release`).
+    2.  **On Merge to `main`**: All PR steps, plus multi-stage Docker image build (with Rust wheel), push to registry, deploy to staging (Helm/Kustomize).
+    3.  **On Git Tag**: Deploy to production.
+
+### Risk Assessment
+*   **Risk 1: Python/Rust FFI Complexity**: Mitigated by strict PyO3 usage, clear error propagation, and early spike prototyping.
+*   **Risk 2: Performance Bottlenecks Outside Rust**: Mitigated by distributed tracing (OpenTelemetry), asynchronous Python I/O (`aiohttp`, `aiobotocore`), and load profiling.
+
+## Getting Started
+
+### Prerequisites
+
+*   **Local Machine**: Python 3.11+, Rust toolchain (`rustup`), Docker, Docker Compose.
+*   **Python Tools**: `poetry>=1.2` or `pdm>=2.0`, `maturin`.
+*   **Frontend Tools**: Node.js v18+, `npm` or `yarn`.
+*   **Required Skills**: Proficiency in Python (FastAPI), foundational Rust, Docker experience.
+
+### Project Structure
+
+This project is organized as a monorepo:
+
+```
+karyaksham/
+├── .env.example               # Template for local development environment variables
+├── .github/
+│   └── workflows/
+│       ├── ci.yml             # Runs linting, tests, and build checks on PRs
+│       └── cd.yml             # Deploys to staging/production on merge/tag
+├── .gitignore                 # Specifies intentionally untracked files to ignore
+├── README.md                  # Project overview, setup, and usage instructions
+├── backend/
+│   ├── pyproject.toml         # Python project metadata and dependencies (PDM/Poetry)
+│   ├── src/
+│   │   ├── karyaksham_api/
+│   │   │   ├── __init__.py
+│   │   │   ├── api/           # API endpoint routers
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── v1/
+│   │   │   │       ├── __init__.py
+│   │   │   │       ├── api.py # Aggregates all v1 routers
+│   │   │   │       └── endpoints/
+│   │   │   │           ├── __init__.py
+│   │   │   │           ├── auth.py # Authentication endpoints (login, register)
+│   │   │   │           ├── jobs.py # Endpoints for managing processing jobs
+│   │   │   │           └── users.py # User management endpoints
+│   │   │   ├── auth/          # Authentication related logic
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── jwt.py     # Logic for creating and decoding JWTs
+│   │   │   │   └── security.py # Password hashing, RBAC dependencies
+│   │   │   ├── core/          # Configuration, settings
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── config.py  # Pydantic settings management (loads from .env)
+│   │   │   ├── crud/          # Database interaction logic
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── base.py    # Base CRUD class with common methods
+│   │   │   │   ├── crud_job.py # Data access logic for the Job model
+│   │   │   │   └── crud_user.py # Data access logic for the User model
+│   │   │   ├── db/            # Database setup and models
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── migrations/ # Alembic directory for database migrations
+│   │   │   │   │   ├── versions/ # Contains individual migration scripts
+│   │   │   │   │   ├── env.py # Alembic runtime environment configuration
+│   │   │   │   │   └── script.py.mako # Migration script template
+│   │   │   │   ├── models/
+│   │   │   │   │   ├── __init__.py
+│   │   │   │   │   ├── job.py # SQLAlchemy model for processing jobs
+│   │   │   │   │   └── user.py # SQLAlchemy model for users
+│   │   │   │   └── session.py # Database session creation and management
+│   │   │   ├── integrations/  # External service clients
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── object_storage.py # Client for S3, GCS, or MinIO
+│   │   │   │   └── redis_client.py # Wrapper for Redis connections
+│   │   │   ├── schemas/       # Pydantic schemas for data validation
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── job.py     # Pydantic schemas for job creation and response
+│   │   │   │   ├── token.py   # Pydantic schemas for JWT tokens
+│   │   │   │   └── user.py    # Pydantic schemas for user data
+│   │   │   ├── static/        # Static assets (e.g., for API docs)
+│   │   │   │   └── favicon.ico # Example static asset for API docs
+│   │   │   ├── utils/         # Miscellaneous utility functions
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── helpers.py # Miscellaneous utility functions
+│   │   │   └── main.py        # FastAPI application entry point
+│   │   └── karyaksham_workers/ # Celery worker definitions
+│   │       ├── __init__.py
+│   │       ├── celery_app.py  # Celery application instance and configuration
+│   │       └── tasks/
+│   │           ├── __init__.py
+│   │           └── processing.py # Celery tasks that call the Rust engine
+├── docs/                      # Project documentation
+│   ├── C4/                    # C4 model diagrams for architecture visualization
+│   │   ├── level-1-context.puml
+│   │   └── level-2-container.puml
+│   ├── adrs/                  # Architecture Decision Records
+│   │   └── 001-hybrid-monolith-with-ffi.md
+│   ├── api.md                 # Details on API usage and authentication
+│   └── setup.md               # Developer setup and getting started guide
+├── frontend/                  # React/Vue frontend application
+│   ├── public/
+│   │   └── index.html         # Main HTML entry point for the SPA
+│   ├── src/                   # Frontend source code
+│   │   ├── App.tsx            # Main application component (React example)
+│   │   ├── assets/            # Static assets like images, fonts, and CSS
+│   │   ├── components/        # Reusable UI components
+│   │   ├── hooks/             # Custom React hooks
+│   │   ├── pages/             # Top-level page components
+│   │   ├── services/
+│   │   │   └── apiClient.ts   # Typed client for interacting with the backend API
+│   │   └── main.tsx           # Application entry point
+│   ├── .eslintrc.cjs          # ESLint configuration
+│   ├── index.html             # Development entry point for Vite
+│   ├── package.json           # NPM dependencies and scripts
+│   └── tsconfig.json          # TypeScript configuration
+├── infrastructure/            # Infrastructure setup and deployment files
+│   ├── Dockerfile             # Multi-stage Dockerfile for API and workers
+│   ├── .dockerignore          # Files to exclude from the Docker build context
+│   ├── docker-compose.yml     # Orchestrates services for local development
+│   ├── kubernetes/
+│   │   ├── base/              # Common Kustomize resources for all environments
+│   │   │   ├── configmap.yaml
+│   │   │   ├── deployment-api.yaml
+│   │   │   ├── deployment-worker.yaml
+│   │   │   ├── kustomization.yaml
+│   │   │   └── service.yaml
+│   │   └── overlays/
+│   │       ├── production/
+│   │       │   ├── kustomization.yaml
+│   │       │   └── scaling-patch.yaml
+│   │       └── staging/
+│   │           ├── kustomization.yaml
+│   │           └── replica-count-patch.yaml
+│   └── scripts/
+│       ├── entrypoint.sh      # Container entrypoint script
+│       └── run_migrations.sh  # Script to apply Alembic migrations
+├── rust_engine/               # Rust processing engine crate
+│   ├── Cargo.toml             # Rust crate manifest and dependencies
+│   ├── src/
+│   │   ├── core/              # Core processing logic
+│   │   │   ├── mod.rs
+│   │   │   ├── data_processor.rs # High-performance data processing logic
+│   │   │   └── file_handler.rs # Logic for streaming from object storage
+│   │   ├── utils/             # Utility functions for Rust engine
+│   │   │   ├── mod.rs
+│   │   │   └── error.rs       # Custom error types and conversions
+│   │   └── lib.rs             # PyO3 module definition exposing functions to Python
+└── tests/                     # Tests for all components
+    ├── __init__.py
+    ├── e2e/                   # End-to-end tests
+    │   ├── specs/
+    │   │   └── job_submission.spec.ts # E2E test for a full user journey
+    │   └── playwright.config.ts # Configuration for Playwright
+    ├── python/                # Python tests
+    │   ├── __init__.py
+    │   ├── conftest.py        # Global pytest fixtures and test helpers
+    │   ├── integration/
+    │   │   ├── __init__.py
+    │   │   ├── test_api_endpoints.py # Tests API routes with a test client
+    │   │   └── test_worker_integration.py # Tests the full Celery job flow
+    │   └── unit/
+    │       ├── __init__.py
+    │       ├── test_auth.py   # Unit tests for security functions
+    │       └── test_crud_operations.py # Unit tests for DB operations
+    └── rust/
+        └── bridge_test.py     # Python-side test to validate PyO3 bindings
+```
+
+### Configuration
+
+Environment variables are used for configuring the application. For local development, use a `.env` file based on the example below. In production, these should be securely injected by the orchestration platform (e.g., Kubernetes) from a dedicated secrets store.
+
+```dotenv
+# .env.example
+# Application
+ENVIRONMENT=development
+SECRET_KEY=a_very_secret_key_for_jwt
+
+# PostgreSQL Database
+POSTGRES_SERVER=db
+POSTGRES_USER=karyaksham
+POSTGRES_PASSWORD=password
+POSTGRES_DB=karyakshamdb
+
+# Redis Broker & Cache
+REDIS_HOST=redis
+REDIS_PORT=6379
+
+# Object Storage (MinIO for local dev)
+OBJECT_STORAGE_ENDPOINT=http://minio:9000
+OBJECT_STORAGE_ACCESS_KEY=minioadmin
+OBJECT_STORAGE_SECRET_KEY=minioadmin
+OBJECT_STORAGE_BUCKET=karyaksham-data
+```
+
+**Secrets Management**: In production, never use `.env` files directly. Integrate with a dedicated secrets manager like HashiCorp Vault, AWS Secrets Manager, or Google Secret Manager. These can be securely mounted into Kubernetes pods.
+
+## Contributing
+
+We welcome contributions! Please see our `CONTRIBUTING.md` (to be created) for guidelines.
+
+## License
+
+This project is licensed under the MIT License - see the `LICENSE` file for details.

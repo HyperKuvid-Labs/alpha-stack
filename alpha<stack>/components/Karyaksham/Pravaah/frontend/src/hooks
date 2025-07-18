@@ -1,0 +1,125 @@
+import { useState, useEffect, useCallback } from 'react';
+import { apiClient } from '../services/apiClient';
+
+// Define types based on backend schemas (e.g., from backend/src/karyaksham_api/schemas/user.py and token.py)
+interface User {
+  id: number;
+  email: string;
+  is_active: boolean;
+  is_superuser: boolean;
+  // Add other user fields as needed
+}
+
+interface AuthTokenResponse {
+  access_token: string;
+  token_type: string;
+  user: User; // Assuming the user object is returned along with the token
+}
+
+interface LoginCredentials {
+  email: string;
+  password: string;
+}
+
+interface AuthState {
+  user: User | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  error: string | null;
+  login: (credentials: LoginCredentials) => Promise<void>;
+  logout: () => void;
+}
+
+const LOCAL_STORAGE_TOKEN_KEY = 'jwt_token';
+const LOCAL_STORAGE_USER_KEY = 'current_user';
+
+export const useAuth = (): AuthState => {
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true); // Start as loading to check local storage
+  const [error, setError] = useState<string | null>(null);
+
+  // Initialize auth state from local storage on component mount
+  useEffect(() => {
+    try {
+      const storedToken = localStorage.getItem(LOCAL_STORAGE_TOKEN_KEY);
+      const storedUser = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
+
+      if (storedToken && storedUser) {
+        setUser(JSON.parse(storedUser));
+        setToken(storedToken);
+        apiClient.setToken(storedToken); // Ensure API client is aware of the token
+      }
+    } catch (e) {
+      console.error("Failed to parse stored user or token:", e);
+      // Clear invalid storage items if parsing fails
+      localStorage.removeItem(LOCAL_STORAGE_TOKEN_KEY);
+      localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const login = useCallback(async (credentials: LoginCredentials) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      // Backend authentication endpoint is expected to be `/api/v1/auth/login`
+      // apiClient will prefix with baseURL (e.g., http://localhost:8000/api/v1)
+      const response = await apiClient.post<AuthTokenResponse>('/auth/login', {
+        username: credentials.email, // FastAPI typically expects 'username' for OAuth2PasswordRequestForm
+        password: credentials.password,
+      }, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' } // Required for OAuth2PasswordRequestForm
+      });
+
+      const { access_token, user: loggedInUser } = response.data;
+
+      setToken(access_token);
+      setUser(loggedInUser);
+      apiClient.setToken(access_token); // Update token in the API client instance
+
+      localStorage.setItem(LOCAL_STORAGE_TOKEN_KEY, access_token);
+      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(loggedInUser));
+
+    } catch (err: any) {
+      console.error('Login failed:', err);
+      if (err.response) {
+        setError(err.response.data?.detail || 'Login failed. Please check your credentials.');
+      } else if (err.request) {
+        setError('Network error. Please try again.');
+      } else {
+        setError('An unexpected error occurred.');
+      }
+      setUser(null);
+      setToken(null);
+      apiClient.clearToken();
+      localStorage.removeItem(LOCAL_STORAGE_TOKEN_KEY);
+      localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const logout = useCallback(() => {
+    setUser(null);
+    setToken(null);
+    setError(null);
+    apiClient.clearToken(); // Clear token from the API client instance
+    localStorage.removeItem(LOCAL_STORAGE_TOKEN_KEY);
+    localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+  }, []);
+
+  const isAuthenticated = !!token && !!user;
+
+  return {
+    user,
+    token,
+    isAuthenticated,
+    isLoading,
+    error,
+    login,
+    logout,
+  };
+};

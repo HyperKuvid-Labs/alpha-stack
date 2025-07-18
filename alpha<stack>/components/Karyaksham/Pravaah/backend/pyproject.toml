@@ -1,0 +1,106 @@
+```toml
+[project]
+name = "karyaksham-backend"
+version = "0.1.0"
+description = "Backend for Karyaksham: High-performance data processing API and asynchronous workers for efficient data transformation using Python and Rust."
+authors = [{ name = "Karyaksham Team", email = "dev@karyaksham.com" }]
+license = { text = "MIT" }
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Data Processing",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Framework :: FastAPI",
+]
+
+dependencies = [
+    "fastapi>=0.110.0,<0.111.0",
+    "uvicorn[standard]>=0.29.0,<0.30.0",
+    "pydantic>=2.7.0,<2.8.0",
+    "pydantic-settings>=2.2.0,<2.3.0",
+    "SQLAlchemy>=2.0.28,<2.1.0",
+    "psycopg2-binary>=2.9.9,<3.0.0",
+    "alembic>=1.13.1,<1.14.0",
+    "python-jose[cryptography]>=3.3.0,<4.0.0",
+    "passlib[bcrypt]>=1.7.4,<1.8.0",
+    "celery>=5.3.6,<5.4.0",
+    "redis>=5.0.4,<5.1.0",
+    "boto3>=1.34.80,<1.35.0", # For Object Storage (S3/MinIO) interactions
+    "polars[pyarrow]>=0.20.18,<0.21.0", # For fast DataFrame operations in Python
+    # Link to the local Rust package (karyaksham-rust) built by Maturin.
+    # For local development with PDM, 'develop = true' installs it in editable mode.
+    # In production Docker builds, the Rust wheel will be pre-built by Maturin
+    # and installed before PDM installs these dependencies.
+    "karyaksham-rust @ {path = '../rust_engine', develop = true}",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.1.1,<8.2.0",
+    "pytest-asyncio>=0.23.6,<0.24.0",
+    "httpx>=0.27.0,<0.28.0", # For testing FastAPI endpoints
+    "ruff>=0.4.0,<0.5.0",
+    "black>=24.3.0,<24.4.0",
+    "mypy>=1.9.0,<1.10.0",
+    "python-dotenv>=1.0.1,<1.1.0", # For loading .env files in local development
+    "ipython>=8.23.0,<8.24.0", # Interactive shell for development
+    "maturin>=1.2.0,<1.3.0", # For building and managing the Rust PyO3 extension
+]
+
+[project.scripts]
+# Entry point for running the FastAPI application using Uvicorn
+start-api = "uvicorn karyaksham_api.main:app --host 0.0.0.0 --port 8000"
+# Entry point for starting the Celery worker
+start-worker = "celery -A karyaksham_workers.celery_app worker -l info"
+# Entry point for running Alembic database migrations
+run-migrations = "alembic upgrade head"
+
+[tool.pdm]
+# Specifies that Python source code for this project is located in the 'src' directory.
+# PDM will look for packages like `karyaksham_api` and `karyaksham_workers` inside 'src/'.
+package-dir = "src"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+select = [
+    "E", "F", "W", "I", "N", "D", "UP", "ANN", "ASYNC", "B", "C", "G", "PIE",
+    "PLC", "PLE", "PLR", "SLF", "TID", "ARG", "PTH", "TD", "FIX", "ERA", "PD",
+    "PGH", "RUF"
+]
+ignore = [
+    "ANN101", # Missing type annotation for `self` in method
+    "ANN102", # Missing type annotation for `cls` in classmethod
+    "D",      # Ignore all pydocstyle violations (docstrings) for now, enable later for docstring checks
+]
+
+[tool.black]
+line-length = 120
+target-version = ['py311']
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unused_ignores = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+ignore_missing_imports = true # Temporarily ignore missing imports for external libraries, refine as project matures
+plugins = [
+    "pydantic.mypy", # Enable MyPy plugin for Pydantic models
+    "SQLAlchemy.mypy", # Enable MyPy plugin for SQLAlchemy 2.0 type hints
+]
+
+[tool.pydantic-mypy]
+init_for_params = true
+warn_untyped_fields = true
+
+[tool.SQLAlchemy.mypy]
+warn_20 = true # Enable SQLAlchemy 2.0 style warnings for better type checking
+```
