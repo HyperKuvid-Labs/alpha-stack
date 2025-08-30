@@ -88,4 +88,32 @@ def _apply_lang_specific_cleaning(text: str, ext: Optional[str]) -> str:
             text = re.sub(r'^FROM\s+.*\n', '', text, flags=re.MULTILINE)
             text = from_lines[-1] + '\n' + text
     
-    elif file_ext in ['yml', 'ya]()_
+    elif file_ext in ['yml', 'yaml']:
+        text = re.sub(r'^---\s*\n---', '---', text, flags=re.MULTILINE)
+    
+    return text
+
+
+def detect_language_from_content(text: str) -> Optional[str]:
+    lang_hints = {
+        'python': [r'def\s+\w+\(', r'import\s+\w+', r'from\s+\w+\s+import', r'if\s+__name__\s*==\s*["\']__main__["\']'],
+        'javascript': [r'function\s+\w+\(', r'const\s+\w+\s*=', r'let\s+\w+\s*=', r'var\s+\w+\s*='],
+        'typescript': [r'interface\s+\w+', r'type\s+\w+\s*=', r':\s*string', r':\s*number'],
+        'java': [r'public\s+class\s+\w+', r'public\s+static\s+void\s+main', r'import\s+java\.'],
+        'go': [r'func\s+\w+\(', r'package\s+main', r'import\s*\('],
+        'rust': [r'fn\s+\w+\(', r'use\s+std::', r'let\s+mut\s+\w+'],
+        'php': [r'<\?php', r'\$\w+\s*=', r'function\s+\w+\('],
+        'ruby': [r'def\s+\w+', r'class\s+\w+', r'require\s+["\']'],
+        'sql': [r'SELECT\s+', r'INSERT\s+INTO', r'CREATE\s+TABLE', r'ALTER\s+TABLE'],
+        'html': [r'<html', r'<head>', r'<body>', r'<!DOCTYPE'],
+        'css': [r'\w+\s*\{', r'@media', r'@import'],
+        'dockerfile': [r'^FROM\s+', r'^RUN\s+', r'^COPY\s+', r'^ADD\s+'],
+        'yaml': [r'^\w+:', r'^\s*-\s+\w+', r'---']
+    }
+    
+    for lg, pats in lang_hints.items():
+        for pat in pats:
+            if re.search(pat, text, re.MULTILINE | re.IGNORECASE):
+                return lg
+    
+    return None
