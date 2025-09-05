@@ -1,0 +1,9 @@
+tqdm
+google-generativeai
+networkx
+matplotlib
+astpretty
+transformers
+pydantic
+google-genai
+Pyside6
