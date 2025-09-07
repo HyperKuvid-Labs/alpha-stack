@@ -1,4 +1,5 @@
 from google import genai
+import folder_tree
 from google.genai import types
 from dotenv import load_dotenv
 import re
@@ -6,23 +7,11 @@ import json
 import os
 import string
 from gen_file import GENERATABLE_FILENAMES,GENERATABLE_FILES
-from folder_tree import TreeNode
+from folder_tree import TreeNode,DependencyAnalyzer
 from prompt import software_blueprint_prompt,folder_structure_prompt,file_format_prompt
+from genai_client import get_client
+from dfs_tree_gen import dfs_tree_and_gen
 load_dotenv(dotenv_path='.env')
-client=genai.Client()
-
-_client = None
-
-def get_client():
-    """
-    This function initializes the Google AI client but only does it once.
-    This is the key to fixing the startup problem.
-    """
-    global _client
-    if _client is None:
-        print("Backend: Initializing Google AI client...")
-        _client = genai.Client()
-    return _client
 
 # --- Your Functions (Modified to use get_client()) ---
 
@@ -69,7 +58,7 @@ def inital_software_blueprint(prompt:str)->str:
             return ("Error decoding JSON:", e)
 def folder_structure(project_overveiw:str):
     """generates the folder_structure for the project description"""
-    
+    client = get_client()
     response = client.models.generate_content(
     model="gemini-2.5-pro",
     contents = types.Content(role='user',parts=[types.Part.from_text(text=json.dumps(project_overveiw))
@@ -79,6 +68,7 @@ def folder_structure(project_overveiw:str):
     return response.text
 def files_format(project_overveiw:str,folder_structure:str):
     """generates the json file of each output"""
+    client = get_client()
     response = client.models.generate_content(
     model="gemini-2.5-pro",
     contents = types.Content(role='user',parts=[types.Part.from_text(text=json.dumps(project_overveiw))
@@ -86,7 +76,6 @@ def files_format(project_overveiw:str,folder_structure:str):
     config=types.GenerateContentConfig(systemInstruction=file_format_prompt)
     )
     return response.text
-
 def generate_tree(resp: str, project_name: str = "root") -> TreeNode:
     content = resp.strip().replace('```', '').strip()
     lines = content.split('\n')
@@ -125,9 +114,16 @@ def generate_tree(resp: str, project_name: str = "root") -> TreeNode:
                 stack[-1].add_child(node)
             stack.append(node)
 
+    def mark_files_and_dirs(node: TreeNode):
+        if not node.children:
+            node.is_file = True
+        else:
+            node.is_file = False
+            for child in node.children:
+                mark_files_and_dirs(child)
 
-
-
+    mark_files_and_dirs(root)
+    return root
 def main():
     """
     Executes the main logic and returns the features and folder structure.
@@ -139,13 +135,24 @@ def main():
     print(folder_struc)
     file_format=files_format(software_blueprint,folder_struc)
     print(file_format)
-    # # Create the project files
-    # project_name = software_blueprint["projectDetails"]["projectName"]
-    # folder_tree = generate_tree(folder_struc, project_name)
-    # create_project_structure(folder_tree, project_name,software_blueprint,folder_struc ,base_path)
-
-    # # Extract only the features list
-    # features = software_blueprint.get("features", [])
-
-    # print("--- Backend Process Finished ---")
+    project_name=software_blueprint["projectDetails"]["projectName"]
+    folder_tree=generate_tree(folder_struc,project_name)
+    dependency_analyzer=DependencyAnalyzer()
+    json_file_name = "projects_metadata.json"
+    metadata_dict = {project_name: []}
+    output_dir = os.path.dirname(json_file_name)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+    
+    dfs_tree_and_gen(root=folder_tree, refined_prompt=software_blueprint, tree_structure=folder_struc, project_name=project_name, current_path="", parent_context="", json_file_name=json_file_name, metadata_dict=metadata_dict, dependency_analyzer=dependency_analyzer,
+    file_output_format=file_format)
+    
+    dependency_analyzer.visualize_graph()
+    for entry in metadata_dict[project_name]:
+        path = entry["path"]
+        entry["couples_with"] = dependency_analyzer.get_dependencies(entry["path"])
+    with open(json_file_name, 'w') as f:
+        json.dump(metadata_dict, f, indent=4)
+    
+    print("Running final validation pass...")
 main()
