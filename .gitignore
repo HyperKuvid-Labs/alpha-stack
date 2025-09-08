@@ -1,4 +1,4 @@
 !.env.example
-.env
+*.env
 /**__pycache__**
 *.pyc

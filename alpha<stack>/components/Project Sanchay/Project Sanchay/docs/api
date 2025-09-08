@@ -1,0 +1,40 @@
+# API Reference Documentation
+
+This directory (`docs/api/`) contains the auto-generated API reference documentation for the Project Sanchay application.
+
+The documentation is generated from the source code of both the Python application layer and the Rust core engine. It provides detailed information on modules, classes, functions, and data structures, including their parameters, return types, and descriptions extracted from docstrings and code comments.
+
+## Contents
+
+*   **Python API Documentation:** Generated from the `src/sanchay_app/` directory using Sphinx with the `autodoc` extension.
+    *   This covers the application's user interface, orchestration logic, database interactions, and other Python-specific components.
+*   **Rust API Documentation:** Generated from the `crates/sanchay_core/` directory using `rustdoc`.
+    *   This covers the high-performance core engine's modules, structs, traits, and functions, including detailed explanations of the file processing, directory traversal, and binding mechanisms.
+
+## How to Generate
+
+These documents are typically generated automatically as part of the project's CI/CD pipeline (see `.github/workflows/ci-cd.yml`).
+
+To generate the documentation locally:
+
+### Python API (Sphinx)
+
+1.  Navigate to the `docs/` directory.
+2.  Install Sphinx and required themes/extensions:
+    ```bash
+    pip install sphinx sphinx_rtd_theme sphinx-autodoc-typehints
+    ```
+3.  Generate the HTML documentation:
+    ```bash
+    sphinx-build -b html . _build/html
+    ```
+    The generated Python API documentation will be available in `docs/_build/html/`.
+
+### Rust API (rustdoc)
+
+1.  Navigate to the root of the Rust crate: `crates/sanchay_core/`.
+2.  Run `cargo doc` to generate the documentation:
+    ```bash
+    cargo doc --no-deps --open
+    ```
+    This will generate the documentation in `target/doc/` and open it in your default web browser. For CI/CD, the `--no-deps` flag avoids documenting external dependencies.

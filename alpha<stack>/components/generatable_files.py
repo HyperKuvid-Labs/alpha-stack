@@ -52,7 +52,7 @@ def get_gf(project_desc: str, folder_structure: str):
     # if not api_key:
     #     raise ValueError("GEMINI_API_KEY environment variable not set")
     
-    genai.configure(api_key="AIzaSyAb56f8gsiKgrg7ry3UWcuiDbGQsLMFJj0")
+    genai.configure(api_key="AIzaSyDqA_anmBc5of17-j2OOjy1_R6Fv_mwu5Y")
 
     prompt = f"""
     Based on the following project description and folder structure, determine the generatable files and filenames for the application:

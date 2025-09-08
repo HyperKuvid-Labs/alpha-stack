@@ -96,7 +96,7 @@ def gen_file_content(context, file_path, project_desc, project_name, is_top_leve
     try:
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            genai.configure(api_key="AIzaSyAb56f8gsiKgrg7ry3UWcuiDbGQsLMFJj0")
+            genai.configure(api_key="AIzaSyDqA_anmBc5of17-j2OOjy1_R6Fv_mwu5Y")
         else:
             genai.configure(api_key=api_key)
 

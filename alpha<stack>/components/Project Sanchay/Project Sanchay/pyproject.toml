@@ -1,0 +1,176 @@
+```toml
+[build-system]
+requires = ["maturin>=0.14,<0.15"]
+build-backend = "maturin"
+
+[project]
+name = "sanchay"
+version = "0.1.0"
+authors = [
+    { name = "Project Sanchay Team", email = "info@projectsanchay.com" },
+]
+description = "A high-performance file collection and processing application built with Python and Rust."
+readme = "README.md"
+requires-python = ">=3.10"
+keywords = ["file-management", "data-processing", "rust", "python", "pyside6", "cli"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License", # General project license
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Operating System :: OS Independent",
+    "Topic :: Utilities",
+    "Topic :: System :: Filesystems",
+]
+dependencies = [
+    "PySide6>=6.4.0",
+    "python-dotenv>=1.0.0",
+    "SQLAlchemy>=2.0.0",
+    "typer[all]>=0.9.0", # includes rich for rich output, useful for CLI
+    "loguru>=0.7.0",
+    "pydantic>=2.0.0", # For data validation, especially with configuration or API
+]
+
+[project.urls]
+Homepage = "https://github.com/your-org/project-sanchay"
+Documentation = "https://github.com/your-org/project-sanchay#readme"
+Source = "https://github.com/your-org/project-sanchay"
+Issues = "https://github.com/your-org/project-sanchay/issues"
+
+[project.scripts]
+sanchay = "sanchay_app.__main__:cli_app" # Entry point for the CLI
+
+[project.gui-scripts]
+sanchay-gui = "sanchay_app.__main__:gui_app" # Entry point for the GUI
+
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.22.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-qt>=4.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0",
+    "isort>=5.0",
+    "mypy>=1.0",
+    "ruff>=0.0.270",
+    "faker>=18.0.0", # For generating test data
+]
+docs = [
+    "sphinx>=6.0",
+    "sphinx-rtd-theme>=1.0",
+    "myst-parser>=0.18.0",
+]
+pg = [ # PostgreSQL specific driver
+    "psycopg2-binary>=2.9.0"
+]
+
+[tool.maturin]
+# Points to the Cargo.toml of the Rust crate to be built.
+# This assumes the pyproject.toml is at the root of `project-sanchay/`
+manifest-path = "crates/sanchay_core/Cargo.toml"
+features = ["pyo3/extension-module"]
+# The name of the Python module that the Rust crate compiles into.
+# Python code will `import sanchay_core`.
+module-name = "sanchay_core"
+# Specifies the directory containing the Python source code that should be included
+# in the final wheel package.
+# The 'src' folder contains 'sanchay_app' which is the main Python package.
+python-source = "src"
+
+
+# Tooling configurations
+[tool.black]
+line-length = 120
+target-version = ['py310']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.mypy_cache
+  | \.pytest_cache
+  | \.vscode
+  | \.venv
+  | \.env
+  | build
+  | dist
+  | scripts
+  | docs
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 120
+known_first_party = ["sanchay_app", "sanchay_core"] # For better grouping of imports
+known_third_party = ["PySide6", "sqlalchemy", "typer", "loguru", "pydantic", "fastapi", "uvicorn", "maturin", "python_dotenv", "psycopg2"] # Add other common libs
+skip_glob = ["scripts/*"]
+extend_skip = ["build", "dist", ".venv", ".env"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true # Temporarily, should be fixed later for specific libs
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+exclude = [
+    'build/',
+    'dist/',
+    'scripts/',
+    'venv/',
+    'tests/',
+    'docker/',
+    'crates/sanchay_core/', # Exclude Rust core from Python type checking
+]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "--strict-markers --cov=src/sanchay_app --cov-report=term-missing -ra"
+testpaths = [
+    "tests",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "ui: marks UI tests (requires PySide6)",
+    "integration: marks integration tests (e.g., Python-Rust bridge)",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+# Select common rulesets for good code quality
+select = ["E", "F", "W", "I", "N", "D", "UP", "A", "B", "C", "R", "T", "SIM", "PTH", "PLC", "PLE", "PLW", "RET"]
+ignore = [
+    "D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107", "D203", "D212", # Temporarily disable specific docstring checks
+    "E501", # Handled by black
+    "C901", # Complexity check, can be too strict initially
+]
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".vscode",
+    ".venv",
+    ".env",
+    "scripts",
+    "docs",
+    "crates", # Exclude Rust code directory from Python linting
+]
+
+[tool.ruff.pydocstyle]
+convention = "google"
+```

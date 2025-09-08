@@ -1,0 +1,228 @@
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal
+from PySide6.QtGui import QColor
+from typing import List, Any, Optional
+from dataclasses import dataclass, field
+from datetime import datetime
+import uuid
+
+
+@dataclass
+class JobStatus:
+    """
+    Data structure representing a single job's status.
+    This dataclass will be used by the JobStatusTableModel to display job information.
+    """
+    job_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    name: str = "New Job"
+    status: str = "Pending"  # e.g., "Pending", "Running", "Completed", "Failed", "Cancelled"
+    progress_percentage: int = 0  # 0-100
+    files_processed: int = 0
+    total_files: int = 0
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    error_message: Optional[str] = None
+
+    def __post_init__(self):
+        # Ensure job_id is always a string for consistency, especially if a uuid.UUID object
+        # is passed from other parts of the system (e.g., database)
+        if not isinstance(self.job_id, str):
+            self.job_id = str(self.job_id)
+
+
+class JobStatusTableModel(QAbstractTableModel):
+    """
+    A Qt Item Model for displaying a list of JobStatus objects in a table view.
+    It provides data for the UI to display job ID, name, status, progress, etc.
+    This model allows efficient updates to individual jobs or the entire list.
+    """
+
+    # Signals to notify external components (e.g., views, main window) about model changes
+    job_updated = Signal(str)  # Emits job_id when a specific job is updated
+    jobs_cleared = Signal()    # Emits when all jobs are cleared from the model
+
+    _column_names: List[str] = [
+        "ID",
+        "Name",
+        "Status",
+        "Progress (%)",
+        "Processed Files",
+        "Total Files",
+        "Start Time",
+        "End Time",
+    ]
+
+    def __init__(self, jobs: Optional[List[JobStatus]] = None, parent: Optional[Any] = None):
+        super().__init__(parent)
+        self._jobs: List[JobStatus] = jobs if jobs is not None else []
+        # A map for O(1) lookup of job row index by job_id
+        self._job_id_map: dict[str, int] = {job.job_id: i for i, job in enumerate(self._jobs)}
+
+    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
+        """Returns the number of rows (jobs) in the model."""
+        if parent.isValid():
+            return 0  # We don't have child rows for jobs
+        return len(self._jobs)
+
+    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
+        """Returns the number of columns in the model."""
+        return len(self._column_names)
+
+    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
+        """
+        Returns the data for a given index and role.
+        This method is called by Qt views to retrieve information for display.
+        """
+        if not index.isValid() or not (0 <= index.row() < len(self._jobs)):
+            return None
+
+        job = self._jobs[index.row()]
+        column = index.column()
+
+        if role == Qt.ItemDataRole.DisplayRole:
+            if column == 0:
+                return job.job_id
+            elif column == 1:
+                return job.name
+            elif column == 2:
+                return job.status
+            elif column == 3:
+                return f"{job.progress_percentage}%"
+            elif column == 4:
+                return job.files_processed
+            elif column == 5:
+                return job.total_files
+            elif column == 6:
+                return job.start_time.strftime("%Y-%m-%d %H:%M:%S") if job.start_time else "N/A"
+            elif column == 7:
+                return job.end_time.strftime("%Y-%m-%d %H:%M:%S") if job.end_time else "N/A"
+        elif role == Qt.ItemDataRole.EditRole:
+            # For editable views, return the raw data for editing
+            if column == 0:
+                return job.job_id
+            elif column == 1:
+                return job.name
+            elif column == 2:
+                return job.status
+            elif column == 3:
+                return job.progress_percentage
+            elif column == 4:
+                return job.files_processed
+            elif column == 5:
+                return job.total_files
+            elif column == 6:
+                return job.start_time
+            elif column == 7:
+                return job.end_time
+        elif role == Qt.ItemDataRole.ForegroundRole:
+            # Apply color based on job status for better visual distinction
+            if column == 2:  # Status column
+                if job.status == "Completed":
+                    return QColor(Qt.GlobalColor.darkGreen)
+                elif job.status == "Failed":
+                    return QColor(Qt.GlobalColor.red)
+                elif job.status == "Running":
+                    return QColor(Qt.GlobalColor.blue)
+                elif job.status == "Cancelled":
+                    return QColor(Qt.GlobalColor.darkGray)
+            # If there's an error message, highlight the job name as a subtle indicator
+            if job.error_message and column == 1: # Name column
+                return QColor(Qt.GlobalColor.darkRed)
+        elif role == Qt.ItemDataRole.ToolTipRole:
+            # Provide an error message as a tooltip for the status column
+            if job.error_message and column == 2:
+                return f"Error: {job.error_message}"
+        elif role == Qt.ItemDataRole.TextAlignmentRole:
+            # Align numeric columns to the right for readability
+            if column in [3, 4, 5]:  # Progress, Processed Files, Total Files
+                return int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        return None
+
+    def headerData(
+        self, section: int, orientation: Qt.Orientation, role: int = Qt.ItemDataRole.DisplayRole
+    ) -> Any:
+        """
+        Returns the header data for a given section, orientation, and role.
+        Used to display column headers.
+        """
+        if role == Qt.ItemDataRole.DisplayRole:
+            if orientation == Qt.Orientation.Horizontal:
+                if 0 <= section < len(self._column_names):
+                    return self._column_names[section]
+            # Default vertical header (row numbers) is usually sufficient, no custom implementation needed.
+        return None
+
+    def find_job_row(self, job_id: str) -> Optional[int]:
+        """Helper method to find the row index of a job by its ID."""
+        return self._job_id_map.get(job_id)
+
+    def get_job_by_id(self, job_id: str) -> Optional[JobStatus]:
+        """Retrieves a JobStatus object by its ID."""
+        row = self.find_job_row(job_id)
+        if row is not None:
+            return self._jobs[row]
+        return None
+
+    def add_job(self, job: JobStatus):
+        """Adds a new job to the model. If a job with the same ID exists, it updates it."""
+        if job.job_id in self._job_id_map:
+            # If job already exists, treat as an update
+            self.update_job(job)
+            return
+
+        row = len(self._jobs)
+        # Signal to views that rows are about to be inserted
+        self.beginInsertRows(QModelIndex(), row, row)
+        self._jobs.append(job)
+        self._job_id_map[job.job_id] = row
+        self.endInsertRows()
+        self.job_updated.emit(job.job_id)
+
+    def update_job(self, updated_job: JobStatus):
+        """Updates an existing job in the model."""
+        row = self.find_job_row(updated_job.job_id)
+        if row is not None:
+            self._jobs[row] = updated_job
+            # Notify views that data for this specific row has changed
+            index_start = self.index(row, 0)
+            index_end = self.index(row, self.columnCount() - 1)
+            self.dataChanged.emit(index_start, index_end)
+            self.job_updated.emit(updated_job.job_id)
+        else:
+            # If job doesn't exist, add it as a new job
+            self.add_job(updated_job)
+
+    def remove_job(self, job_id: str):
+        """Removes a job from the model by its ID."""
+        row = self.find_job_row(job_id)
+        if row is not None:
+            # Signal to views that rows are about to be removed
+            self.beginRemoveRows(QModelIndex(), row, row)
+            del self._jobs[row]
+            del self._job_id_map[job_id]
+            # Rebuild the map as indices of subsequent jobs have shifted
+            self._job_id_map = {job.job_id: i for i, job in enumerate(self._jobs)}
+            self.endRemoveRows()
+            self.job_updated.emit(job_id)
+
+    def clear_jobs(self):
+        """Clears all jobs from the model."""
+        if not self._jobs:
+            return # Nothing to clear
+
+        # Signal to views that rows are about to be removed (all of them)
+        self.beginRemoveRows(QModelIndex(), 0, len(self._jobs) - 1)
+        self._jobs.clear()
+        self._job_id_map.clear()
+        self.endRemoveRows()
+        self.jobs_cleared.emit()
+
+    def set_jobs(self, jobs: List[JobStatus]):
+        """Sets the entire list of jobs, replacing existing ones.
+        This is a more heavy-handed operation, causing views to fully refresh.
+        """
+        self.beginResetModel()  # Signals views to completely refresh their data
+        self._jobs = list(jobs)
+        self._job_id_map = {job.job_id: i for i, job in enumerate(self._jobs)}
+        self.endResetModel()
+        # No specific job_updated signals here, as it's a full reset.
+        # Views will just re-fetch all new data.

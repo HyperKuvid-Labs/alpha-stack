@@ -1,0 +1,72 @@
+[build-system]
+requires = ["maturin>=0.14,<0.15"]
+build-backend = "maturin"
+
+[project]
+name = "sanchay"
+version = "0.1.0"
+description = "Project Sanchay: A hybrid Python/Rust application for high-performance file processing and management."
+authors = [{ name = "Project Sanchay Team", email = "dev@projectsanchay.com" }]
+license = { text = "MIT" } # Or LGPL-3.0-only if distributing PySide6 components directly
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Rust",
+    "Operating System :: OS Independent",
+    "Topic :: System :: Filesystems",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "PySide6>=6.4.0",     # Primary UI framework
+    "SQLAlchemy",         # ORM for database interaction (SQLite/PostgreSQL)
+    "python-dotenv",      # For loading configuration from .env files
+    "pydantic>=2",        # For data validation, especially useful for config and API models
+]
+
+[project.optional-dependencies]
+api = [
+    "fastapi",            # For the optional REST API layer
+    "uvicorn[standard]",  # ASGI server for FastAPI
+]
+dev = [
+    "pytest",             # Python testing framework
+    "pytest-asyncio",     # Pytest plugin for testing asyncio code
+    "pytest-qt",          # Pytest plugin for testing PySide6/PyQt applications
+    "black",              # Code formatter
+    "isort",              # Import sorter
+    "mypy",               # Static type checker
+    "ruff",               # Fast Python linter and formatter (as an alternative/addition to black/isort)
+    "setuptools",         # Often a hidden dependency for various build/dev tools
+]
+
+[project.scripts]
+sanchay = "sanchay_app.__main__:main" # Main entry point for both GUI and CLI
+
+[tool.maturin]
+path = "crates/sanchay_core" # Path to the Rust crate within the monorepo
+features = ["pyo3/extension-module"] # Required for PyO3 to build a Python extension
+strip = true # Strip debug symbols from the compiled binary to reduce size
+# rust-flavor = "abi3" # Use abi3 for better Python version compatibility if not using `requires-python` tightly
+
+[tool.pytest.ini_options]
+min_version = "6.0"
+addopts = "--import-mode=append" # Helps pytest find modules correctly in complex structures
+pythonpath = ["src/sanchay_app"] # Tell pytest where to find the Python source code
+asyncio_mode = "auto" # Configure pytest-asyncio to automatically detect and run async tests
+
+[tool.black]
+line-length = 100
+target-version = ['py310', 'py311', 'py312']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["sanchay_app"] # Treat our own modules as first-party for sorting
+skip_glob = ["**/migrations/*.py"] # Skip auto-generated migration files

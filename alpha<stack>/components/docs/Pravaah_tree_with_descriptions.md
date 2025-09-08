@@ -4,241 +4,240 @@
 
 Pravaah
   - **{project-root}/**
-    - *Description: This is the root directory of the `Pravaah` project, structured as a monorepo that contains all source code, configuration, and documentation. It organizes the entire application into distinct, high-level components like `frontend`, `backend`, `rust_engine`, and `infrastructure`.*
-  - **.env.example**
-    - *Description: This file is a template listing all the environment variables required for local development. Developers should copy it to a `.env` file and populate it with their specific configuration values and secrets to run the project.*
+    - *Description: This is the root directory for the "Pravaah" project, a full-stack application. It organizes the entire codebase into distinct, high-level components including the backend, a high-performance Rust core, the frontend, infrastructure definitions, CI/CD pipelines, and project-wide documentation.*
   - **.github/**
     - **workflows/**
       - **ci.yml**
-        - *Description: This file is a GitHub Actions workflow that defines the Continuous Integration (CI) pipeline. It automatically runs quality checks like linting, tests, and build validations for all project components (backend, frontend, Rust engine) on events such as pull requests.*
+        - *Description: This YAML file defines the Continuous Integration (CI) pipeline using GitHub Actions. It automates the process of running linters, tests, and builds for the frontend, backend, and Rust core components whenever code is pushed or a pull request is created.*
       - **cd.yml**
-        - *Description: This YAML file defines the GitHub Actions workflow for Continuous Deployment (CD). It automates the process of building, packaging, and deploying the application to staging and production environments, typically triggered after code is merged into the main branch or a new tag is created.*
-  - **.gitignore**
-    - *Description: The `.gitignore` file specifies files and directories that Git should ignore, preventing them from being tracked in version control. It's used to exclude local configurations, dependencies, build artifacts, and other generated files from the repository.*
-  - **README.md**
-    - *Description: **README.md**: This file serves as the main entry point for understanding the project. It typically contains a high-level overview of the Pravaah application, its purpose, and essential instructions for setup, installation, and basic usage.*
+        - *Description: This GitHub Actions workflow file defines the Continuous Deployment (CD) pipeline for the project. It automates the process of building and pushing the frontend and backend Docker images to a container registry and then deploying the new versions to a Kubernetes environment.*
   - **backend/**
+    - **gati/**
+      - **__init__.py**
+        - *Description: This file marks the `gati` directory as a Python package, allowing its submodules (like `api`, `core`, and `db`) to be imported by other parts of the backend application. It can be empty or contain package-level initialization code.*
+      - **api/**
+        - **__init__.py**
+          - *Description: This `__init__.py` file marks the `api` directory as a Python package, enabling its modules and sub-packages (like the versioned API router in `v1`) to be imported elsewhere. It may also be used to aggregate routers from different versions into a single master API router for the FastAPI application.*
+        - **v1/**
+          - **__init__.py**
+            - *Description: This `__init__.py` file marks the `v1` directory as a Python package, allowing its contents to be imported. It often serves to aggregate the various API routers from the `endpoints` sub-directory into a single, versioned router that can be included in the main FastAPI application.*
+          - **endpoints/**
+            - **__init__.py**
+              - *Description: This `__init__.py` file marks the `endpoints` directory as a Python package. Its presence allows the FastAPI application to import the various API router modules (like `auth.py`, `jobs.py`) contained within this directory.*
+            - **auth.py**
+              - *Description: This file defines the FastAPI API endpoints for user authentication and authorization. It contains the public-facing routes for handling user login, validating credentials, and issuing access tokens for clients to use in subsequent requests.*
+            - **jobs.py**
+              - *Description: This file defines the FastAPI API endpoints for managing background jobs. It is responsible for handling HTTP requests to create, retrieve status, list, and manage asynchronous tasks within the application.*
+            - **users.py**
+              - *Description: This file defines the REST API endpoints for user management within the `gati` backend service. It contains the request handlers for operations like creating new users, retrieving user details, updating user information, and deleting user accounts.*
+          - **schemas.py**
+            - *Description: This file contains Pydantic schemas that define the data structures for the v1 API's request bodies and response models. It is responsible for data validation, serialization, and ensuring a consistent data contract between the frontend and backend.*
+      - **auth/**
+        - **__init__.py**
+          - *Description: This `__init__.py` file designates the `auth` directory as a Python package, allowing its modules (`jwt.py`, `security.py`) to be imported throughout the application. It may also define a simplified public API for the package by exposing key functions and classes from its submodules.*
+        - **jwt.py**
+          - *Description: This file is responsible for handling JSON Web Token (JWT) operations. It contains the logic to create (encode) new access tokens for authenticated users and to decode and validate incoming tokens to verify user identity for protected API endpoints.*
+        - **security.py**
+          - *Description: This file defines the FastAPI security dependencies and schemes used to protect API endpoints. It likely contains the `OAuth2PasswordBearer` setup and the dependency function that endpoints use to require a valid token, verify it, and retrieve the current authenticated user.*
+      - **core/**
+        - **__init__.py**
+          - *Description: This file marks the `core` directory as a Python package, enabling other parts of the backend application to import its modules, such as configuration settings and application lifecycle events.*
+        - **config.py**
+          - *Description: This file centralizes the backend application's configuration by defining and managing settings loaded from environment variables. It provides a single source for parameters such as database credentials, secret keys, and external service URLs used throughout the application.*
+        - **lifespan.py**
+          - *Description: This file manages the FastAPI application's lifecycle events. It contains the logic for startup and shutdown procedures, such as initializing database connection pools or message queues when the application starts, and gracefully closing them when it stops.*
+      - **db/**
+        - **__init__.py**
+          - *Description: This `__init__.py` file designates the `db` directory as a Python package, allowing other parts of the application to import its database-related modules, such as `models`, `crud`, and `session`. It may also be used to control the package's namespace and expose key database components for easier access.*
+        - **crud.py**
+          - *Description: This file contains the data access logic, implementing the Create, Read, Update, and Delete (CRUD) operations for the application's database models. It acts as an abstraction layer, providing reusable functions that the API endpoints call to interact with the database, separating business logic from data persistence details.*
+        - **models.py**
+          - *Description: This file defines the database schema using Python classes, which map to tables in the database via an Object-Relational Mapper (ORM) like SQLModel or SQLAlchemy. Each class within `models.py` represents a database table, and its attributes correspond to the table's columns.*
+        - **session.py**
+          - *Description: This file is responsible for initializing the application's database connection and managing database sessions. It typically creates the SQLAlchemy/SQLModel engine and a session factory, and provides a dependency function for FastAPI to inject a database session into API endpoints for each request.*
+      - **integrations/**
+        - **__init__.py**
+          - *Description: This `__init__.py` file designates the `integrations` directory as a Python package, making its modules, which contain logic for connecting to external services (like S3), importable throughout the application.*
+        - **s3.py**
+          - *Description: This file defines a client or helper functions for interacting with an S3-compatible object storage service. It encapsulates the logic for operations like uploading, downloading, and managing files, providing a standardized interface for other parts of the backend application.*
+      - **tasks/**
+        - **__init__.py**
+          - *Description: This `__init__.py` file marks the `tasks` directory as a Python package, allowing its modules containing background job definitions (e.g., Celery tasks) to be imported. It might also be used to initialize the Celery app or expose specific tasks at the package level for easier discovery.*
+        - **filesystem_ops.py**
+          - *Description: This file defines asynchronous background tasks, likely using Celery, for performing I/O-intensive filesystem operations. It contains the logic for jobs like scanning directories, moving files, or analyzing file metadata, which are executed by a separate worker process to avoid blocking the main API.*
+        - **task_utils.py**
+          - *Description: This file provides reusable helper functions specifically for the Celery background tasks defined in this directory. It likely contains common logic, such as updating job statuses in the database, logging progress, or handling errors, which is shared across multiple tasks.*
+      - **utils/**
+        - **__init__.py**
+          - *Description: This `__init__.py` file designates the `utils` directory as a Python package, allowing its modules (like `logging.py`) to be imported elsewhere in the application. It may also be used to expose specific utility functions at the package level for more convenient access.*
+        - **logging.py**
+          - *Description: This file, `gati/utils/logging.py`, should contain the centralized configuration for the application's logging. It is responsible for setting up log formats, levels, and handlers (e.g., console, file) to ensure consistent logging across the entire backend, including the FastAPI application and Celery workers.*
+      - **main.py**
+        - *Description: This file, `main.py`, is the primary entry point for the Gati FastAPI web application. It instantiates the FastAPI application, mounts the API routers from the `api/` directory, and configures application-level settings like middleware and lifespan events.*
+      - **worker.py**
+        - *Description: This file serves as the entrypoint for launching the Celery background worker processes. It is responsible for creating and configuring the Celery application instance, which discovers and executes asynchronous tasks defined in the `gati/tasks/` directory.*
+    - **tests/**
+      - **__init__.py**
+        - *Description: This file marks the `tests` directory and its subdirectories as a Python package, allowing the test runner (like pytest) to discover and import the test modules contained within it. It is essential for structuring the test suite and is often left empty.*
+      - **conftest.py**
+        - *Description: This is a special `pytest` configuration file that defines shared test fixtures, hooks, and plugins for the backend test suite. It centralizes setup and teardown logic, such as initializing a test database or creating an API test client, making these resources available to all tests within the `tests` directory.*
+      - **integration/**
+        - **__init__.py**
+          - *Description: This file marks the `tests/integration` directory as a Python package, allowing test discovery tools like `pytest` to find and execute the integration tests within it. It is often empty, as its presence is what enables the test runner to import modules from this directory.*
+        - **test_api_jobs.py**
+          - *Description: This file contains integration tests for the job management API endpoints (defined in `backend/gati/api/v1/endpoints/jobs.py`). It simulates real HTTP requests to create, retrieve, and manage jobs, verifying that the API layer, database interactions, and business logic integrate and function correctly.*
+      - **unit/**
+        - **__init__.py**
+          - *Description: This file marks the `unit` directory as a Python package, enabling the test runner (e.g., pytest) to discover and import the unit tests contained within this folder. It is often intentionally left empty.*
+        - **test_auth.py**
+          - *Description: This file contains unit tests for the backend's authentication and authorization modules. It is responsible for verifying the correctness of individual functions, such as JWT creation/decoding and password verification, in isolation from the database or API endpoints.*
+    - **.env.example**
+      - *Description: This file serves as a template listing all the required environment variables for the backend application. Developers should copy it to a `.env` file and populate it with their specific local configuration values, such as database credentials and secret keys, to run the project.*
+    - **poetry.lock**
+      - *Description: This auto-generated file locks the exact versions of all Python packages and their sub-dependencies for the backend application, as defined in `pyproject.toml`. Its purpose is to ensure consistent, reproducible builds and environments for development, testing, and production.*
     - **pyproject.toml**
-      - *Description: This file defines the backend Python project's metadata, dependencies, and development tool configurations. It is used by package managers like Poetry or PDM to install dependencies, run scripts, and build the project.*
+      - *Description: This file is the project definition file for the Python backend, managed using the Poetry dependency manager. It declares project metadata, specifies application and development dependencies (e.g., FastAPI, pytest), and configures development tools like linters and formatters.*
+  - **core/**
     - **src/**
-      - **karyaksham_api/**
-        - **__init__.py**
-          - *Description: This file marks the `karyaksham_api` directory as a Python package, making its modules and sub-packages (like `api`, `core`, `crud`, and `db`) importable by other parts of the application. It can also contain package-level initialization code or expose key objects from its submodules.*
-        - **api/**
-          - **__init__.py**
-            - *Description: This `__init__.py` file marks the `api` directory as a Python package, allowing its contents, such as different API versions (`v1`), to be imported. It serves as the entry point for the API module structure within the `karyaksham_api` application.*
-          - **v1/**
-            - **__init__.py**
-              - *Description: This file marks the `v1` directory as a Python package, allowing its contents—such as the main v1 API router and specific endpoint modules—to be imported and used by the main FastAPI application. It is essential for organizing the API endpoints under the `/api/v1` namespace.*
-            - **api.py**
-              - *Description: This file acts as the central router for the `v1` API. It aggregates all the individual endpoint routers (e.g., for users, jobs, auth) from the `endpoints` subdirectory into a single `APIRouter`, which is then included in the main FastAPI application.*
-            - **endpoints/**
-              - **__init__.py**
-                - *Description: This `__init__.py` file marks the `endpoints` directory as a Python package. This allows the FastAPI application to discover and import the individual API endpoint router modules (like `auth.py`, `jobs.py`, etc.) contained within this directory.*
-              - **auth.py**
-                - *Description: This file defines the API endpoints for user authentication, such as login and registration. It handles incoming HTTP requests for user sign-up and sign-in, validates credentials, and returns access tokens upon success.*
-              - **jobs.py**
-                - *Description: This file defines the FastAPI API endpoints for managing processing jobs. It contains the HTTP route handlers for creating, retrieving, listing, and updating job resources, acting as the web layer for all job-related operations.*
-              - **users.py**
-                - *Description: This file defines the FastAPI API endpoints for managing user resources. It contains the routes for performing CRUD (Create, Read, Update, Delete) operations, such as retrieving a list of users, fetching a specific user's details, and updating user information.*
-        - **auth/**
-          - **__init__.py**
-            - *Description: This file marks the `auth` directory as a Python package, making its modules like `jwt.py` and `security.py` importable elsewhere in the application. It may also selectively expose functions or classes from these modules for a more convenient import interface.*
-          - **jwt.py**
-            - *Description: This file contains the core logic for handling JSON Web Tokens (JWTs). It is responsible for creating (encoding) new tokens for authenticated users and decoding/validating incoming tokens to secure API endpoints.*
-          - **security.py**
-            - *Description: This file contains security-related utilities, primarily for password hashing and verification using a library like passlib or bcrypt. It also likely defines FastAPI dependencies to enforce user authentication and role-based access control (RBAC) on API endpoints.*
-        - **core/**
-          - **__init__.py**
-            - *Description: This file marks the `core` directory as a Python package, enabling the import of its modules like `config.py`. It can also be used to expose core components, such as the application settings, for more convenient access from other parts of the `karyaksham_api`.*
-          - **config.py**
-            - *Description: This file centralizes the application's configuration by using a library like Pydantic to load and validate settings from environment variables. It provides a type-safe way to access critical parameters such as database connection strings, secret keys, and external service credentials.*
-        - **crud/**
-          - **__init__.py**
-            - *Description: This file marks the `crud` directory as a Python package, enabling the modules within it to be imported elsewhere in the application. It may also be used to expose specific CRUD objects from its sibling modules (like `crud_user`, `crud_job`) for more convenient access.*
-          - **base.py**
-            - *Description: This file defines a generic `CRUDBase` class that provides reusable methods for common database operations (Create, Read, Update, Delete). Specific model-focused classes, like `crud_user.py` and `crud_job.py`, inherit from this base class to avoid duplicating data access logic.*
-          - **crud_job.py**
-            - *Description: This file contains the data access logic for the `Job` model, implementing specific Create, Read, Update, and Delete (CRUD) operations. It serves as an abstraction layer between the API endpoints and the database, handling all direct interactions with the `jobs` table.*
-          - **crud_user.py**
-            - *Description: This file contains the data access logic for the `User` model. It defines functions or a class with methods to perform Create, Read, Update, and Delete (CRUD) operations on user records in the database, abstracting these database interactions from the API endpoint logic.*
-        - **db/**
-          - **__init__.py**
-            - *Description: This file marks the `db` directory as a Python package, making its contents (like models and session management) importable. It may also be used to expose key database objects, such as the SQLAlchemy `Base` model or the session creator, to the rest of the application for easier access.*
-          - **migrations/**
-            - **versions/**
-              - *Description: This directory holds the individual migration scripts generated by Alembic. Each Python file within represents a specific, version-controlled change to the database schema, such as creating a table or adding a column, and contains the logic to apply or revert that change.*
-            - **env.py**
-              - *Description: This is the Alembic configuration script that defines how database migrations are run. It provides Alembic with the necessary context, such as the database connection URL and the target SQLAlchemy model metadata, to generate and apply schema changes.*
-            - **script.py.mako**
-              - *Description: This is a Mako template file used by the Alembic database migration tool. It serves as the blueprint for generating new Python migration scripts, defining their basic structure, imports, and the required `upgrade()` and `downgrade()` functions.*
-          - **models/**
-            - **__init__.py**
-              - *Description: This file marks the `models` directory as a Python package and is used to import all SQLAlchemy models (e.g., `User`, `Job`) from their respective files. This consolidation provides a single, convenient namespace for the rest of the application and for tools like Alembic to discover all defined models for generating database migrations.*
-            - **job.py**
-              - *Description: This file defines the SQLAlchemy ORM model for a `Job`, mapping the `jobs` database table to a Python class. It specifies the table's columns, such as `id`, `status`, `owner_id`, and any relationships to other models like `User`.*
-            - **user.py**
-              - *Description: This file defines the `User` SQLAlchemy model, which maps to the `users` table in the database. It specifies the table's schema, including columns like `id`, `email`, `hashed_password`, and any relationships to other database models.*
-          - **session.py**
-            - *Description: This file configures and provides access to the database. It is responsible for creating the SQLAlchemy database engine and the `SessionLocal` class used to manage database sessions for API requests.*
-        - **integrations/**
-          - **__init__.py**
-            - *Description: This file marks the `integrations` directory as a Python package, allowing other parts of the application to import the modules within it that manage connections to external services like object storage and Redis.*
-          - **object_storage.py**
-            - *Description: This Python file defines a client or wrapper for interacting with an external object storage service like AWS S3, Google Cloud Storage, or MinIO. It abstracts the logic for uploading, downloading, and generating pre-signed URLs, providing a unified interface for the rest of the application to manage files.*
-          - **redis_client.py**
-            - *Description: This Python file defines a reusable client or connection manager for interacting with a Redis server. It centralizes connection logic, likely creating a configured Redis client instance that can be used throughout the application for tasks like caching, session storage, or as a message broker for Celery.*
-        - **schemas/**
-          - **__init__.py**
-            - *Description: This `__init__.py` file marks the `schemas` directory as a Python package. This allows other parts of the application to import the Pydantic data schemas (defined in `job.py`, `user.py`, etc.) that are used for API request/response validation and data serialization.*
-          - **job.py**
-            - *Description: This file contains Pydantic models that define the data structure and validation rules for API requests and responses related to processing jobs, such as `JobCreate` for input and `Job` for output.*
-          - **token.py**
-            - *Description: This file defines the Pydantic schemas for JWT authentication tokens. It specifies the data structure for the token response sent to a client upon successful login (e.g., `access_token`, `token_type`) and for the data payload encoded within the token itself.*
-          - **user.py**
-            - *Description: This file defines the Pydantic schemas for the "User" entity. These schemas are used for data validation, serialization, and defining the API contract for user-related operations, such as creating, updating, and retrieving user information.*
-        - **static/**
-          - **favicon.ico**
-            - *Description: This file, `favicon.ico`, is the standard icon for the web application, displayed in browser tabs and bookmarks. Located in the `static` directory, it is served directly by the FastAPI backend to provide a visual identity, particularly for the auto-generated API documentation pages.*
-        - **utils/**
-          - **__init__.py**
-            - *Description: This file marks the `utils` directory as a Python package, allowing its contained modules (like `helpers.py`) to be imported elsewhere. It may also expose key utility functions to a simpler namespace for convenient access across the application.*
-          - **helpers.py**
-            - *Description: This file contains miscellaneous, general-purpose utility functions that support various parts of the `karyaksham_api` application. It acts as a collection of reusable code snippets that don't fit into more specific modules like `crud` or `auth`.*
-        - **main.py**
-          - *Description: This file serves as the main entry point for the FastAPI web application. It is responsible for creating the core FastAPI app instance, including the API routers from the `api` module, and configuring application-level settings and middleware.*
-      - **karyaksham_workers/**
-        - **__init__.py**
-          - *Description: This `__init__.py` file marks the `karyaksham_workers` directory as a Python package, allowing its modules, such as the Celery app and tasks, to be imported by other parts of the application. It can be empty or used for package-level initialization.*
-        - **celery_app.py**
-          - *Description: This file initializes and configures the main Celery application instance. It is responsible for setting the message broker, result backend, and discovering task modules for the background workers.*
-        - **tasks/**
-          - **__init__.py**
-            - *Description: This file marks the `tasks` directory as a Python package, making its modules (like `processing.py`) importable. It can also be used to selectively expose task functions from different modules to create a unified API for the `tasks` package.*
-          - **processing.py**
-            - *Description: This file defines the Celery background tasks responsible for executing the core data processing logic. It acts as the Python bridge that invokes the high-performance functions from the `rust_engine` to perform computations asynchronously, keeping the API responsive.*
+      - **__init__.py**
+        - *Description: This `__init__.py` file marks the `src` directory as a Python package, which is a requirement for PyO3 to allow the compiled Rust core engine to be correctly imported and used by the Python backend.*
+      - **error.rs**
+        - *Description: This file defines the custom error types for the Rust `core` library. It consolidates all potential failures, such as I/O or data processing errors, into a unified type for robust, idiomatic error handling within the Rust codebase and for exposing exceptions to the Python layer.*
+      - **filesystem/**
+        - **mod.rs**
+          - *Description: This file, `mod.rs`, serves as the Rust module declaration for the `filesystem` directory. It is responsible for defining the module's public API by declaring its sub-modules (like `scanner.rs`) and re-exporting their relevant components for use by the rest of the `core` crate.*
+        - **scanner.rs**
+          - *Description: This Rust source file implements high-performance logic for recursively scanning directories. It is responsible for efficiently traversing the filesystem to discover files and gather their metadata, a core function likely exposed to the Python backend for performance-critical operations.*
+      - **lib.rs**
+        - *Description: `lib.rs` is the main entry point for the Rust library (`pravaah_core`). It defines the crate's public API and uses the PyO3 framework to expose high-performance Rust functions and types as a callable Python module for the backend.*
+      - **processing/**
+        - **mod.rs**
+          - *Description: This file, `mod.rs`, is the Rust module declaration for the `processing` directory. It defines the module's public interface and exposes its submodules, such as `parallel.rs`, to the rest of the high-performance Rust `core` crate.*
+        - **parallel.rs**
+          - *Description: This Rust source file implements high-performance, parallel data processing logic for the core engine. It likely uses libraries like Rayon to distribute computationally intensive tasks, such as filtering or transforming large datasets of file metadata, across multiple CPU cores for maximum speed.*
+      - **types/**
+        - **mod.rs**
+          - *Description: This file, `mod.rs`, serves as the module declaration for the `types` directory within the Rust `core` crate. Its purpose is to define the public API of the `types` module by exporting the data structures (like structs and enums) defined in other files within this directory, such as `file_meta.rs`.*
+        - **file_meta.rs**
+          - *Description: This Rust source file defines the core data structures, likely `structs`, used to represent file metadata. It encapsulates properties like file path, size, and modification times, serving as the primary data model for the file scanning and processing operations within the high-performance Rust engine.*
+    - **tests/**
+      - **scanner_tests.rs**
+        - *Description: This file contains Rust integration tests for the high-performance directory traversal and file metadata collection logic defined in `core/src/filesystem/scanner.rs`. It ensures the scanner behaves correctly by creating temporary file/directory structures and asserting the scan results are accurate.*
+    - **benches/**
+      - **scan_benchmark.rs**
+        - *Description: This Rust file contains performance benchmarks for the filesystem scanning functionality of the `core` library. It is designed to measure the speed and efficiency of the directory traversal logic using Rust's `cargo bench` command.*
+    - **Cargo.toml**
+      - *Description: This is the manifest file for the `core` Rust project, managed by Rust's build system, Cargo. It defines the crate's metadata, its dependencies (like `pyo3` for Python bindings and `rayon` for parallelism), and the necessary build configuration to compile it into a library that can be used by the Python backend.*
   - **docs/**
-    - **C4/**
-      - **level-1-context.puml**
-        - *Description: This PlantUML file (`.puml`) defines the C4 Level 1 System Context diagram for the project. It provides the highest-level architectural view, illustrating how the Pravaah system interacts with its users and any external systems.*
-      - **level-2-container.puml**
-        - *Description: This PlantUML file defines the C4 Level 2 (Container) diagram for the Pravaah system. It illustrates the high-level technical building blocks (e.g., API, frontend, database, worker processes) and their interactions, providing a technical overview of the system's architecture.*
-    - **adrs/**
-      - **001-hybrid-monolith-with-ffi.md**
-        - *Description: This Architecture Decision Record (ADR) documents the foundational choice to build the system as a hybrid monolith. It justifies the decision to integrate a high-performance Rust component with the main Python backend via a Foreign Function Interface (FFI) for computationally intensive tasks.*
-    - **api.md**
-      - *Description: This Markdown file provides essential documentation for developers on how to use the project's backend API. It details authentication procedures, endpoint specifications, request/response formats, and usage examples to guide client-side integration.*
-    - **setup.md**
-      - *Description: This Markdown file (`setup.md`) serves as a developer's guide for setting up the project on a local machine. It contains step-by-step instructions on prerequisites, dependency installation, environment configuration, and commands to run the application for development and testing.*
+    - **api/**
+      - *Description: This directory is designated for API documentation, such as OpenAPI or Swagger specifications. It provides a detailed, machine-readable reference for the backend's endpoints, defining their structure, request/response formats, and authentication requirements.*
+    - **architecture.md**
+      - *Description: This Markdown file serves as the primary documentation for the project's high-level system architecture. It is expected to contain diagrams, design principles, and explanations of how major components like the frontend, backend, and core processing engine interact with each other.*
+    - **user_guide.md**
+      - *Description: This Markdown file contains the user guide, providing end-users with comprehensive instructions, tutorials, and feature explanations on how to use the Pravaah application. It serves as the primary "how-to" manual for operating the software from a user's perspective.*
   - **frontend/**
     - **public/**
-      - **index.html**
-        - *Description: This `index.html` file is the main HTML entry point for the production build of the frontend Single-Page Application (SPA). It provides the basic page structure and contains the root DOM element where the JavaScript framework (e.g., React) mounts the entire user interface.*
+      - **favicon.ico**
+        - *Description: This file is the website's "favicon," a small icon that web browsers display in the address bar, browser tabs, and bookmark lists. Its placement in the `public` directory ensures it is served as a static asset to provide a visual brand identity for the application.*
+      - **logo.svg**
+        - *Description: This file is the main logo for the Pravaah web application, stored as a Scalable Vector Graphic (SVG). Located in the `frontend/public` directory, it is served directly as a static asset for branding purposes across the user interface.*
     - **src/**
-      - **App.tsx**
-        - *Description: `App.tsx` is the root component of the React single-page application. It orchestrates the overall application layout, sets up client-side routing to different pages, and often wraps the application with global providers for state, themes, or data fetching.*
-      - **assets/**
-        - *Description: This folder stores static assets for the frontend application, such as images, icons, fonts, and global stylesheets. These assets are typically imported directly into components or CSS files and are processed and optimized by the build tool (e.g., Vite, Webpack).*
+      - **app/**
+        - **api/**
+          - *Description: This directory contains server-side API Route Handlers for the Next.js application, following the App Router convention. It allows the frontend to have its own backend endpoints, which can be used to securely communicate with the main Python backend, manage sessions, or handle other server-only logic.*
+        - **dashboard/**
+          - **layout.tsx**
+            - *Description: This file defines the shared UI layout for all pages within the `/dashboard` section of the Next.js application. It typically includes persistent components like a navigation bar, sidebar, or header that wrap the content of individual dashboard pages.*
+          - **page.tsx**
+            - *Description: Based on its location and name, `page.tsx` is the primary React component that defines the user interface for the `/dashboard` route. This file is the main view users see after logging in, responsible for displaying key application data, controls, and status information, such as managing and monitoring data processing jobs.*
+        - **login/**
+          - **page.tsx**
+            - *Description: This file defines the React component that renders the user interface for the `/login` route. It contains the login form, handles user input, and manages the logic for authenticating users against the backend API.*
+        - **globals.css**
+          - *Description: This file defines the global CSS styles for the entire Next.js frontend application. It typically contains CSS resets, base styles for HTML elements, and the necessary `@tailwind` directives to inject Tailwind CSS's foundational styles across all pages and components.*
+        - **layout.tsx**
+          - *Description: This file is the root layout for the Next.js application, defining the main HTML structure (like `<html>` and `<body>` tags) and shared UI components that wrap every page. It is responsible for applying global styles, fonts, and providing a consistent shell for the entire user interface.*
+        - **page.tsx**
+          - *Description: This file defines the main landing page or home page for the Next.js application, rendering the UI for the root URL (`/`). It is the primary entry point for users visiting the site and may redirect to the login page or dashboard based on authentication status.*
       - **components/**
-        - *Description: This directory contains reusable, self-contained UI components (e.g., buttons, input fields, modals, layout elements) for the React frontend. These components are the fundamental building blocks that are assembled within the `pages` directory to construct the application's user interface.*
+        - **jobs/**
+          - **JobProgressBar.tsx**
+            - *Description: This file defines a reusable React component, `JobProgressBar.tsx`, responsible for visually displaying the progress of a background job. It likely receives the job's status and completion percentage as props to render a dynamic progress bar for the user interface.*
+        - **layout/**
+          - **Navbar.tsx**
+            - *Description: This file defines the main navigation bar React component for the application's user interface. It is a reusable layout element responsible for displaying the application logo, navigation links, and user-related controls like login or logout buttons.*
+        - **ui/**
+          - **Button.tsx**
+            - *Description: This file defines a reusable, general-purpose UI button component for the frontend application. It is used to ensure a consistent look and feel for all buttons across the user interface and likely accepts props to control its appearance (e.g., variant, size) and behavior.*
       - **hooks/**
-        - *Description: This folder contains custom React hooks, which are reusable functions for encapsulating stateful logic and side effects. These hooks allow sharing functionality like data fetching, form state management, or authentication status across different components in the React application.*
-      - **pages/**
-        - *Description: This directory contains top-level React components, where each file corresponds to a specific "page" or route in the single-page application (e.g., `HomePage.tsx`, `LoginPage.tsx`). These components orchestrate the page layout and assemble smaller, reusable UI elements from the `components/` directory.*
-      - **services/**
-        - **apiClient.ts**
-          - *Description: This TypeScript file provides a centralized, typed client for making HTTP requests to the backend API. It encapsulates common logic like setting the base URL, attaching authentication tokens to headers, and handling API errors, offering a reusable service for data fetching across the frontend application.*
-      - **main.tsx**
-        - *Description: Based on its name and location, `frontend/src/main.tsx` is the primary entry point for the React front-end application. It is responsible for bootstrapping the application by rendering the root component (likely `App.tsx`) into the DOM of the main `index.html` file.*
-    - **.eslintrc.cjs**
-      - *Description: This is the ESLint configuration file for the frontend project, written in CommonJS format (`.cjs`). It defines the static code analysis rules to enforce code quality and a consistent style across the React/TypeScript codebase.*
-    - **index.html**
-      - *Description: This file is the development entry point for the frontend single-page application (SPA). It provides the basic HTML shell, including the root DOM element (e.g., `<div id="root">`) where the JavaScript application is mounted, and a script tag that loads the main application logic (e.g., `src/main.tsx`).*
+        - **useAuth.ts**
+          - *Description: This file defines the `useAuth` custom React hook, which encapsulates authentication logic for the frontend application. It provides React components with a simple interface to access the current user's authentication status, user data, and functions like login and logout.*
+      - **lib/**
+        - **api.ts**
+          - *Description: This file defines the frontend's type-safe API client for communicating with the FastAPI backend. It centralizes all HTTP request logic, providing functions for specific endpoints and managing details like authentication headers and base URLs.*
+        - **auth.ts**
+          - *Description: This file contains client-side authentication logic and helper functions for the frontend application. It is responsible for managing user sessions, handling authentication tokens (e.g., JWTs), and providing utilities for login, logout, and checking the current user's authentication status.*
+      - **types/**
+        - **index.ts**
+          - *Description: This file serves as the central module for all shared TypeScript type definitions used in the frontend application. It likely exports interfaces, types, and enums for data structures such as API responses, component props, and application state, providing a single, convenient import point for the rest of the codebase.*
+    - **tests/**
+      - **e2e/**
+        - **auth.spec.ts**
+          - *Description: This file contains end-to-end (E2E) tests for the user authentication flow of the frontend application. It simulates real user interactions, such as logging in with valid/invalid credentials and logging out, to verify that the entire authentication system works correctly from the user's perspective in a browser environment.*
+      - **component/**
+        - **Button.test.tsx**
+          - *Description: This file contains component tests for the reusable `Button` UI component (`src/components/ui/Button.tsx`). It uses a testing framework like Jest or Vitest to verify that the button renders correctly, handles user interactions such as clicks, and properly reflects different states and props (e.g., disabled, variant styles).*
+    - **.env.local.example**
+      - *Description: This file is a template that lists the environment variables required for running the frontend application in a local development environment. Developers should copy this file to `.env.local` and fill in the specific values, such as the backend API endpoint URL, for their local setup.*
+    - **next.config.mjs**
+      - *Description: This file is the main configuration file for the Next.js frontend application. It allows developers to customize the framework's default behavior, such as setting up redirects, managing environment variables, and configuring the build process.*
     - **package.json**
-      - *Description: This JSON file is the manifest for the frontend application, defining its dependencies (e.g., React, Vite) and providing runnable npm scripts for tasks like development, building, and linting. It is the central configuration file for managing the JavaScript/TypeScript project.*
+      - *Description: This file is the standard Node.js project manifest for the frontend application. It defines project metadata, lists dependencies (e.g., React, Next.js, Tailwind CSS), and contains `scripts` for tasks like running the development server, building for production, and executing tests.*
+    - **postcss.config.js**
+      - *Description: This file configures PostCSS, a tool used to transform CSS with JavaScript plugins. Its primary role in this Next.js project is to define the plugins, such as Tailwind CSS and Autoprefixer, that process the project's stylesheets during the build process.*
+    - **tailwind.config.ts**
+      - *Description: This TypeScript file configures the Tailwind CSS framework for the Next.js frontend. It is used to define the project's design system, including custom themes (colors, fonts, spacing), plugins, and specifying which source files to scan for utility classes.*
     - **tsconfig.json**
-      - *Description: This file is the TypeScript configuration for the frontend project. It defines the rules and compiler options for how TypeScript (`.ts`, `.tsx`) files are transpiled into JavaScript, including settings for target version, module system, and JSX handling.*
-  - **infrastructure/**
-    - **Dockerfile**
-      - *Description: This `Dockerfile` contains the instructions to build the application's container images for both the FastAPI web server and the Celery workers. It likely uses a multi-stage build process to compile the Rust engine, install Python dependencies, and create optimized, production-ready images.*
-    - **.dockerignore**
-      - *Description: This file specifies which files and directories to exclude from the Docker build context. It prevents unnecessary or sensitive files, such as `.git`, local environment files, and test suites, from being included in the final image, resulting in smaller, more secure images and faster builds.*
-    - **docker-compose.yml**
-      - *Description: This file defines and configures the project's multi-container services for local development using Docker Compose. It orchestrates the backend API, workers, database, and message broker, enabling developers to easily spin up the entire application stack with a single command.*
+      - *Description: This file is the TypeScript compiler configuration for the Next.js frontend application. It defines the rules and settings for transpiling TypeScript code (`.ts`, `.tsx`) into JavaScript, enabling features like static type-checking, module resolution, and path aliases.*
+  - **infra/**
     - **kubernetes/**
       - **base/**
+        - **api-deployment.yaml**
+          - *Description: This file is a Kubernetes `Deployment` manifest that defines how to run the backend API service on a Kubernetes cluster. As a Kustomize `base` configuration, it contains the common, environment-agnostic specifications for the API pods, including the container image, replica count, and resource requirements.*
         - **configmap.yaml**
-          - *Description: This file defines a Kubernetes `ConfigMap` to store non-secret configuration data, such as environment variables, for the application. As a Kustomize `base` resource, it provides default settings that are shared across all deployment environments (e.g., staging, production).*
-        - **deployment-api.yaml**
-          - *Description: This file is a base Kubernetes `Deployment` manifest for the backend API application. It declaratively defines how the API server's container should be run, scaled, and managed within a Kubernetes cluster, serving as a common template for all deployment environments.*
-        - **deployment-worker.yaml**
-          - *Description: This file is a Kubernetes `Deployment` manifest that defines the desired state for the application's background worker pods. It specifies which container image to use, how many replicas to run, and other configuration needed to deploy and manage the asynchronous task processors (e.g., Celery workers) in the cluster.*
+          - *Description: This file defines a base Kubernetes `ConfigMap` resource using Kustomize. It stores non-sensitive, environment-agnostic configuration data as key-value pairs, which are consumed by the various application pods (backend API, workers, frontend) at runtime.*
+        - **frontend-deployment.yaml**
+          - *Description: This YAML file is a baseline Kubernetes `Deployment` manifest for the project's frontend application. It defines the desired state for the frontend service, including the container image to use, the number of replicas, and how to perform updates, which serves as a common template for all deployment environments.*
         - **kustomization.yaml**
-          - *Description: This is the main Kustomize configuration file for the `base` layer of the application's Kubernetes setup. It declares the common resource files (like `deployment-api.yaml` and `service.yaml`) that are shared across all environments, acting as a foundation for environment-specific overlays.*
+          - *Description: This is the primary Kustomize configuration file for the `base` layer. It defines the common, environment-agnostic Kubernetes resources for the application by referencing all other manifest files (like `api-deployment.yaml`, `service.yaml`) within this directory.*
         - **service.yaml**
-          - *Description: This Kubernetes manifest defines a `Service` resource, which creates a stable network endpoint and internal load balancer for the application's API pods. As a base Kustomize resource, it provides the common networking configuration for all deployment environments.*
+          - *Description: This file is a Kubernetes manifest that defines a base `Service` resource. Its purpose is to create a stable network endpoint, such as an internal IP address or DNS name, for accessing the application's pods (like the backend API or frontend) within the Kubernetes cluster.*
+        - **worker-deployment.yaml**
+          - *Description: This file is a base Kubernetes `Deployment` manifest for the application's background worker processes (e.g., Celery). It defines the core, environment-agnostic configuration for deploying and managing the worker pods that execute asynchronous tasks within the cluster.*
       - **overlays/**
         - **production/**
           - **kustomization.yaml**
-            - *Description: This is a Kustomize configuration file that defines the specific settings for the **production** environment. It customizes the common Kubernetes resources found in the `base` directory by applying production-only patches, such as scaling adjustments or different image tags, to generate the final deployment manifests.*
+            - *Description: This Kustomize configuration file defines the production environment's specific settings for the Kubernetes deployment. It references the common manifests from the `base` directory and applies production-specific patches and overrides, such as scaling configurations or image tags.*
           - **scaling-patch.yaml**
-            - *Description: This is a Kustomize patch file that defines the scaling configuration specifically for the production environment. It likely contains a `HorizontalPodAutoscaler` (HPA) or sets higher replica counts for the API and worker deployments, overriding the base configurations to handle production-level traffic.*
+            - *Description: This Kustomize patch file defines production-specific scaling configurations, such as replica counts and resource requests/limits, for the Kubernetes deployments. It overrides the base configurations to ensure the application is provisioned with appropriate resources to handle production-level traffic.*
         - **staging/**
           - **kustomization.yaml**
-            - *Description: This Kustomize file defines the Kubernetes configuration for the `staging` environment. It references the common resources in the `base` directory and applies staging-specific patches, such as modifying replica counts or environment variables, to create the final deployment manifests.*
-          - **replica-count-patch.yaml**
-            - *Description: This Kustomize patch file specifies the number of pod replicas for one or more deployments specifically within the staging environment. It overlays and modifies the base Kubernetes configuration, allowing staging to run with a different number of instances than production or development.*
-    - **scripts/**
-      - **entrypoint.sh**
-        - *Description: This shell script serves as the primary entry point for the project's Docker containers. Its role is to perform initial setup tasks at container startup, such as running database migrations, before launching the main application process (e.g., the API server or a background worker).*
-      - **run_migrations.sh**
-        - *Description: This shell script executes the database migration commands, likely using Alembic, which is present in the project. It is designed to be run during the application's deployment or startup sequence to ensure the database schema is up-to-date before the API server becomes operational.*
-  - **rust_engine/**
-    - **Cargo.toml**
-      - *Description: This is the manifest file for the `rust_engine` crate, powered by Rust's build tool, Cargo. It defines project metadata, lists external library dependencies, and specifies build profiles and compilation settings needed to create a library that can be called from Python.*
-    - **src/**
-      - **core/**
-        - **mod.rs**
-          - *Description: This file is the Rust module declaration for the `core` directory. It defines the `core` module's contents by declaring its sub-modules (like `data_processor` and `file_handler`) and controls their visibility to the rest of the `rust_engine` crate.*
-        - **data_processor.rs**
-          - *Description: This Rust file contains the core, high-performance algorithms for processing the input data. It is the computational heart of the `rust_engine`, responsible for executing the main business logic and transformations after data has been loaded.*
-        - **file_handler.rs**
-          - *Description: This Rust module handles file I/O operations for the core processing engine. It is likely responsible for efficiently reading data, possibly by streaming from an object storage service, and making it available to other parts of the engine like the `data_processor`.*
-      - **utils/**
-        - **mod.rs**
-          - *Description: This file, `mod.rs`, is the Rust module declaration for the `utils` directory. It defines the `utils` module and makes its submodules, like `error.rs`, accessible to the rest of the `rust_engine` crate.*
-        - **error.rs**
-          - *Description: This file defines custom error types for the `rust_engine` crate. It centralizes error handling by creating a unified `Error` type that can represent various failure conditions from different parts of the engine, such as I/O or data processing.*
-      - **lib.rs**
-        - *Description: This file is the root of the `rust_engine` library crate. It uses the PyO3 framework to define the Foreign Function Interface (FFI), exposing the high-performance Rust functions to the Python backend so they can be called directly.*
-  - **tests/**
-    - **__init__.py**
-      - *Description: This file marks the `tests` directory as a Python package, which is essential for test discovery tools like `pytest` to find and execute tests located in its subdirectories. It is often empty, but can be used for package-level test initializations.*
-    - **e2e/**
-      - **specs/**
-        - **job_submission.spec.ts**
-          - *Description: This TypeScript file contains end-to-end (E2E) tests that simulate a user's entire workflow for submitting a new job through the application's user interface. It uses a testing framework like Playwright to automate browser actions and verify that the entire system, from frontend to backend, functions correctly for this critical feature.*
-      - **playwright.config.ts**
-        - *Description: This is the main configuration file for the Playwright end-to-end testing framework. It defines how E2E tests are run, including settings for target browsers (e.g., Chrome, Firefox), the base URL for the application under test, test timeouts, and reporter options.*
-    - **python/**
-      - **__init__.py**
-        - *Description: This file, `__init__.py`, marks the `tests/python` directory as a Python package. Its presence is crucial for test runners like `pytest` to discover and correctly import test modules, fixtures, and helpers from this directory and its subdirectories.*
-      - **conftest.py**
-        - *Description: This is a special `pytest` configuration file that defines shared test fixtures, hooks, and helper functions. Its contents, such as a test database connection or an API client instance, are automatically available to all Python unit and integration tests.*
-      - **integration/**
-        - **__init__.py**
-          - *Description: This file marks the `integration` directory as a Python package, enabling the test runner (like `pytest`) to discover and import the integration test modules contained within it. It is typically empty and serves only to make the directory importable.*
-        - **test_api_endpoints.py**
-          - *Description: This Python file contains integration tests for the backend's FastAPI application. It uses a test client to send HTTP requests to the API endpoints, verifying that routes, request handling, database interactions, and authentication logic all work together correctly.*
-        - **test_worker_integration.py**
-          - *Description: This file contains integration tests for the asynchronous background worker system. It verifies the complete end-to-end flow of a processing job, from a task being enqueued in Celery to its successful execution by a worker and the validation of its results.*
-      - **unit/**
-        - **__init__.py**
-          - *Description: This file marks the `tests/python/unit` directory as a Python package. This allows the test runner (like pytest) to discover and correctly import the unit test modules (e.g., `test_auth.py`, `test_crud_operations.py`) located within this directory.*
-        - **test_auth.py**
-          - *Description: This file contains unit tests for the project's Python authentication and security helper functions. It is responsible for verifying the correctness of isolated logic such as password hashing/verification and JSON Web Token (JWT) creation/decoding, without requiring a live database or network services.*
-        - **test_crud_operations.py**
-          - *Description: This file contains unit tests for the data access layer (the CRUD modules). It verifies that functions for creating, reading, updating, and deleting database records behave correctly in isolation, typically by mocking the database connection.*
-    - **rust/**
-      - **bridge_test.py**
-        - *Description: This Python test file validates the Foreign Function Interface (FFI) bridge between the Python application and the `rust_engine`. It calls the Rust functions exposed via PyO3 to ensure they are integrated correctly and that data is marshaled properly across the language boundary.*
+            - *Description: This Kustomize configuration file orchestrates the Kubernetes deployment for the **staging** environment. It references the common manifests in the `base` directory and applies staging-specific patches, such as `config-patch.yaml`, to customize the application's configuration for pre-production testing.*
+          - **config-patch.yaml**
+            - *Description: This file is a Kustomize patch that defines environment-specific configuration values for the staging deployment. It overrides or extends the base `ConfigMap` to provide settings, such as API endpoints or log levels, tailored specifically for the staging environment.*
+  - **.dockerignore**
+    - *Description: The `.dockerignore` file lists patterns for files and directories that should be excluded from the Docker build context when creating container images. This prevents unnecessary or sensitive files like Git history, local dependencies, and test artifacts from being copied into the image, resulting in smaller, faster, and more secure builds for both the backend and frontend services.*
+  - **.gitignore**
+    - *Description: This file specifies intentionally untracked files and directories for the Git version control system. Its purpose is to prevent build artifacts, local configuration files, dependency folders, and other generated files from being committed to the repository.*
+  - **docker-compose.yml**
+    - *Description: This file defines and configures the multi-container application for local development using Docker Compose. It orchestrates the building and running of all necessary services, such as the backend API, frontend, database, and message broker, to create a consistent development environment.*
+  - **Dockerfile.backend**
+    - *Description: This file is a Docker build script used to create a container image for the Python backend application. It defines the environment, dependencies (from `pyproject.toml`), and runtime commands needed to run both the FastAPI web server and the Celery background workers.*
+  - **Dockerfile.frontend**
+    - *Description: This `Dockerfile` contains the instructions to build a production-ready, containerized Docker image for the Next.js frontend application. It defines a multi-stage build process to create a lightweight and optimized image for deployment.*
+  - **LICENSE**
+    - *Description: This file contains the legal license for the software, defining the terms under which others may use, modify, and distribute the project's code. It is a crucial legal document that specifies the permissions and restrictions for anyone interacting with the project.*
+  - **Makefile**
+    - *Description: The `Makefile` is a build automation script that defines a set of convenient command-line shortcuts for common development tasks. It orchestrates commands across the project's various components, such as building services, running tests, linting code, and managing the local development environment.*
+  - **README.md**
+    - *Description: The `README.md` file serves as the project's main documentation, providing a high-level overview of the "Pravaah" application, its purpose, and key features. It contains essential instructions for developers on how to set up, configure, and run the project locally.*

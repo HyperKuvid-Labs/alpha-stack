@@ -1,0 +1,182 @@
+# File System Tree for Dhātu
+
+## Structure with Descriptions
+
+Dhātu
+  - **{project-root}/**
+    - *Description: This is the root directory for the "Dhātu" project, a hybrid Python and Rust desktop application. It contains all the source code, assets, configuration, and tooling required to build, test, package, and document the entire application.*
+  - **.github/**
+    - **workflows/**
+      - **ci.yml**
+        - *Description: This file defines the Continuous Integration (CI) pipeline using GitHub Actions. It automates essential quality checks, such as linting, building, and running tests for both the Python and Rust code, on every push or pull request to the repository.*
+      - **release.yml**
+        - *Description: This GitHub Actions workflow file defines the automated process for creating a new software release. It is typically triggered when a new version tag is pushed to the repository, and its job is to build the application for various operating systems, package the executables, and upload them as assets to a new GitHub Release.*
+  - **assets/**
+    - **icons/**
+      - **dhatu.ico**
+        - *Description: This file, `dhatu.ico`, is the application's primary icon for the Windows operating system. It is used for the application's executable file, taskbar icon, and desktop/start menu shortcuts to provide visual branding.*
+      - **dhatu.png**
+        - *Description: This PNG file is the primary application icon for the Dhātu project. It is used for display in window title bars, application menus, and taskbars, particularly on Linux and macOS systems.*
+    - **images/**
+      - **logo.png**
+        - *Description: This PNG file contains the primary logo for the Dhātu application. It is used for branding within the user interface, such as on splash screens or in "About" dialogs.*
+    - **styles/**
+      - **main.qss**
+        - *Description: This file is a Qt Style Sheet (QSS) that defines the global visual theme and appearance for the application's user interface. It contains CSS-like rules to style all the PyQt6 widgets, ensuring a consistent look and feel across the entire program.*
+  - **config/**
+    - **logging.json**
+      - *Description: This JSON file defines the configuration for the application's logging system, specifying log levels, formats, and output destinations like the console or log files. It allows developers or administrators to control logging verbosity and behavior without changing the application's code.*
+    - **settings.py**
+      - *Description: This file, `settings.py`, defines and manages the application's configuration. It centralizes settings by loading values from environment variables or configuration files, providing default values, and making them accessible to the rest of the Python application.*
+  - **dhatu_core/**
+    - **.cargo/**
+      - **config.toml**
+        - *Description: This file provides project-specific configuration for Cargo, the Rust build system, for the `dhatu_core` crate. It is used to customize build behavior, such as setting compiler flags or defining custom build profiles for optimization.*
+    - **src/**
+      - **processing/**
+        - **file_processor.rs**
+          - *Description: This Rust source file contains the core logic for processing a single file. It is responsible for reading a file's content, applying data transformations or analysis, and returning the structured results for use by the broader application.*
+        - **mod.rs**
+          - *Description: This file, `mod.rs`, serves as the Rust module declaration for the `processing` directory. It is responsible for defining the public API of the `processing` module by declaring its sub-modules (like `file_processor.rs`) and re-exporting their relevant functions and structs to be used by other parts of the `dhatu_core` crate.*
+      - **db/**
+        - **models.rs**
+          - *Description: This file defines the Rust `struct`s that represent the database tables or collections used by the `dhatu_core` engine. These structs serve as the in-memory data models, mapping directly to the schema of the persistent storage.*
+        - **mod.rs**
+          - *Description: This file, `dhatu_core/src/db/mod.rs`, serves as the root of the Rust `db` module. It is responsible for declaring and exposing the public API of the database functionality, such as database connection logic and sub-modules like `models`, to the rest of the `dhatu_core` crate.*
+      - **utils/**
+        - **error.rs**
+          - *Description: This file defines custom error types and a `Result` alias for the `dhatu_core` Rust crate. It centralizes all potential failure states (e.g., I/O, processing) and facilitates converting them into Python exceptions that can be handled by the main application.*
+        - **mod.rs**
+          - *Description: This file, `mod.rs`, serves as the root of the `utils` module within the Rust crate. It declares and publicly exposes the various utility sub-modules (like `error.rs`) for use throughout the `dhatu_core` library.*
+      - **bindings.rs**
+        - *Description: Based on its name and location within the Rust crate `dhatu_core`, `bindings.rs` defines the foreign function interface (FFI) between Rust and Python. This file uses the PyO3 crate to expose Rust functions and data structures, making them callable from the Python application code as a native extension module.*
+      - **lib.rs**
+        - *Description: This file, `lib.rs`, is the root of the `dhatu_core` Rust library crate. It defines the public API of the Rust engine and uses PyO3 to expose its high-performance functions to the Python application as a native module.*
+    - **Cargo.toml**
+      - *Description: This is the manifest file for the `dhatu_core` Rust crate, managed by Cargo (Rust's build system). It defines the crate's metadata, dependencies (like `pyo3` for Python bindings and `rayon` for parallelism), and build configurations for compiling the high-performance core engine.*
+  - **docs/**
+    - **architecture/**
+      - **adr/**
+        - **001-python-rust-architecture.md**
+          - *Description: This file is an Architecture Decision Record (ADR) that documents the foundational choice to use a hybrid architecture. It justifies the decision to combine a Python frontend/UI with a high-performance Rust core, outlining the context, trade-offs, and consequences of this approach.*
+      - **data_flow.md**
+        - *Description: This Markdown file provides a high-level overview, likely with diagrams, explaining the path data takes through the application. It details the journey from user interaction in the UI, through the Python management layer, into the Rust processing engine, and back.*
+    - **user_guide/**
+      - **getting_started.md**
+        - *Description: This Markdown file is the primary user guide for the Dhātu application, providing new users with essential instructions for installation, initial setup, and a basic walkthrough of the software's core features to help them start using it quickly.*
+  - **packaging/**
+    - **linux/**
+      - **dhatu.desktop**
+        - *Description: This file is a standard Linux desktop entry file that defines how the Dhātu application appears in system menus. It specifies the application's name, icon, and the command required to launch it, enabling seamless integration with the Linux desktop environment.*
+    - **macos/**
+      - **Info.plist**
+        - *Description: This macOS property list file defines essential application metadata, such as the bundle identifier, executable name, and icon file. It is used by the packaging tool (e.g., PyInstaller) to generate the final `.app` bundle for distribution on macOS.*
+    - **build_executable.spec**
+      - *Description: This is a PyInstaller specification file that defines the configuration for building a standalone executable of the `Dhātu` application. It instructs the build process on how to bundle the Python code, the compiled Rust extension, assets like icons and stylesheets, and any other dependencies into a single distributable file for end-users.*
+  - **scripts/**
+    - **build.py**
+      - *Description: Based on its name and location, `scripts/build.py` is an automation script that orchestrates the project's build process. It likely calls tools like `maturin` to compile the Rust core into a Python extension, ensuring all necessary components are correctly built and placed for development or packaging.*
+    - **run.py**
+      - *Description: This Python script is a convenience wrapper for running the application in a local development environment. It likely ensures the necessary dependencies (like the Rust module) are built and the correct paths are set before launching the main application from `src/dhatu/main.py`.*
+  - **src/**
+    - **dhatu/**
+      - **app_logic/**
+        - **__init__.py**
+          - *Description: This `__init__.py` file marks the `app_logic` directory as a Python package, enabling its modules like `processing_manager` and `state_manager` to be imported elsewhere. It may also expose key classes from these modules to create a simplified public API for the application logic components.*
+        - **processing_manager.py**
+          - *Description: This file, `processing_manager.py`, orchestrates long-running data processing tasks. It manages a queue of jobs and delegates them to background worker threads, preventing the user interface from freezing and allowing for progress tracking and asynchronous updates.*
+        - **state_manager.py**
+          - *Description: This file, `state_manager.py`, defines a class responsible for managing and centralizing the application's global state. It acts as a single source of truth for information such as processing status, user settings, or loaded data, allowing various components (like the UI and processing logic) to query and react to state changes consistently.*
+      - **auth/**
+        - **__init__.py**
+          - *Description: This file marks the `auth` directory as a Python package, allowing its modules—such as `encryption.py`—to be imported throughout the application. It can also be used to define a convenient public API for the package by selectively exposing its key functions and classes.*
+        - **encryption.py**
+          - *Description: This file provides cryptographic utilities for encrypting and decrypting sensitive user data, such as API keys or credentials. It supports the authentication (`auth`) module by ensuring that confidential information is stored securely.*
+      - **core/**
+        - **__init__.py**
+          - *Description: This file marks the `dhatu/core` directory as a Python package. It allows other parts of the application to import the core modules within this directory, such as the `engine.py` wrapper for the Rust processing backend.*
+        - **engine.py**
+          - *Description: This file serves as the Python wrapper for the native Rust processing engine (`dhatu_core`). It imports the compiled Rust module and exposes its high-performance functions through a clean, Pythonic API for the rest of the application to use.*
+      - **database/**
+        - **__init__.py**
+          - *Description: This file marks the `database` directory as a Python package, enabling its modules (`models.py`, `repository.py`) to be imported. It can also define the package's public API by selectively exposing key classes or functions for easier access.*
+        - **models.py**
+          - *Description: This file defines the data schema for the application's database using Python classes. Each class in `models.py` typically represents a database table, defining its columns and data types, to be used by the data access layer (`repository.py`).*
+        - **repository.py**
+          - *Description: This file implements the Repository design pattern, serving as the Data Access Layer (DAL) for the application's SQLite database. It abstracts away the low-level SQL queries, providing a clean, high-level API for creating, reading, updating, and deleting records.*
+      - **integrations/**
+        - **__init__.py**
+          - *Description: This `__init__.py` file marks the `integrations` directory as a Python package, enabling the import of its modules. The package itself is intended to hold code for interfacing with third-party services, such as the crash reporting system defined in `error_reporter.py`.*
+        - **error_reporter.py**
+          - *Description: This file likely contains the logic for integrating with an external error monitoring service (like Sentry or Bugsnag). It captures unhandled exceptions and crash information from the application and submits them to a remote server, enabling developers to diagnose and fix bugs.*
+      - **ui/**
+        - **__init__.py**
+          - *Description: This `__init__.py` file marks the `ui` directory as a Python package, making its user interface components, such as views and widgets, importable throughout the application. It can also be used to selectively expose key UI classes for a cleaner import interface.*
+        - **compiled/**
+          - **__init__.py**
+            - *Description: This `__init__.py` file marks the `dhatu.ui.compiled` directory as a Python package. This allows the application to import the auto-generated Python UI modules, such as `main_window_ui.py`, which are created by compiling Qt Designer (`.ui`) files.*
+          - **main_window_ui.py**
+            - *Description: This file contains the auto-generated Python code converted from the `main_window.ui` Qt Designer file. It defines the layout and widgets of the main application window, separating the visual presentation from the interactive logic handled in `main_window.py`.*
+        - **views/**
+          - **__init__.py**
+            - *Description: This `__init__.py` file marks the `src/dhatu/ui/views` directory as a Python package. This allows the application to import the view components it contains, such as the `MainWindow`, which defines the main application window's logic.*
+          - **main_window.py**
+            - *Description: This Python file contains the application logic and event-handling code for the main window of the Dhātu desktop application. It connects user actions (like button clicks) from the UI layout (defined in `main_window.ui`) to the backend processing and state management functions.*
+        - **widgets/**
+          - **__init__.py**
+            - *Description: This file marks the `widgets` directory as a Python package, allowing custom UI components like `progress_bar.py` to be imported and used elsewhere in the application's user interface code. It can also be used to control the package's public API by exposing specific widget classes.*
+          - **progress_bar.py**
+            - *Description: This file defines a custom PyQt6 progress bar widget. It likely provides specific styling and functionality for displaying the progress of background operations managed by the application, such as file processing.*
+        - **main_window.ui**
+          - *Description: This is a Qt Designer file that contains the XML-based definition of the application's main window layout and its widgets. It is visually designed using Qt's GUI builder and is then compiled into a Python file (`main_window_ui.py`) for use by the application's view logic.*
+      - **utils/**
+        - **__init__.py**
+          - *Description: This file marks the `dhatu/utils` directory as a Python package, making its utility modules (like `logging_config.py`) importable. It can also be used to expose key helper functions and classes directly at the package level for convenient access from other parts of the application.*
+        - **logging_config.py**
+          - *Description: This Python file configures the application's logging behavior. It is responsible for setting up handlers (e.g., for console and file output), formatters, and log levels to ensure consistent and structured logging across the entire application.*
+      - **__init__.py**
+        - *Description: This file marks the `dhatu` directory as a Python package, allowing its modules and subpackages to be imported throughout the project. It can also contain package-level initialization code, define metadata like `__version__`, or expose a simplified public API.*
+      - **__main__.py**
+        - *Description: This file serves as the executable entry point for the `dhatu` package, allowing the application to be launched from the command line using `python -m dhatu`. Its primary role is to bootstrap the application, usually by calling the main function defined in `main.py`.*
+      - **main.py**
+        - *Description: This file, `main.py`, is the primary entry point for the Dhātu application. It is responsible for initializing the application environment, creating the main Qt application instance and window, and starting the event loop to launch the GUI.*
+  - **tests/**
+    - **fixtures/**
+      - **sample.log**
+        - *Description: This file is a sample log file used as a test fixture. It provides consistent, predictable input for automated tests that verify the application's ability to parse, process, or analyze log data.*
+    - **python/**
+      - **__init__.py**
+        - *Description: This file marks the `tests/python` directory as a Python package, allowing the test runner (like pytest) to discover and correctly import test modules within this directory and its subdirectories. It is often intentionally empty.*
+      - **conftest.py**
+        - *Description: This file, `conftest.py`, is a special configuration file for the `pytest` framework. It defines shared fixtures, hooks, and plugins that are available to all Python tests within the `tests/python/` directory and its subdirectories, promoting reusable test setup and teardown logic.*
+      - **e2e/**
+        - **__init__.py**
+          - *Description: This `__init__.py` file marks the `tests/python/e2e/` directory as a Python package. This allows the test runner (e.g., pytest) to discover and import the end-to-end test modules located within this folder.*
+        - **test_full_workflow.py**
+          - *Description: This file contains end-to-end (E2E) tests that simulate a complete user workflow from the perspective of an end-user. It likely uses a framework like `pytest-qt` to launch the application's graphical interface, automate user interactions (e.g., button clicks, file selection), and assert that the entire system, including the Rust backend, behaves as expected.*
+      - **integration/**
+        - **__init__.py**
+          - *Description: This `__init__.py` file marks the `tests/python/integration` directory as a Python package, allowing test discovery tools like `pytest` to find and run tests within it. These tests focus on verifying the interaction and data exchange between different parts of the application, such as the Python wrapper and the Rust core.*
+        - **test_rust_boundary.py**
+          - *Description: This file contains integration tests that validate the communication boundary between the Python application and the compiled Rust core library. It ensures that function calls, data type conversions, and error handling between the two languages work as expected.*
+      - **unit/**
+        - **__init__.py**
+          - *Description: This file marks the `tests/python/unit` directory as a Python package, allowing test discovery tools like `pytest` to find and import the unit test modules within this directory. It is often empty, as its primary purpose is to enable the Python import system for the test suite.*
+        - **test_app_logic.py**
+          - *Description: This file contains unit tests for the Python application's core business logic, specifically for the modules located in `src/dhatu/app_logic/`. It verifies the functionality of classes like `ProcessingManager` and `StateManager` in isolation, ensuring they behave correctly without depending on the UI or the Rust core.*
+    - **rust_tests_are_in_crate_src/**
+      - *Description: This is a placeholder file acting as a note to developers. It clarifies that, following standard Rust convention, tests for the `dhatu_core` crate are located directly within the `dhatu_core/src/` directory alongside the code they are testing, not in this top-level project `tests/` directory.*
+  - **.dockerignore**
+    - *Description: The `.dockerignore` file lists files and directories that should be excluded from the context sent to the Docker daemon during a `docker build`. This prevents unnecessary files like build artifacts (`target/`, `__pycache__`), virtual environments, or version control history (`.git`) from being included in the final image, resulting in faster builds and a smaller image size.*
+  - **.env.example**
+    - *Description: This file serves as a template that lists all the required environment variables for local development, complete with placeholder or default values. Developers should copy it to a `.env` file (which is git-ignored) and populate it with their specific settings or secrets to configure the application.*
+  - **.gitignore**
+    - *Description: The `.gitignore` file specifies intentionally untracked files and directories for Git to ignore. It prevents build artifacts, local configurations, logs, and temporary files from being accidentally committed to the version control repository.*
+  - **Dockerfile**
+    - *Description: This `Dockerfile` defines the steps to build a Docker container image for the application. It is used to create a reproducible, isolated environment containing the necessary operating system, toolchains (like Rust and Python), and dependencies required to build and potentially run the Dhātu application.*
+  - **README.md**
+    - *Description: The `README.md` file is the project's main landing page, providing a high-level overview of the Dhātu application, its features, and essential instructions for installation, development setup, and usage. It is typically the first document a new user or contributor will read.*
+  - **docker-compose.yml**
+    - *Description: This file uses Docker Compose to define and run multi-container services, simplifying the setup of a consistent local development, testing, or build environment for the project. It orchestrates the services, networks, and volumes required, often using the project's `Dockerfile` as a base.*
+  - **pyproject.toml**
+    - *Description: `pyproject.toml` is the central configuration file for the Python project, defining project metadata, dependencies, and build-system requirements. It is particularly crucial here for configuring `maturin` to compile the Rust-based `dhatu_core` into a Python extension module and for managing settings for tools like `black` and `pytest`.*

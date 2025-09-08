@@ -12,6 +12,7 @@ class TreeNode:
         self.is_file = False
         self.description = desc
         self.file_path = ""
+        self.code = ""
 
     def add_child(self, child_node):
         print("Adding child node:", child_node.value)
@@ -133,7 +134,7 @@ class TreeNode:
 def generate_descriptions_for_tree(tree_root: TreeNode, project_context: str, project_name: str):
     def get_file_description(node: TreeNode, full_path: str, project_context: str):
         try:
-            genai.configure(api_key="AIzaSyAb56f8gsiKgrg7ry3UWcuiDbGQsLMFJj0")
+            genai.configure(api_key="AIzaSyDqA_anmBc5of17-j2OOjy1_R6Fv_mwu5Y")
             
             file_extension = pathlib.Path(node.value).suffix
             is_directory = not node.is_file
@@ -371,12 +372,28 @@ def generate_fs(project_name : str, add_descriptions: bool = True):
     # print("DFS Traversal:")
     # tree.dfsTraverse()
     
-    print("Creating visual representation...")
-    if add_descriptions:
-        graph = tree_to_graphviz_with_descriptions(tree)
-    else:
-        graph = tree_to_graphviz(tree)
+    # print("Creating visual representation...")
+    # if add_descriptions:
+    #     graph = tree_to_graphviz_with_descriptions(tree)
+    # else:
+    #     graph = tree_to_graphviz(tree)
     
-    graph.render(f'docs/{project_name}_tree_visual', format='png', cleanup=True)
+    # graph.render(f'docs/{project_name}_tree_visual', format='png', cleanup=True)
     
+    return tree
+
+def dfs_populate_Tree_with_code(tree: TreeNode):
+    def traverse_and_populate(node: TreeNode):
+        if node.is_file and node.file_path:
+            try:
+                with open(node.file_path, "r", encoding='utf-8') as f:
+                    node.code = f.read()
+            except Exception as e:
+                print(f"Error reading file {node.file_path}: {e}")
+                node.code = ""
+        
+        for child in node.children:
+            traverse_and_populate(child)
+    
+    traverse_and_populate(tree)
     return tree

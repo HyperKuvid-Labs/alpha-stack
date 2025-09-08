@@ -4,8 +4,7 @@ import os
 
 def generate_ts(prompt: str) -> str:
     api_key = os.getenv("GEMINI_API_KEY")
-
-    genai.configure(api_key="AIzaSyAb56f8gsiKgrg7ry3UWcuiDbGQsLMFJj0")
+    genai.configure(api_key="AIzaSyDqA_anmBc5of17-j2OOjy1_R6Fv_mwu5Y")
     #generate the tech stack and reqs documentation
     ts_prompt = f"""
     User Request: {prompt}
@@ -102,7 +101,7 @@ def generate_ts(prompt: str) -> str:
     return resp.text
 
 def get_project_name(ts: str) -> str:
-    genai.configure(api_key="AIzaSyAb56f8gsiKgrg7ry3UWcuiDbGQsLMFJj0")
+    genai.configure(api_key="AIzaSyDqA_anmBc5of17-j2OOjy1_R6Fv_mwu5Y")
 
     prompt = f"""
     Extract the project name from the following technical stack documentation:

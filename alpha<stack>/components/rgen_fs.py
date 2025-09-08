@@ -8,7 +8,6 @@ def generate_structure()->str:
     path = pathlib.Path(os.getcwd()) / "docs" / "tech_stack_reqs.md"
     with open(path, "r") as f:
         content = f.read()
-    
     prompt = f"""
     You are a **senior software architect** and build-systems engineer.
 

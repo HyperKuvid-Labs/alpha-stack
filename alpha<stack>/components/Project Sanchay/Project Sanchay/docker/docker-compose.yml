@@ -1,0 +1,118 @@
+```yaml
+version: '3.8'
+
+services:
+  # PostgreSQL Database Service for local development
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sanchay_dev
+      POSTGRES_USER: sanchay_user
+      POSTGRES_PASSWORD: sanchay_password_dev
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432" # Expose PostgreSQL port to host
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # MinIO Object Storage Service (S3-compatible) for local development
+  minio:
+    image: quay.io/minio/minio:latest
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadminpassword
+      MINIO_REGION: us-east-1 # Region as expected by S3 clients
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000" # MinIO API port
+      - "9001:9001" # MinIO Console port
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # MinIO Client to configure MinIO (e.g., create buckets)
+  minio_client:
+    image: quay.io/minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    # Commands to set up the bucket and make it accessible
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set local http://minio:9000 minioadmin minioadminpassword;
+      /usr/bin/mc mb local/sanchay-dev-bucket || true; # Create bucket if it doesn't exist
+      /usr/bin/mc policy set public local/sanchay-dev-bucket || true; # Set public policy (adjust as needed)
+      exit 0;
+      "
+    networks:
+      - default # Connects to the default network where minio service runs
+
+  # Sanchay Application Service (Python + Rust Core)
+  sanchay_app:
+    build:
+      context: .. # Build context is the project root (where pyproject.toml is)
+      dockerfile: docker/Dockerfile # Path to the multi-stage Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio_client: # Ensure MinIO setup (e.g., bucket creation) is complete
+        condition: service_completed_successfully
+    environment:
+      # Database Configuration (for PostgreSQL)
+      DATABASE_URL: postgresql://sanchay_user:sanchay_password_dev@db:5432/sanchay_dev
+      # To switch to SQLite for specific testing, you'd configure this in the app.
+      # For a containerized app, SQLite path would be inside the container, e.g., /app/data/sanchay_metadata.db
+
+      # MinIO / S3 Object Storage Configuration
+      STORAGE_PROVIDER: minio # Or 's3' for AWS S3 in production
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadminpassword
+      MINIO_BUCKET: sanchay-dev-bucket
+      AWS_REGION: us-east-1 # Used by S3 clients, even when targeting MinIO
+
+      # Application General Configuration
+      APP_ENV: development
+      LOG_LEVEL: INFO
+      # FastAPI specific configuration, if the API is enabled
+      FASTAPI_HOST: 0.0.0.0
+      FASTAPI_PORT: 8000
+    # Expose FastAPI port if the application exposes a web interface
+    ports:
+      - "8000:8000"
+    # Command to run the application's FastAPI server.
+    # Assumes `src.sanchay_app.api.main` is the Python module containing the FastAPI app instance.
+    # This overrides the CMD in the Dockerfile if it exists, ensuring the API starts.
+    command: ["uvicorn", "src.sanchay_app.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    # For local development with hot-reloading (uncomment and adjust as needed if Dockerfile doesn't handle this)
+    # This would typically require the Dockerfile to install dev dependencies and possibly an entrypoint
+    # that rebuilds rust or uses an interactive Python shell.
+    # volumes:
+    #   - ../src:/app/src
+    #   - ../crates:/app/crates
+
+# Define named volumes for persistent data
+volumes:
+  postgres_data:
+  minio_data:
+
+# Define default network (optional, as Compose creates one by default)
+networks:
+  default:
+    driver: bridge
+```

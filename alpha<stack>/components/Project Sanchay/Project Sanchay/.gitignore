@@ -1,0 +1,49 @@
+# Generic ignores
+.DS_Store
+Thumbs.db
+*.log
+
+# Environment variables
+.env
+
+# Python specific
+__pycache__/
+*.pyc
+*.pyd
+*.so
+*.dll
+venv/
+.venv/
+.pytest_cache/
+htmlcov/
+.coverage.*
+*.egg-info/
+pip-wheel-metadata/
+.mypy_cache/
+
+# Rust specific
+# Compiled output for Rust crates
+crates/*/target/
+
+# Build and Distribution
+build/
+dist/
+*.whl
+*.exe
+*.dmg
+*.AppDir
+*.zip
+*.tar.gz
+*.deb
+*.rpm
+
+# IDE specific
+.vscode/
+.idea/
+*.swp
+*~
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3

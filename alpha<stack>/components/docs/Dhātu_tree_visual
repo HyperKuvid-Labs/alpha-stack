@@ -1,0 +1,222 @@
+// File Tree with Descriptions
+digraph {
+	rankdir=TB
+	node [fontsize=10]
+	124666967618144 [label="Dhātu" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666964997856 [label="{project-root}/\n(This is the root directory for the \"Dhātu\" project...)" fillcolor=lightblue shape=box style=filled tooltip="This is the root directory for the \"Dhātu\" project, a hybrid Python and Rust desktop application. It contains all the source code, assets, configuration, and tooling required to build, test, package, and document the entire application."]
+	124666967618144 -> 124666964997856
+	124666964998480 [label=".github/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666967618144 -> 124666964998480
+	124666964997616 [label="workflows/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666964998480 -> 124666964997616
+	124666964994496 [label="ci.yml\n(This file defines the Continuous Integration (CI) ...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines the Continuous Integration (CI) pipeline using GitHub Actions. It automates essential quality checks, such as linting, building, and running tests for both the Python and Rust code, on every push or pull request to the repository."]
+	124666964997616 -> 124666964994496
+	124666964999344 [label="release.yml\n(This GitHub Actions workflow file defines the auto...)" fillcolor=lightblue shape=box style=filled tooltip="This GitHub Actions workflow file defines the automated process for creating a new software release. It is typically triggered when a new version tag is pushed to the repository, and its job is to build the application for various operating systems, package the executables, and upload them as assets to a new GitHub Release."]
+	124666964997616 -> 124666964999344
+	124666964994784 [label="assets/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666967618144 -> 124666964994784
+	124666964999104 [label="icons/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666964994784 -> 124666964999104
+	124666964997424 [label="dhatu.ico\n(This file, `dhatu.ico`, is the application's prima...)" fillcolor=lightblue shape=box style=filled tooltip="This file, `dhatu.ico`, is the application's primary icon for the Windows operating system. It is used for the application's executable file, taskbar icon, and desktop/start menu shortcuts to provide visual branding."]
+	124666964999104 -> 124666964997424
+	124666964999488 [label="dhatu.png\n(This PNG file is the primary application icon for ...)" fillcolor=lightblue shape=box style=filled tooltip="This PNG file is the primary application icon for the Dhātu project. It is used for display in window title bars, application menus, and taskbars, particularly on Linux and macOS systems."]
+	124666964999104 -> 124666964999488
+	124666964994736 [label="images/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666964994784 -> 124666964994736
+	124666964999392 [label="logo.png\n(This PNG file contains the primary logo for the Dh...)" fillcolor=lightblue shape=box style=filled tooltip="This PNG file contains the primary logo for the Dhātu application. It is used for branding within the user interface, such as on splash screens or in \"About\" dialogs."]
+	124666964994736 -> 124666964999392
+	124666964999152 [label="styles/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666964994784 -> 124666964999152
+	124666964997712 [label="main.qss\n(This file is a Qt Style Sheet (QSS) that defines t...)" fillcolor=lightblue shape=box style=filled tooltip="This file is a Qt Style Sheet (QSS) that defines the global visual theme and appearance for the application's user interface. It contains CSS-like rules to style all the PyQt6 widgets, ensuring a consistent look and feel across the entire program."]
+	124666964999152 -> 124666964997712
+	124666964999248 [label="config/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666967618144 -> 124666964999248
+	124666964997760 [label="logging.json\n(This JSON file defines the configuration for the a...)" fillcolor=lightblue shape=box style=filled tooltip="This JSON file defines the configuration for the application's logging system, specifying log levels, formats, and output destinations like the console or log files. It allows developers or administrators to control logging verbosity and behavior without changing the application's code."]
+	124666964999248 -> 124666964997760
+	124666964999536 [label="settings.py\n(This file, `settings.py`, defines and manages the ...)" fillcolor=lightblue shape=box style=filled tooltip="This file, `settings.py`, defines and manages the application's configuration. It centralizes settings by loading values from environment variables or configuration files, providing default values, and making them accessible to the rest of the Python application."]
+	124666964999248 -> 124666964999536
+	124666964999680 [label="dhatu_core/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666967618144 -> 124666964999680
+	124666964999632 [label=".cargo/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666964999680 -> 124666964999632
+	124666964999776 [label="config.toml\n(This file provides project-specific configuration ...)" fillcolor=lightblue shape=box style=filled tooltip="This file provides project-specific configuration for Cargo, the Rust build system, for the `dhatu_core` crate. It is used to customize build behavior, such as setting compiler flags or defining custom build profiles for optimization."]
+	124666964999632 -> 124666964999776
+	124666964999824 [label="src/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666964999680 -> 124666964999824
+	124666964999872 [label="processing/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666964999824 -> 124666964999872
+	124666964999920 [label="file_processor.rs\n(This Rust source file contains the core logic for ...)" fillcolor=lightblue shape=box style=filled tooltip="This Rust source file contains the core logic for processing a single file. It is responsible for reading a file's content, applying data transformations or analysis, and returning the structured results for use by the broader application."]
+	124666964999872 -> 124666964999920
+	124666965000016 [label="mod.rs\n(This file, `mod.rs`, serves as the Rust module dec...)" fillcolor=lightblue shape=box style=filled tooltip="This file, `mod.rs`, serves as the Rust module declaration for the `processing` directory. It is responsible for defining the public API of the `processing` module by declaring its sub-modules (like `file_processor.rs`) and re-exporting their relevant functions and structs to be used by other parts of the `dhatu_core` crate."]
+	124666964999872 -> 124666965000016
+	124666965000112 [label="db/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666964999824 -> 124666965000112
+	124666965000160 [label="models.rs\n(This file defines the Rust `struct`s that represen...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines the Rust `struct`s that represent the database tables or collections used by the `dhatu_core` engine. These structs serve as the in-memory data models, mapping directly to the schema of the persistent storage."]
+	124666965000112 -> 124666965000160
+	124666965180544 [label="mod.rs\n(This file, `dhatu_core/src/db/mod.rs`, serves as t...)" fillcolor=lightblue shape=box style=filled tooltip="This file, `dhatu_core/src/db/mod.rs`, serves as the root of the Rust `db` module. It is responsible for declaring and exposing the public API of the database functionality, such as database connection logic and sub-modules like `models`, to the rest of the `dhatu_core` crate."]
+	124666965000112 -> 124666965180544
+	124666965180640 [label="utils/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666964999824 -> 124666965180640
+	124666965180688 [label="error.rs\n(This file defines custom error types and a `Result...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines custom error types and a `Result` alias for the `dhatu_core` Rust crate. It centralizes all potential failure states (e.g., I/O, processing) and facilitates converting them into Python exceptions that can be handled by the main application."]
+	124666965180640 -> 124666965180688
+	124666965180784 [label="mod.rs\n(This file, `mod.rs`, serves as the root of the `ut...)" fillcolor=lightblue shape=box style=filled tooltip="This file, `mod.rs`, serves as the root of the `utils` module within the Rust crate. It declares and publicly exposes the various utility sub-modules (like `error.rs`) for use throughout the `dhatu_core` library."]
+	124666965180640 -> 124666965180784
+	124666965180832 [label="bindings.rs\n(Based on its name and location within the Rust cra...)" fillcolor=lightblue shape=box style=filled tooltip="Based on its name and location within the Rust crate `dhatu_core`, `bindings.rs` defines the foreign function interface (FFI) between Rust and Python. This file uses the PyO3 crate to expose Rust functions and data structures, making them callable from the Python application code as a native extension module."]
+	124666964999824 -> 124666965180832
+	124666965180928 [label="lib.rs\n(This file, `lib.rs`, is the root of the `dhatu_cor...)" fillcolor=lightblue shape=box style=filled tooltip="This file, `lib.rs`, is the root of the `dhatu_core` Rust library crate. It defines the public API of the Rust engine and uses PyO3 to expose its high-performance functions to the Python application as a native module."]
+	124666964999824 -> 124666965180928
+	124666965180976 [label="Cargo.toml\n(This is the manifest file for the `dhatu_core` Rus...)" fillcolor=lightblue shape=box style=filled tooltip="This is the manifest file for the `dhatu_core` Rust crate, managed by Cargo (Rust's build system). It defines the crate's metadata, dependencies (like `pyo3` for Python bindings and `rayon` for parallelism), and build configurations for compiling the high-performance core engine."]
+	124666964999680 -> 124666965180976
+	124666965181024 [label="docs/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666967618144 -> 124666965181024
+	124666965181120 [label="architecture/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965181024 -> 124666965181120
+	124666965181216 [label="adr/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965181120 -> 124666965181216
+	124666965181264 [label="001-python-rust-architecture.md\n(This file is an Architecture Decision Record (ADR)...)" fillcolor=lightblue shape=box style=filled tooltip="This file is an Architecture Decision Record (ADR) that documents the foundational choice to use a hybrid architecture. It justifies the decision to combine a Python frontend/UI with a high-performance Rust core, outlining the context, trade-offs, and consequences of this approach."]
+	124666965181216 -> 124666965181264
+	124666965181312 [label="data_flow.md\n(This Markdown file provides a high-level overview,...)" fillcolor=lightblue shape=box style=filled tooltip="This Markdown file provides a high-level overview, likely with diagrams, explaining the path data takes through the application. It details the journey from user interaction in the UI, through the Python management layer, into the Rust processing engine, and back."]
+	124666965181120 -> 124666965181312
+	124666965181360 [label="user_guide/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965181024 -> 124666965181360
+	124666965181408 [label="getting_started.md\n(This Markdown file is the primary user guide for t...)" fillcolor=lightblue shape=box style=filled tooltip="This Markdown file is the primary user guide for the Dhātu application, providing new users with essential instructions for installation, initial setup, and a basic walkthrough of the software's core features to help them start using it quickly."]
+	124666965181360 -> 124666965181408
+	124666965181456 [label="packaging/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666967618144 -> 124666965181456
+	124666965181552 [label="linux/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965181456 -> 124666965181552
+	124666965181600 [label="dhatu.desktop\n(This file is a standard Linux desktop entry file t...)" fillcolor=lightblue shape=box style=filled tooltip="This file is a standard Linux desktop entry file that defines how the Dhātu application appears in system menus. It specifies the application's name, icon, and the command required to launch it, enabling seamless integration with the Linux desktop environment."]
+	124666965181552 -> 124666965181600
+	124666965181696 [label="macos/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965181456 -> 124666965181696
+	124666965181744 [label="Info.plist\n(This macOS property list file defines essential ap...)" fillcolor=lightblue shape=box style=filled tooltip="This macOS property list file defines essential application metadata, such as the bundle identifier, executable name, and icon file. It is used by the packaging tool (e.g., PyInstaller) to generate the final `.app` bundle for distribution on macOS."]
+	124666965181696 -> 124666965181744
+	124666965181792 [label="build_executable.spec\n(This is a PyInstaller specification file that defi...)" fillcolor=lightblue shape=box style=filled tooltip="This is a PyInstaller specification file that defines the configuration for building a standalone executable of the `Dhātu` application. It instructs the build process on how to bundle the Python code, the compiled Rust extension, assets like icons and stylesheets, and any other dependencies into a single distributable file for end-users."]
+	124666965181456 -> 124666965181792
+	124666965181840 [label="scripts/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666967618144 -> 124666965181840
+	124666965181888 [label="build.py\n(Based on its name and location, `scripts/build.py`...)" fillcolor=lightblue shape=box style=filled tooltip="Based on its name and location, `scripts/build.py` is an automation script that orchestrates the project's build process. It likely calls tools like `maturin` to compile the Rust core into a Python extension, ensuring all necessary components are correctly built and placed for development or packaging."]
+	124666965181840 -> 124666965181888
+	124666965181984 [label="run.py\n(This Python script is a convenience wrapper for ru...)" fillcolor=lightblue shape=box style=filled tooltip="This Python script is a convenience wrapper for running the application in a local development environment. It likely ensures the necessary dependencies (like the Rust module) are built and the correct paths are set before launching the main application from `src/dhatu/main.py`."]
+	124666965181840 -> 124666965181984
+	124666965182032 [label="src/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666967618144 -> 124666965182032
+	124666965182176 [label="dhatu/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965182032 -> 124666965182176
+	124666965182224 [label="app_logic/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965182176 -> 124666965182224
+	124666965182272 [label="__init__.py\n(This `__init__.py` file marks the `app_logic` dire...)" fillcolor=lightblue shape=box style=filled tooltip="This `__init__.py` file marks the `app_logic` directory as a Python package, enabling its modules like `processing_manager` and `state_manager` to be imported elsewhere. It may also expose key classes from these modules to create a simplified public API for the application logic components."]
+	124666965182224 -> 124666965182272
+	124666965182320 [label="processing_manager.py\n(This file, `processing_manager.py`, orchestrates l...)" fillcolor=lightblue shape=box style=filled tooltip="This file, `processing_manager.py`, orchestrates long-running data processing tasks. It manages a queue of jobs and delegates them to background worker threads, preventing the user interface from freezing and allowing for progress tracking and asynchronous updates."]
+	124666965182224 -> 124666965182320
+	124666965182368 [label="state_manager.py\n(This file, `state_manager.py`, defines a class res...)" fillcolor=lightblue shape=box style=filled tooltip="This file, `state_manager.py`, defines a class responsible for managing and centralizing the application's global state. It acts as a single source of truth for information such as processing status, user settings, or loaded data, allowing various components (like the UI and processing logic) to query and react to state changes consistently."]
+	124666965182224 -> 124666965182368
+	124666965182464 [label="auth/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965182176 -> 124666965182464
+	124666965182512 [label="__init__.py\n(This file marks the `auth` directory as a Python p...)" fillcolor=lightblue shape=box style=filled tooltip="This file marks the `auth` directory as a Python package, allowing its modules—such as `encryption.py`—to be imported throughout the application. It can also be used to define a convenient public API for the package by selectively exposing its key functions and classes."]
+	124666965182464 -> 124666965182512
+	124666965182560 [label="encryption.py\n(This file provides cryptographic utilities for enc...)" fillcolor=lightblue shape=box style=filled tooltip="This file provides cryptographic utilities for encrypting and decrypting sensitive user data, such as API keys or credentials. It supports the authentication (`auth`) module by ensuring that confidential information is stored securely."]
+	124666965182464 -> 124666965182560
+	124666965182656 [label="core/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965182176 -> 124666965182656
+	124666965182704 [label="__init__.py\n(This file marks the `dhatu/core` directory as a Py...)" fillcolor=lightblue shape=box style=filled tooltip="This file marks the `dhatu/core` directory as a Python package. It allows other parts of the application to import the core modules within this directory, such as the `engine.py` wrapper for the Rust processing backend."]
+	124666965182656 -> 124666965182704
+	124666965182752 [label="engine.py\n(This file serves as the Python wrapper for the nat...)" fillcolor=lightblue shape=box style=filled tooltip="This file serves as the Python wrapper for the native Rust processing engine (`dhatu_core`). It imports the compiled Rust module and exposes its high-performance functions through a clean, Pythonic API for the rest of the application to use."]
+	124666965182656 -> 124666965182752
+	124666965182800 [label="database/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965182176 -> 124666965182800
+	124666965182848 [label="__init__.py\n(This file marks the `database` directory as a Pyth...)" fillcolor=lightblue shape=box style=filled tooltip="This file marks the `database` directory as a Python package, enabling its modules (`models.py`, `repository.py`) to be imported. It can also define the package's public API by selectively exposing key classes or functions for easier access."]
+	124666965182800 -> 124666965182848
+	124666965182896 [label="models.py\n(This file defines the data schema for the applicat...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines the data schema for the application's database using Python classes. Each class in `models.py` typically represents a database table, defining its columns and data types, to be used by the data access layer (`repository.py`)."]
+	124666965182800 -> 124666965182896
+	124666965182944 [label="repository.py\n(This file implements the Repository design pattern...)" fillcolor=lightblue shape=box style=filled tooltip="This file implements the Repository design pattern, serving as the Data Access Layer (DAL) for the application's SQLite database. It abstracts away the low-level SQL queries, providing a clean, high-level API for creating, reading, updating, and deleting records."]
+	124666965182800 -> 124666965182944
+	124666965182992 [label="integrations/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965182176 -> 124666965182992
+	124666965183040 [label="__init__.py\n(This `__init__.py` file marks the `integrations` d...)" fillcolor=lightblue shape=box style=filled tooltip="This `__init__.py` file marks the `integrations` directory as a Python package, enabling the import of its modules. The package itself is intended to hold code for interfacing with third-party services, such as the crash reporting system defined in `error_reporter.py`."]
+	124666965182992 -> 124666965183040
+	124666965183088 [label="error_reporter.py\n(This file likely contains the logic for integratin...)" fillcolor=lightblue shape=box style=filled tooltip="This file likely contains the logic for integrating with an external error monitoring service (like Sentry or Bugsnag). It captures unhandled exceptions and crash information from the application and submits them to a remote server, enabling developers to diagnose and fix bugs."]
+	124666965182992 -> 124666965183088
+	124666965183184 [label="ui/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965182176 -> 124666965183184
+	124666965183232 [label="__init__.py\n(This `__init__.py` file marks the `ui` directory a...)" fillcolor=lightblue shape=box style=filled tooltip="This `__init__.py` file marks the `ui` directory as a Python package, making its user interface components, such as views and widgets, importable throughout the application. It can also be used to selectively expose key UI classes for a cleaner import interface."]
+	124666965183184 -> 124666965183232
+	124666965183280 [label="compiled/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965183184 -> 124666965183280
+	124666965183328 [label="__init__.py\n(This `__init__.py` file marks the `dhatu.ui.compil...)" fillcolor=lightblue shape=box style=filled tooltip="This `__init__.py` file marks the `dhatu.ui.compiled` directory as a Python package. This allows the application to import the auto-generated Python UI modules, such as `main_window_ui.py`, which are created by compiling Qt Designer (`.ui`) files."]
+	124666965183280 -> 124666965183328
+	124666965183376 [label="main_window_ui.py\n(This file contains the auto-generated Python code ...)" fillcolor=lightblue shape=box style=filled tooltip="This file contains the auto-generated Python code converted from the `main_window.ui` Qt Designer file. It defines the layout and widgets of the main application window, separating the visual presentation from the interactive logic handled in `main_window.py`."]
+	124666965183280 -> 124666965183376
+	124666965183472 [label="views/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965183184 -> 124666965183472
+	124666965183520 [label="__init__.py\n(This `__init__.py` file marks the `src/dhatu/ui/vi...)" fillcolor=lightblue shape=box style=filled tooltip="This `__init__.py` file marks the `src/dhatu/ui/views` directory as a Python package. This allows the application to import the view components it contains, such as the `MainWindow`, which defines the main application window's logic."]
+	124666965183472 -> 124666965183520
+	124666965183568 [label="main_window.py\n(This Python file contains the application logic an...)" fillcolor=lightblue shape=box style=filled tooltip="This Python file contains the application logic and event-handling code for the main window of the Dhātu desktop application. It connects user actions (like button clicks) from the UI layout (defined in `main_window.ui`) to the backend processing and state management functions."]
+	124666965183472 -> 124666965183568
+	124666965183616 [label="widgets/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965183184 -> 124666965183616
+	124666965183664 [label="__init__.py\n(This file marks the `widgets` directory as a Pytho...)" fillcolor=lightblue shape=box style=filled tooltip="This file marks the `widgets` directory as a Python package, allowing custom UI components like `progress_bar.py` to be imported and used elsewhere in the application's user interface code. It can also be used to control the package's public API by exposing specific widget classes."]
+	124666965183616 -> 124666965183664
+	124666965183712 [label="progress_bar.py\n(This file defines a custom PyQt6 progress bar widg...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines a custom PyQt6 progress bar widget. It likely provides specific styling and functionality for displaying the progress of background operations managed by the application, such as file processing."]
+	124666965183616 -> 124666965183712
+	124666965183760 [label="main_window.ui\n(This is a Qt Designer file that contains the XML-b...)" fillcolor=lightblue shape=box style=filled tooltip="This is a Qt Designer file that contains the XML-based definition of the application's main window layout and its widgets. It is visually designed using Qt's GUI builder and is then compiled into a Python file (`main_window_ui.py`) for use by the application's view logic."]
+	124666965183184 -> 124666965183760
+	124666965183856 [label="utils/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965182176 -> 124666965183856
+	124666965183904 [label="__init__.py\n(This file marks the `dhatu/utils` directory as a P...)" fillcolor=lightblue shape=box style=filled tooltip="This file marks the `dhatu/utils` directory as a Python package, making its utility modules (like `logging_config.py`) importable. It can also be used to expose key helper functions and classes directly at the package level for convenient access from other parts of the application."]
+	124666965183856 -> 124666965183904
+	124666965183952 [label="logging_config.py\n(This Python file configures the application's logg...)" fillcolor=lightblue shape=box style=filled tooltip="This Python file configures the application's logging behavior. It is responsible for setting up handlers (e.g., for console and file output), formatters, and log levels to ensure consistent and structured logging across the entire application."]
+	124666965183856 -> 124666965183952
+	124666965184000 [label="__init__.py\n(This file marks the `dhatu` directory as a Python ...)" fillcolor=lightblue shape=box style=filled tooltip="This file marks the `dhatu` directory as a Python package, allowing its modules and subpackages to be imported throughout the project. It can also contain package-level initialization code, define metadata like `__version__`, or expose a simplified public API."]
+	124666965182176 -> 124666965184000
+	124666965184048 [label="__main__.py\n(This file serves as the executable entry point for...)" fillcolor=lightblue shape=box style=filled tooltip="This file serves as the executable entry point for the `dhatu` package, allowing the application to be launched from the command line using `python -m dhatu`. Its primary role is to bootstrap the application, usually by calling the main function defined in `main.py`."]
+	124666965182176 -> 124666965184048
+	124666965184144 [label="main.py\n(This file, `main.py`, is the primary entry point f...)" fillcolor=lightblue shape=box style=filled tooltip="This file, `main.py`, is the primary entry point for the Dhātu application. It is responsible for initializing the application environment, creating the main Qt application instance and window, and starting the event loop to launch the GUI."]
+	124666965182176 -> 124666965184144
+	124666965184192 [label="tests/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666967618144 -> 124666965184192
+	124666965184288 [label="fixtures/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965184192 -> 124666965184288
+	124666965184336 [label="sample.log\n(This file is a sample log file used as a test fixt...)" fillcolor=lightblue shape=box style=filled tooltip="This file is a sample log file used as a test fixture. It provides consistent, predictable input for automated tests that verify the application's ability to parse, process, or analyze log data."]
+	124666965184288 -> 124666965184336
+	124666965184432 [label="python/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965184192 -> 124666965184432
+	124666965184480 [label="__init__.py\n(This file marks the `tests/python` directory as a ...)" fillcolor=lightblue shape=box style=filled tooltip="This file marks the `tests/python` directory as a Python package, allowing the test runner (like pytest) to discover and correctly import test modules within this directory and its subdirectories. It is often intentionally empty."]
+	124666965184432 -> 124666965184480
+	124666965184528 [label="conftest.py\n(This file, `conftest.py`, is a special configurati...)" fillcolor=lightblue shape=box style=filled tooltip="This file, `conftest.py`, is a special configuration file for the `pytest` framework. It defines shared fixtures, hooks, and plugins that are available to all Python tests within the `tests/python/` directory and its subdirectories, promoting reusable test setup and teardown logic."]
+	124666965184432 -> 124666965184528
+	124666965184624 [label="e2e/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965184432 -> 124666965184624
+	124666965184672 [label="__init__.py\n(This `__init__.py` file marks the `tests/python/e2...)" fillcolor=lightblue shape=box style=filled tooltip="This `__init__.py` file marks the `tests/python/e2e/` directory as a Python package. This allows the test runner (e.g., pytest) to discover and import the end-to-end test modules located within this folder."]
+	124666965184624 -> 124666965184672
+	124666965184720 [label="test_full_workflow.py\n(This file contains end-to-end (E2E) tests that sim...)" fillcolor=lightblue shape=box style=filled tooltip="This file contains end-to-end (E2E) tests that simulate a complete user workflow from the perspective of an end-user. It likely uses a framework like `pytest-qt` to launch the application's graphical interface, automate user interactions (e.g., button clicks, file selection), and assert that the entire system, including the Rust backend, behaves as expected."]
+	124666965184624 -> 124666965184720
+	124666965184768 [label="integration/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965184432 -> 124666965184768
+	124666965184816 [label="__init__.py\n(This `__init__.py` file marks the `tests/python/in...)" fillcolor=lightblue shape=box style=filled tooltip="This `__init__.py` file marks the `tests/python/integration` directory as a Python package, allowing test discovery tools like `pytest` to find and run tests within it. These tests focus on verifying the interaction and data exchange between different parts of the application, such as the Python wrapper and the Rust core."]
+	124666965184768 -> 124666965184816
+	124666965184864 [label="test_rust_boundary.py\n(This file contains integration tests that validate...)" fillcolor=lightblue shape=box style=filled tooltip="This file contains integration tests that validate the communication boundary between the Python application and the compiled Rust core library. It ensures that function calls, data type conversions, and error handling between the two languages work as expected."]
+	124666965184768 -> 124666965184864
+	124666965184960 [label="unit/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	124666965184432 -> 124666965184960
+	124666965185008 [label="__init__.py\n(This file marks the `tests/python/unit` directory ...)" fillcolor=lightblue shape=box style=filled tooltip="This file marks the `tests/python/unit` directory as a Python package, allowing test discovery tools like `pytest` to find and import the unit test modules within this directory. It is often empty, as its primary purpose is to enable the Python import system for the test suite."]
+	124666965184960 -> 124666965185008
+	124666965185056 [label="test_app_logic.py\n(This file contains unit tests for the Python appli...)" fillcolor=lightblue shape=box style=filled tooltip="This file contains unit tests for the Python application's core business logic, specifically for the modules located in `src/dhatu/app_logic/`. It verifies the functionality of classes like `ProcessingManager` and `StateManager` in isolation, ensuring they behave correctly without depending on the UI or the Rust core."]
+	124666965184960 -> 124666965185056
+	124666965185104 [label="rust_tests_are_in_crate_src/\n(This is a placeholder file acting as a note to dev...)" fillcolor=lightblue shape=box style=filled tooltip="This is a placeholder file acting as a note to developers. It clarifies that, following standard Rust convention, tests for the `dhatu_core` crate are located directly within the `dhatu_core/src/` directory alongside the code they are testing, not in this top-level project `tests/` directory."]
+	124666965184192 -> 124666965185104
+	124666965185152 [label=".dockerignore\n(The `.dockerignore` file lists files and directori...)" fillcolor=lightblue shape=box style=filled tooltip="The `.dockerignore` file lists files and directories that should be excluded from the context sent to the Docker daemon during a `docker build`. This prevents unnecessary files like build artifacts (`target/`, `__pycache__`), virtual environments, or version control history (`.git`) from being included in the final image, resulting in faster builds and a smaller image size."]
+	124666967618144 -> 124666965185152
+	124666965185200 [label=".env.example\n(This file serves as a template that lists all the ...)" fillcolor=lightblue shape=box style=filled tooltip="This file serves as a template that lists all the required environment variables for local development, complete with placeholder or default values. Developers should copy it to a `.env` file (which is git-ignored) and populate it with their specific settings or secrets to configure the application."]
+	124666967618144 -> 124666965185200
+	124666965185248 [label=".gitignore\n(The `.gitignore` file specifies intentionally untr...)" fillcolor=lightblue shape=box style=filled tooltip="The `.gitignore` file specifies intentionally untracked files and directories for Git to ignore. It prevents build artifacts, local configurations, logs, and temporary files from being accidentally committed to the version control repository."]
+	124666967618144 -> 124666965185248
+	124666965185296 [label="Dockerfile\n(This `Dockerfile` defines the steps to build a Doc...)" fillcolor=lightblue shape=box style=filled tooltip="This `Dockerfile` defines the steps to build a Docker container image for the application. It is used to create a reproducible, isolated environment containing the necessary operating system, toolchains (like Rust and Python), and dependencies required to build and potentially run the Dhātu application."]
+	124666967618144 -> 124666965185296
+	124666965185344 [label="README.md\n(The `README.md` file is the project's main landing...)" fillcolor=lightblue shape=box style=filled tooltip="The `README.md` file is the project's main landing page, providing a high-level overview of the Dhātu application, its features, and essential instructions for installation, development setup, and usage. It is typically the first document a new user or contributor will read."]
+	124666967618144 -> 124666965185344
+	124666965185392 [label="docker-compose.yml\n(This file uses Docker Compose to define and run mu...)" fillcolor=lightblue shape=box style=filled tooltip="This file uses Docker Compose to define and run multi-container services, simplifying the setup of a consistent local development, testing, or build environment for the project. It orchestrates the services, networks, and volumes required, often using the project's `Dockerfile` as a base."]
+	124666967618144 -> 124666965185392
+	124666965185440 [label="pyproject.toml\n(`pyproject.toml` is the central configuration file...)" fillcolor=lightblue shape=box style=filled tooltip="`pyproject.toml` is the central configuration file for the Python project, defining project metadata, dependencies, and build-system requirements. It is particularly crucial here for configuring `maturin` to compile the Rust-based `dhatu_core` into a Python extension module and for managing settings for tools like `black` and `pytest`."]
+	124666967618144 -> 124666965185440
+}

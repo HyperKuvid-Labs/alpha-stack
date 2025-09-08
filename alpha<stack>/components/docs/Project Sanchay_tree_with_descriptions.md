@@ -1,0 +1,159 @@
+# File System Tree for Project Sanchay
+
+## Structure with Descriptions
+
+Project Sanchay
+  - **project-sanchay/**
+    - *Description: This is the root directory for Project Sanchay, a hybrid application that leverages a high-performance Rust core for intensive file processing and a Python frontend for the user interface (GUI/CLI) and overall application logic. It contains all source code, configuration, documentation, and tooling required to build, test, and run the entire project.*
+  - **.github/**
+    - **workflows/**
+      - **ci-cd.yml**
+        - *Description: This file defines the project's main Continuous Integration and Continuous Delivery (CI/CD) pipeline using GitHub Actions. It automates critical tasks such as running tests, building the Rust core and Python application, and packaging the final executables for release whenever new code is pushed or a tag is created.*
+      - **lint.yml**
+        - *Description: This file defines a GitHub Actions workflow to automatically run code linting and formatting checks. It ensures that all Python and Rust code contributions adhere to the project's established style guides, providing rapid feedback on code quality for pull requests.*
+  - **.dockerignore**
+    - *Description: This file specifies files and folders to exclude from the Docker build context. Its purpose is to create smaller, faster, and more secure Docker images by preventing unnecessary files like local dependencies (`.venv`), build artifacts (`target/`), tests, and documentation from being copied into the image.*
+  - **.gitignore**
+    - *Description: The `.gitignore` file specifies intentionally untracked files and directories that Git should ignore. This prevents temporary files, build artifacts (`/target`, `/dist`), local configurations (`.env`), and editor-specific metadata from being committed to the project's version history.*
+  - **README.md**
+    - *Description: The `README.md` file is the primary entry point for the project's documentation. It provides a comprehensive overview, including the project's purpose, key features, and essential instructions for installation, setup, and basic usage.*
+  - **pyproject.toml**
+    - *Description: `pyproject.toml` is the central configuration file for the Python project, defining metadata, dependencies, and build-system requirements. It specifically uses the `maturin` build backend to compile the Rust core into a Python extension module and package it with the main application.*
+  - **assets/**
+    - **icons/**
+      - **app_icon.png**
+        - *Description: This PNG file is the primary icon for the Sanchay application. It provides the application's visual identity and is used in places like the window's title bar, the taskbar, and desktop shortcuts.*
+    - **styles/**
+      - **main.qss**
+        - *Description: This file, `main.qss`, contains the Qt Style Sheet (QSS) rules that define the custom visual theme and styling for the application's user interface. It functions like a CSS file for the Qt framework, controlling the appearance of widgets, colors, fonts, and layout.*
+  - **config/**
+    - **__init__.py**
+      - *Description: This file marks the `config` directory as a Python package, enabling other parts of the application to import configuration modules like `settings.py`. It is often empty but can also contain package-level initialization code.*
+    - **default.py**
+      - *Description: `default.py` defines the base, non-sensitive configuration settings for the Sanchay application. It serves as the foundational configuration that other environment-specific files (like `development.py` or `production.py`) can inherit from and override.*
+    - **development.py**
+      - *Description: This file contains configuration settings that override the base configuration specifically for the local development environment. It is used to set values like `DEBUG = True`, configure connections to local databases (e.g., SQLite), or enable more verbose logging to aid in debugging.*
+    - **production.py**
+      - *Description: This file defines configuration settings that override the defaults specifically for the production environment. It ensures the application runs with secure, performant, and stable settings when deployed, such as disabling debug mode, setting logging levels to `INFO` or `WARNING`, and connecting to the production database.*
+    - **settings.py**
+      - *Description: **settings.py**: This file is the main entry point for the application's configuration system. Its primary role is to dynamically load and merge settings from other files in the `config` directory (like `default.py`, `development.py`) based on the current environment, creating a single, unified configuration object for the rest of the application to use.*
+    - **.env.example**
+      - *Description: This file is a template that defines the necessary environment variables for the application, such as database connection strings or API keys. A developer should copy it to `.env` and populate it with actual values and secrets required to run the project locally.*
+  - **crates/**
+    - **sanchay_core/**
+      - **Cargo.toml**
+        - *Description: This is the manifest file for the `sanchay_core` Rust crate, managed by Rust's build tool, Cargo. It defines the crate's metadata (name, version, authors) and specifies its external dependencies, such as `rayon` for parallelism and `serde` for serialization.*
+      - **src/**
+        - **__tests__/**
+          - *Description: This directory holds integration tests for the `sanchay_core` Rust crate. It contains Rust test files (`.rs`) that verify the correctness and interactions between the core logic modules, such as `walker.rs`, `file_processor.rs`, and `database.rs`.*
+        - **bindings.rs**
+          - *Description: This file defines the Python module bindings using the `pyo3` crate, exposing the high-performance Rust functions to the main Python application. It acts as the "glue" layer, translating function calls and data types between Python and Rust.*
+        - **database.rs**
+          - *Description: This Rust module contains the high-performance logic for direct database interactions, such as connecting to SQLite or PostgreSQL. It is responsible for efficiently bulk-inserting the file metadata and hashes collected by the core Rust engine.*
+        - **error.rs**
+          - *Description: This file defines the custom `Error` types for the `sanchay_core` Rust crate. It consolidates all potential failures—such as I/O, database, or file processing errors—into a unified type for consistent and robust error handling throughout the Rust logic.*
+        - **file_processor.rs**
+          - *Description: This Rust source file contains the core logic for processing an individual file. It is responsible for tasks like reading a file's content from the disk and efficiently computing a cryptographic hash (e.g., Blake3, SHA-256) to uniquely identify it.*
+        - **lib.rs**
+          - *Description: This file, `lib.rs`, is the main entry point and crate root for the `sanchay_core` Rust library. It is responsible for declaring the library's internal modules (e.g., `walker`, `file_processor`, `bindings`) and defining the public API that is exposed to other parts of the application.*
+        - **walker.rs**
+          - *Description: This file implements high-performance, parallel directory traversal logic for the core Rust engine. It is responsible for recursively scanning a given file path to discover all files and directories, likely using libraries like `walkdir` and `rayon` for maximum efficiency.*
+  - **docs/**
+    - **ADR/**
+      - **001-python-rust-hybrid-approach.md**
+        - *Description: This Architecture Decision Record (ADR) documents the rationale, context, and consequences for choosing a hybrid Python and Rust architecture. It explains why the project combines Python for the main application (UI, orchestration) with a high-performance Rust core for computationally intensive tasks like file processing and directory traversal.*
+    - **api/**
+      - *Description: This `api` folder is designated to hold the auto-generated API reference documentation. It would contain detailed, structured information about the project's classes, functions, and modules, likely generated from source code comments using tools like Sphinx for Python and rustdoc for the Rust core.*
+    - **user_guide/**
+      - **getting_started.md**
+        - *Description: This file provides a step-by-step guide for end-users, detailing how to install, configure, and perform the initial run of the Project Sanchay application. It serves as the primary entry point for new users to quickly become productive with the software.*
+  - **docker/**
+    - **Dockerfile**
+      - *Description: This `Dockerfile` contains the instructions to build a portable, self-contained Docker container image for the application. It likely uses a multi-stage build to compile the Rust core, install Python dependencies, and create an optimized final image for production deployment.*
+    - **docker-compose.yml**
+      - *Description: This YAML file is a Docker Compose configuration used to define and run the project's multi-container local development environment. It orchestrates services like a PostgreSQL database, allowing developers to easily spin up the entire application stack with a single command.*
+  - **scripts/**
+    - **build.sh**
+      - *Description: This shell script automates the process of building the entire application. It likely orchestrates compiling the Rust core into a Python extension, installing dependencies, and bundling the final application into a distributable format (e.g., an executable) for end-users.*
+    - **clean.sh**
+      - *Description: This shell script automates the process of cleaning the project workspace by removing temporary files and build artifacts. It is expected to delete directories like Rust's `target/`, Python's `__pycache__/` and `dist/`, and any other generated files, restoring the project to a clean state.*
+    - **release.sh**
+      - *Description: This shell script automates the process of creating a new software release. It likely orchestrates tasks such as version tagging in Git, building the application for distribution, packaging the final artifacts into archives (`.zip`, `.tar.gz`), and potentially uploading them to a release platform like GitHub.*
+  - **src/**
+    - **sanchay_app/**
+      - **__init__.py**
+        - *Description: This file marks the `sanchay_app` directory as a Python package, making its contents importable. It can also contain package-level initialization code or define a public API by exposing key classes and functions from its submodules.*
+      - **__main__.py**
+        - *Description: This file, `__main__.py`, serves as the main executable entry point for the `sanchay_app` package. It is responsible for parsing command-line arguments and launching the application, typically deciding whether to start the graphical user interface (GUI) or the command-line interface (CLI).*
+      - **api/**
+        - **__init__.py**
+          - *Description: This file marks the `api` directory as a Python package, enabling the application's optional REST API functionality. It may contain package-level initializations, such as creating or configuring the main API router object (e.g., from FastAPI).*
+        - **dependencies.py**
+          - *Description: This file defines reusable dependency injection functions for the FastAPI application. It centralizes logic for providing shared resources, such as database sessions or authenticated user objects, to various API endpoints, promoting code reuse and cleaner route handler logic.*
+        - **routes.py**
+          - *Description: This file defines the REST API endpoints for the application using a web framework like FastAPI. It maps HTTP routes (e.g., `/jobs`, `/status`) to specific handler functions that trigger and manage the core processing logic, allowing for remote interaction and control.*
+      - **auth/**
+        - **__init__.py**
+          - *Description: This `__init__.py` file designates the `auth` directory as a Python package. It allows the application to import authentication and credential-handling modules, such as `credentials.py`, from this namespace.*
+        - **credentials.py**
+          - *Description: Based on its name and location, `credentials.py` is responsible for securely loading, managing, and providing access to credentials for external services, such as API keys for AWS S3. It centralizes the handling of sensitive information, ensuring that secrets are not hardcoded and can be retrieved from secure sources like environment variables or a system keychain.*
+      - **cli.py**
+        - *Description: `cli.py` defines the command-line interface (CLI) for the application, enabling users to perform core functions like starting scans or managing jobs directly from the terminal. This file facilitates scripting, automation, and running the application in headless environments without a graphical user interface.*
+      - **core/**
+        - **__init__.py**
+          - *Description: This `__init__.py` file marks the `core` directory as a Python package, making its modules (like `job_manager.py`) importable. It can also be used to expose key classes and functions from within the core package for more convenient access by other parts of the application.*
+        - **job_manager.py**
+          - *Description: This file serves as the central orchestrator for the application's core background tasks. It contains the logic for creating, managing, and monitoring the state and progress of processing "jobs," such as scanning a directory or uploading files.*
+      - **database/**
+        - **__init__.py**
+          - *Description: This file marks the `database` directory as a Python package, allowing its modules like `connection` and `models` to be imported elsewhere in the `sanchay_app`. It can also be used to expose key database components, such as connection handlers or ORM classes, for more convenient access from other parts of the code.*
+        - **connection.py**
+          - *Description: This file is responsible for establishing and managing the connection to the application's database. It likely contains the necessary logic to create a database engine and session factory (using a library like SQLAlchemy) based on configuration settings for either SQLite or PostgreSQL.*
+        - **migrations/**
+          - *Description: This folder contains version-controlled scripts for managing incremental changes to the application's database schema. It uses a tool like Alembic to ensure that the database structure can be reliably upgraded or downgraded as the application code evolves.*
+        - **models.py**
+          - *Description: This file defines the application's database schema using an Object-Relational Mapper (ORM) like SQLAlchemy. Each Python class in this file represents a database table, and its attributes map to columns, structuring how data such as file metadata, processing jobs, and results are stored.*
+      - **integrations/**
+        - **__init__.py**
+          - *Description: This file marks the `integrations` directory as a Python package, enabling the application to import modules from this folder. It allows for the structured organization of code that connects the Sanchay application to external services, such as cloud storage providers.*
+        - **storage_client.py**
+          - *Description: This file defines a client class for interacting with external object storage services like AWS S3 or MinIO. It abstracts the low-level API calls, providing a simplified interface for uploading, downloading, and managing files in a remote storage bucket.*
+      - **ui/**
+        - **__init__.py**
+          - *Description: This file marks the `ui` directory as a Python package, enabling the import of its UI-related modules, such as windows, widgets, and data models. It can also be used to conveniently expose key UI classes to other parts of the application.*
+        - **main_window.py**
+          - *Description: This Python file defines the main application window, which serves as the primary container for all other UI widgets and elements. It is responsible for orchestrating the overall GUI layout, including menus, toolbars, and the central content area, and connecting user actions to the application's core logic.*
+        - **models/**
+          - *Description: This directory contains Qt Item Models (e.g., `QAbstractTableModel`) for the PySide6 user interface. These models act as an interface between the application's backend data (like scan results or job statuses) and the frontend widgets (views) that display it.*
+        - **threads.py**
+          - *Description: This file defines worker classes, likely using Qt's `QThread`, to execute long-running operations such as file system scanning or data processing in the background. This prevents the user interface from freezing and allows for asynchronous updates on task progress.*
+        - **widgets/**
+          - **__init__.py**
+            - *Description: This `__init__.py` file designates the `widgets` directory as a Python package, enabling the import of its reusable UI components, such as `progress_bar.py`, throughout the application. It may also define a public API for the package by selectively importing key widget classes from its modules.*
+          - **progress_bar.py**
+            - *Description: This file defines a custom `QProgressBar` widget for the PySide6 user interface. It provides visual feedback on the progress of long-running operations, like file scanning or data processing, likely with custom styling and behavior specific to the Sanchay application.*
+      - **utils/**
+        - **__init__.py**
+          - *Description: This `__init__.py` file designates the `utils` directory as a Python package, allowing its modules, like `logging_config`, to be imported. It may also define a public API for the package by selectively importing and exposing key utility functions for easier access throughout the application.*
+        - **logging_config.py**
+          - *Description: This Python file is responsible for centrally configuring the application's logging behavior. It sets up log handlers (e.g., console, file), formatters, and log levels to ensure consistent and structured logging across all modules.*
+  - **tests/**
+    - **__init__.py**
+      - *Description: This file marks the `tests` directory as a Python package, which is necessary for test runners like `pytest` to discover and execute the tests contained within this directory and its subdirectories. It is often empty but plays a crucial role in making the test suite importable.*
+    - **conftest.py**
+      - *Description: `conftest.py` is a special Pytest file used to define shared test fixtures, hooks, and plugins. It centralizes setup and teardown logic, such as creating a temporary database or a test application instance, making these resources available to all tests within the `tests/` directory and its subdirectories.*
+    - **e2e/**
+      - **test_full_scan.py**
+        - *Description: This file contains end-to-end tests that simulate a complete file scanning workflow from a user's perspective. It verifies that initiating a scan correctly processes a sample directory and stores the results, ensuring the entire application stack, from the user interface/CLI to the Rust core, works together as expected.*
+    - **integration/**
+      - **__init__.py**
+        - *Description: This file marks the `tests/integration` directory as a Python package, enabling the test framework (`pytest`) to discover and run the integration tests contained within it. It is often empty but is essential for the test suite's structure.*
+      - **test_rust_bridge.py**
+        - *Description: This file contains integration tests to verify the communication between the Python application and the compiled Rust core engine. It ensures that Python can correctly call functions in the Rust library (`sanchay_core`), pass data, and handle any returned values or errors as expected.*
+    - **unit/**
+      - **__init__.py**
+        - *Description: This file marks the `tests/unit` directory as a Python package, enabling the test runner (like pytest) to discover and import the unit test modules contained within it. It is often empty and primarily serves to structure the test suite.*
+      - **test_job_manager.py**
+        - *Description: This file contains unit tests for the `JobManager` module (`src/sanchay_app/core/job_manager.py`). It is responsible for verifying the core business logic of creating jobs, managing their state (e.g., start, stop, complete), and tracking progress, all in isolation from other components like the UI or the Rust core.*
+      - **test_ui_widgets.py**
+        - *Description: This file contains unit tests for the custom graphical user interface (GUI) widgets found in `src/sanchay_app/ui/widgets/`. It is responsible for verifying the behavior and state of individual UI components, like a custom progress bar, in isolation from the rest of the application.*

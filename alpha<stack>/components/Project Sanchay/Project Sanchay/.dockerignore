@@ -1,0 +1,34 @@
+# Git related
+.git
+.gitignore
+
+# Python specific
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+
+# Rust specific
+target/
+
+# Local development files and secrets
+.env
+*.log
+*.sqlite
+*.db
+sanchay_metadata.db
+
+# Project directories not needed in the Docker image
+.github/
+docs/
+tests/
+scripts/
+docker/
+
+# Rust crate test sources
+crates/*/src/__tests__/

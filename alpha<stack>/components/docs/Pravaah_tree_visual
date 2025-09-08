@@ -1,0 +1,290 @@
+// File Tree with Descriptions
+digraph {
+	rankdir=TB
+	node [fontsize=10]
+	130532026629968 [label=Pravaah fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026620608 [label="{project-root}/\n(This is the root directory for the \"Pravaah\" proje...)" fillcolor=lightblue shape=box style=filled tooltip="This is the root directory for the \"Pravaah\" project, a full-stack application. It organizes the entire codebase into distinct, high-level components including the backend, a high-performance Rust core, the frontend, infrastructure definitions, CI/CD pipelines, and project-wide documentation."]
+	130532026629968 -> 130532026620608
+	130532030995760 [label=".github/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026629968 -> 130532030995760
+	130532026628528 [label="workflows/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532030995760 -> 130532026628528
+	130532026628240 [label="ci.yml\n(This YAML file defines the Continuous Integration ...)" fillcolor=lightblue shape=box style=filled tooltip="This YAML file defines the Continuous Integration (CI) pipeline using GitHub Actions. It automates the process of running linters, tests, and builds for the frontend, backend, and Rust core components whenever code is pushed or a pull request is created."]
+	130532026628528 -> 130532026628240
+	130532026628048 [label="cd.yml\n(This GitHub Actions workflow file defines the Cont...)" fillcolor=lightblue shape=box style=filled tooltip="This GitHub Actions workflow file defines the Continuous Deployment (CD) pipeline for the project. It automates the process of building and pushing the frontend and backend Docker images to a container registry and then deploying the new versions to a Kubernetes environment."]
+	130532026628528 -> 130532026628048
+	130532026629920 [label="backend/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026629968 -> 130532026629920
+	130532026628480 [label="gati/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026629920 -> 130532026628480
+	130532026628336 [label="__init__.py\n(This file marks the `gati` directory as a Python p...)" fillcolor=lightblue shape=box style=filled tooltip="This file marks the `gati` directory as a Python package, allowing its submodules (like `api`, `core`, and `db`) to be imported by other parts of the backend application. It can be empty or contain package-level initialization code."]
+	130532026628480 -> 130532026628336
+	130532026629008 [label="api/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026628480 -> 130532026629008
+	130532026630064 [label="__init__.py\n(This `__init__.py` file marks the `api` directory ...)" fillcolor=lightblue shape=box style=filled tooltip="This `__init__.py` file marks the `api` directory as a Python package, enabling its modules and sub-packages (like the versioned API router in `v1`) to be imported elsewhere. It may also be used to aggregate routers from different versions into a single master API router for the FastAPI application."]
+	130532026629008 -> 130532026630064
+	130532026629104 [label="v1/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026629008 -> 130532026629104
+	130532026628288 [label="__init__.py\n(This `__init__.py` file marks the `v1` directory a...)" fillcolor=lightblue shape=box style=filled tooltip="This `__init__.py` file marks the `v1` directory as a Python package, allowing its contents to be imported. It often serves to aggregate the various API routers from the `endpoints` sub-directory into a single, versioned router that can be included in the main FastAPI application."]
+	130532026629104 -> 130532026628288
+	130532026630112 [label="endpoints/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026629104 -> 130532026630112
+	130532026826832 [label="__init__.py\n(This `__init__.py` file marks the `endpoints` dire...)" fillcolor=lightblue shape=box style=filled tooltip="This `__init__.py` file marks the `endpoints` directory as a Python package. Its presence allows the FastAPI application to import the various API router modules (like `auth.py`, `jobs.py`) contained within this directory."]
+	130532026630112 -> 130532026826832
+	130532026826928 [label="auth.py\n(This file defines the FastAPI API endpoints for us...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines the FastAPI API endpoints for user authentication and authorization. It contains the public-facing routes for handling user login, validating credentials, and issuing access tokens for clients to use in subsequent requests."]
+	130532026630112 -> 130532026826928
+	130532026827024 [label="jobs.py\n(This file defines the FastAPI API endpoints for ma...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines the FastAPI API endpoints for managing background jobs. It is responsible for handling HTTP requests to create, retrieve status, list, and manage asynchronous tasks within the application."]
+	130532026630112 -> 130532026827024
+	130532026827072 [label="users.py\n(This file defines the REST API endpoints for user ...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines the REST API endpoints for user management within the `gati` backend service. It contains the request handlers for operations like creating new users, retrieving user details, updating user information, and deleting user accounts."]
+	130532026630112 -> 130532026827072
+	130532026827120 [label="schemas.py\n(This file contains Pydantic schemas that define th...)" fillcolor=lightblue shape=box style=filled tooltip="This file contains Pydantic schemas that define the data structures for the v1 API's request bodies and response models. It is responsible for data validation, serialization, and ensuring a consistent data contract between the frontend and backend."]
+	130532026629104 -> 130532026827120
+	130532026827216 [label="auth/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026628480 -> 130532026827216
+	130532026827264 [label="__init__.py\n(This `__init__.py` file designates the `auth` dire...)" fillcolor=lightblue shape=box style=filled tooltip="This `__init__.py` file designates the `auth` directory as a Python package, allowing its modules (`jwt.py`, `security.py`) to be imported throughout the application. It may also define a simplified public API for the package by exposing key functions and classes from its submodules."]
+	130532026827216 -> 130532026827264
+	130532026827360 [label="jwt.py\n(This file is responsible for handling JSON Web Tok...)" fillcolor=lightblue shape=box style=filled tooltip="This file is responsible for handling JSON Web Token (JWT) operations. It contains the logic to create (encode) new access tokens for authenticated users and to decode and validate incoming tokens to verify user identity for protected API endpoints."]
+	130532026827216 -> 130532026827360
+	130532026827408 [label="security.py\n(This file defines the FastAPI security dependencie...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines the FastAPI security dependencies and schemes used to protect API endpoints. It likely contains the `OAuth2PasswordBearer` setup and the dependency function that endpoints use to require a valid token, verify it, and retrieve the current authenticated user."]
+	130532026827216 -> 130532026827408
+	130532026827504 [label="core/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026628480 -> 130532026827504
+	130532026827552 [label="__init__.py\n(This file marks the `core` directory as a Python p...)" fillcolor=lightblue shape=box style=filled tooltip="This file marks the `core` directory as a Python package, enabling other parts of the backend application to import its modules, such as configuration settings and application lifecycle events."]
+	130532026827504 -> 130532026827552
+	130532026827600 [label="config.py\n(This file centralizes the backend application's co...)" fillcolor=lightblue shape=box style=filled tooltip="This file centralizes the backend application's configuration by defining and managing settings loaded from environment variables. It provides a single source for parameters such as database credentials, secret keys, and external service URLs used throughout the application."]
+	130532026827504 -> 130532026827600
+	130532026827648 [label="lifespan.py\n(This file manages the FastAPI application's lifecy...)" fillcolor=lightblue shape=box style=filled tooltip="This file manages the FastAPI application's lifecycle events. It contains the logic for startup and shutdown procedures, such as initializing database connection pools or message queues when the application starts, and gracefully closing them when it stops."]
+	130532026827504 -> 130532026827648
+	130532026827744 [label="db/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026628480 -> 130532026827744
+	130532026827792 [label="__init__.py\n(This `__init__.py` file designates the `db` direct...)" fillcolor=lightblue shape=box style=filled tooltip="This `__init__.py` file designates the `db` directory as a Python package, allowing other parts of the application to import its database-related modules, such as `models`, `crud`, and `session`. It may also be used to control the package's namespace and expose key database components for easier access."]
+	130532026827744 -> 130532026827792
+	130532026827888 [label="crud.py\n(This file contains the data access logic, implemen...)" fillcolor=lightblue shape=box style=filled tooltip="This file contains the data access logic, implementing the Create, Read, Update, and Delete (CRUD) operations for the application's database models. It acts as an abstraction layer, providing reusable functions that the API endpoints call to interact with the database, separating business logic from data persistence details."]
+	130532026827744 -> 130532026827888
+	130532026827936 [label="models.py\n(This file defines the database schema using Python...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines the database schema using Python classes, which map to tables in the database via an Object-Relational Mapper (ORM) like SQLModel or SQLAlchemy. Each class within `models.py` represents a database table, and its attributes correspond to the table's columns."]
+	130532026827744 -> 130532026827936
+	130532026827984 [label="session.py\n(This file is responsible for initializing the appl...)" fillcolor=lightblue shape=box style=filled tooltip="This file is responsible for initializing the application's database connection and managing database sessions. It typically creates the SQLAlchemy/SQLModel engine and a session factory, and provides a dependency function for FastAPI to inject a database session into API endpoints for each request."]
+	130532026827744 -> 130532026827984
+	130532026828032 [label="integrations/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026628480 -> 130532026828032
+	130532026828080 [label="__init__.py\n(This `__init__.py` file designates the `integratio...)" fillcolor=lightblue shape=box style=filled tooltip="This `__init__.py` file designates the `integrations` directory as a Python package, making its modules, which contain logic for connecting to external services (like S3), importable throughout the application."]
+	130532026828032 -> 130532026828080
+	130532026828176 [label="s3.py\n(This file defines a client or helper functions for...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines a client or helper functions for interacting with an S3-compatible object storage service. It encapsulates the logic for operations like uploading, downloading, and managing files, providing a standardized interface for other parts of the backend application."]
+	130532026828032 -> 130532026828176
+	130532026828272 [label="tasks/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026628480 -> 130532026828272
+	130532026828320 [label="__init__.py\n(This `__init__.py` file marks the `tasks` director...)" fillcolor=lightblue shape=box style=filled tooltip="This `__init__.py` file marks the `tasks` directory as a Python package, allowing its modules containing background job definitions (e.g., Celery tasks) to be imported. It might also be used to initialize the Celery app or expose specific tasks at the package level for easier discovery."]
+	130532026828272 -> 130532026828320
+	130532026828368 [label="filesystem_ops.py\n(This file defines asynchronous background tasks, l...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines asynchronous background tasks, likely using Celery, for performing I/O-intensive filesystem operations. It contains the logic for jobs like scanning directories, moving files, or analyzing file metadata, which are executed by a separate worker process to avoid blocking the main API."]
+	130532026828272 -> 130532026828368
+	130532026828416 [label="task_utils.py\n(This file provides reusable helper functions speci...)" fillcolor=lightblue shape=box style=filled tooltip="This file provides reusable helper functions specifically for the Celery background tasks defined in this directory. It likely contains common logic, such as updating job statuses in the database, logging progress, or handling errors, which is shared across multiple tasks."]
+	130532026828272 -> 130532026828416
+	130532026828512 [label="utils/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026628480 -> 130532026828512
+	130532026828560 [label="__init__.py\n(This `__init__.py` file designates the `utils` dir...)" fillcolor=lightblue shape=box style=filled tooltip="This `__init__.py` file designates the `utils` directory as a Python package, allowing its modules (like `logging.py`) to be imported elsewhere in the application. It may also be used to expose specific utility functions at the package level for more convenient access."]
+	130532026828512 -> 130532026828560
+	130532026828608 [label="logging.py\n(This file, `gati/utils/logging.py`, should contain...)" fillcolor=lightblue shape=box style=filled tooltip="This file, `gati/utils/logging.py`, should contain the centralized configuration for the application's logging. It is responsible for setting up log formats, levels, and handlers (e.g., console, file) to ensure consistent logging across the entire backend, including the FastAPI application and Celery workers."]
+	130532026828512 -> 130532026828608
+	130532026828704 [label="main.py\n(This file, `main.py`, is the primary entry point f...)" fillcolor=lightblue shape=box style=filled tooltip="This file, `main.py`, is the primary entry point for the Gati FastAPI web application. It instantiates the FastAPI application, mounts the API routers from the `api/` directory, and configures application-level settings like middleware and lifespan events."]
+	130532026628480 -> 130532026828704
+	130532026828752 [label="worker.py\n(This file serves as the entrypoint for launching t...)" fillcolor=lightblue shape=box style=filled tooltip="This file serves as the entrypoint for launching the Celery background worker processes. It is responsible for creating and configuring the Celery application instance, which discovers and executes asynchronous tasks defined in the `gati/tasks/` directory."]
+	130532026628480 -> 130532026828752
+	130532026828848 [label="tests/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026629920 -> 130532026828848
+	130532026828896 [label="__init__.py\n(This file marks the `tests` directory and its subd...)" fillcolor=lightblue shape=box style=filled tooltip="This file marks the `tests` directory and its subdirectories as a Python package, allowing the test runner (like pytest) to discover and import the test modules contained within it. It is essential for structuring the test suite and is often left empty."]
+	130532026828848 -> 130532026828896
+	130532026828944 [label="conftest.py\n(This is a special `pytest` configuration file that...)" fillcolor=lightblue shape=box style=filled tooltip="This is a special `pytest` configuration file that defines shared test fixtures, hooks, and plugins for the backend test suite. It centralizes setup and teardown logic, such as initializing a test database or creating an API test client, making these resources available to all tests within the `tests` directory."]
+	130532026828848 -> 130532026828944
+	130532026828992 [label="integration/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026828848 -> 130532026828992
+	130532026829040 [label="__init__.py\n(This file marks the `tests/integration` directory ...)" fillcolor=lightblue shape=box style=filled tooltip="This file marks the `tests/integration` directory as a Python package, allowing test discovery tools like `pytest` to find and execute the integration tests within it. It is often empty, as its presence is what enables the test runner to import modules from this directory."]
+	130532026828992 -> 130532026829040
+	130532026829088 [label="test_api_jobs.py\n(This file contains integration tests for the job m...)" fillcolor=lightblue shape=box style=filled tooltip="This file contains integration tests for the job management API endpoints (defined in `backend/gati/api/v1/endpoints/jobs.py`). It simulates real HTTP requests to create, retrieve, and manage jobs, verifying that the API layer, database interactions, and business logic integrate and function correctly."]
+	130532026828992 -> 130532026829088
+	130532026829184 [label="unit/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026828848 -> 130532026829184
+	130532026829232 [label="__init__.py\n(This file marks the `unit` directory as a Python p...)" fillcolor=lightblue shape=box style=filled tooltip="This file marks the `unit` directory as a Python package, enabling the test runner (e.g., pytest) to discover and import the unit tests contained within this folder. It is often intentionally left empty."]
+	130532026829184 -> 130532026829232
+	130532026829280 [label="test_auth.py\n(This file contains unit tests for the backend's au...)" fillcolor=lightblue shape=box style=filled tooltip="This file contains unit tests for the backend's authentication and authorization modules. It is responsible for verifying the correctness of individual functions, such as JWT creation/decoding and password verification, in isolation from the database or API endpoints."]
+	130532026829184 -> 130532026829280
+	130532026829328 [label=".env.example\n(This file serves as a template listing all the req...)" fillcolor=lightblue shape=box style=filled tooltip="This file serves as a template listing all the required environment variables for the backend application. Developers should copy it to a `.env` file and populate it with their specific local configuration values, such as database credentials and secret keys, to run the project."]
+	130532026629920 -> 130532026829328
+	130532026829376 [label="poetry.lock\n(This auto-generated file locks the exact versions ...)" fillcolor=lightblue shape=box style=filled tooltip="This auto-generated file locks the exact versions of all Python packages and their sub-dependencies for the backend application, as defined in `pyproject.toml`. Its purpose is to ensure consistent, reproducible builds and environments for development, testing, and production."]
+	130532026629920 -> 130532026829376
+	130532026829424 [label="pyproject.toml\n(This file is the project definition file for the P...)" fillcolor=lightblue shape=box style=filled tooltip="This file is the project definition file for the Python backend, managed using the Poetry dependency manager. It declares project metadata, specifies application and development dependencies (e.g., FastAPI, pytest), and configures development tools like linters and formatters."]
+	130532026629920 -> 130532026829424
+	130532026829472 [label="core/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026629968 -> 130532026829472
+	130532026829616 [label="src/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026829472 -> 130532026829616
+	130532026829664 [label="__init__.py\n(This `__init__.py` file marks the `src` directory ...)" fillcolor=lightblue shape=box style=filled tooltip="This `__init__.py` file marks the `src` directory as a Python package, which is a requirement for PyO3 to allow the compiled Rust core engine to be correctly imported and used by the Python backend."]
+	130532026829616 -> 130532026829664
+	130532026829712 [label="error.rs\n(This file defines the custom error types for the R...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines the custom error types for the Rust `core` library. It consolidates all potential failures, such as I/O or data processing errors, into a unified type for robust, idiomatic error handling within the Rust codebase and for exposing exceptions to the Python layer."]
+	130532026829616 -> 130532026829712
+	130532026829760 [label="filesystem/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026829616 -> 130532026829760
+	130532026829856 [label="mod.rs\n(This file, `mod.rs`, serves as the Rust module dec...)" fillcolor=lightblue shape=box style=filled tooltip="This file, `mod.rs`, serves as the Rust module declaration for the `filesystem` directory. It is responsible for defining the module's public API by declaring its sub-modules (like `scanner.rs`) and re-exporting their relevant components for use by the rest of the `core` crate."]
+	130532026829760 -> 130532026829856
+	130532026829904 [label="scanner.rs\n(This Rust source file implements high-performance ...)" fillcolor=lightblue shape=box style=filled tooltip="This Rust source file implements high-performance logic for recursively scanning directories. It is responsible for efficiently traversing the filesystem to discover files and gather their metadata, a core function likely exposed to the Python backend for performance-critical operations."]
+	130532026829760 -> 130532026829904
+	130532026830000 [label="lib.rs\n(`lib.rs` is the main entry point for the Rust libr...)" fillcolor=lightblue shape=box style=filled tooltip="`lib.rs` is the main entry point for the Rust library (`pravaah_core`). It defines the crate's public API and uses the PyO3 framework to expose high-performance Rust functions and types as a callable Python module for the backend."]
+	130532026829616 -> 130532026830000
+	130532026830048 [label="processing/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026829616 -> 130532026830048
+	130532026830144 [label="mod.rs\n(This file, `mod.rs`, is the Rust module declaratio...)" fillcolor=lightblue shape=box style=filled tooltip="This file, `mod.rs`, is the Rust module declaration for the `processing` directory. It defines the module's public interface and exposes its submodules, such as `parallel.rs`, to the rest of the high-performance Rust `core` crate."]
+	130532026830048 -> 130532026830144
+	130532026830192 [label="parallel.rs\n(This Rust source file implements high-performance,...)" fillcolor=lightblue shape=box style=filled tooltip="This Rust source file implements high-performance, parallel data processing logic for the core engine. It likely uses libraries like Rayon to distribute computationally intensive tasks, such as filtering or transforming large datasets of file metadata, across multiple CPU cores for maximum speed."]
+	130532026830048 -> 130532026830192
+	130532026830288 [label="types/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026829616 -> 130532026830288
+	130532026830384 [label="mod.rs\n(This file, `mod.rs`, serves as the module declarat...)" fillcolor=lightblue shape=box style=filled tooltip="This file, `mod.rs`, serves as the module declaration for the `types` directory within the Rust `core` crate. Its purpose is to define the public API of the `types` module by exporting the data structures (like structs and enums) defined in other files within this directory, such as `file_meta.rs`."]
+	130532026830288 -> 130532026830384
+	130532026830432 [label="file_meta.rs\n(This Rust source file defines the core data struct...)" fillcolor=lightblue shape=box style=filled tooltip="This Rust source file defines the core data structures, likely `structs`, used to represent file metadata. It encapsulates properties like file path, size, and modification times, serving as the primary data model for the file scanning and processing operations within the high-performance Rust engine."]
+	130532026830288 -> 130532026830432
+	130532026830528 [label="tests/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026829472 -> 130532026830528
+	130532026830576 [label="scanner_tests.rs\n(This file contains Rust integration tests for the ...)" fillcolor=lightblue shape=box style=filled tooltip="This file contains Rust integration tests for the high-performance directory traversal and file metadata collection logic defined in `core/src/filesystem/scanner.rs`. It ensures the scanner behaves correctly by creating temporary file/directory structures and asserting the scan results are accurate."]
+	130532026830528 -> 130532026830576
+	130532026830624 [label="benches/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026829472 -> 130532026830624
+	130532026830672 [label="scan_benchmark.rs\n(This Rust file contains performance benchmarks for...)" fillcolor=lightblue shape=box style=filled tooltip="This Rust file contains performance benchmarks for the filesystem scanning functionality of the `core` library. It is designed to measure the speed and efficiency of the directory traversal logic using Rust's `cargo bench` command."]
+	130532026830624 -> 130532026830672
+	130532026830720 [label="Cargo.toml\n(This is the manifest file for the `core` Rust proj...)" fillcolor=lightblue shape=box style=filled tooltip="This is the manifest file for the `core` Rust project, managed by Rust's build system, Cargo. It defines the crate's metadata, its dependencies (like `pyo3` for Python bindings and `rayon` for parallelism), and the necessary build configuration to compile it into a library that can be used by the Python backend."]
+	130532026829472 -> 130532026830720
+	130532026830768 [label="docs/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026629968 -> 130532026830768
+	130532026830912 [label="api/\n(This directory is designated for API documentation...)" fillcolor=lightblue shape=box style=filled tooltip="This directory is designated for API documentation, such as OpenAPI or Swagger specifications. It provides a detailed, machine-readable reference for the backend's endpoints, defining their structure, request/response formats, and authentication requirements."]
+	130532026830768 -> 130532026830912
+	130532026830960 [label="architecture.md\n(This Markdown file serves as the primary documenta...)" fillcolor=lightblue shape=box style=filled tooltip="This Markdown file serves as the primary documentation for the project's high-level system architecture. It is expected to contain diagrams, design principles, and explanations of how major components like the frontend, backend, and core processing engine interact with each other."]
+	130532026830768 -> 130532026830960
+	130532026831008 [label="user_guide.md\n(This Markdown file contains the user guide, provid...)" fillcolor=lightblue shape=box style=filled tooltip="This Markdown file contains the user guide, providing end-users with comprehensive instructions, tutorials, and feature explanations on how to use the Pravaah application. It serves as the primary \"how-to\" manual for operating the software from a user's perspective."]
+	130532026830768 -> 130532026831008
+	130532026831056 [label="frontend/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026629968 -> 130532026831056
+	130532026831152 [label="public/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026831056 -> 130532026831152
+	130532026831200 [label="favicon.ico\n(This file is the website's \"favicon,\" a small icon...)" fillcolor=lightblue shape=box style=filled tooltip="This file is the website's \"favicon,\" a small icon that web browsers display in the address bar, browser tabs, and bookmark lists. Its placement in the `public` directory ensures it is served as a static asset to provide a visual brand identity for the application."]
+	130532026831152 -> 130532026831200
+	130532026831248 [label="logo.svg\n(This file is the main logo for the Pravaah web app...)" fillcolor=lightblue shape=box style=filled tooltip="This file is the main logo for the Pravaah web application, stored as a Scalable Vector Graphic (SVG). Located in the `frontend/public` directory, it is served directly as a static asset for branding purposes across the user interface."]
+	130532026831152 -> 130532026831248
+	130532026831344 [label="src/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026831056 -> 130532026831344
+	130532026831440 [label="app/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026831344 -> 130532026831440
+	130532026831536 [label="api/\n(This directory contains server-side API Route Hand...)" fillcolor=lightblue shape=box style=filled tooltip="This directory contains server-side API Route Handlers for the Next.js application, following the App Router convention. It allows the frontend to have its own backend endpoints, which can be used to securely communicate with the main Python backend, manage sessions, or handle other server-only logic."]
+	130532026831440 -> 130532026831536
+	130532026831584 [label="dashboard/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026831440 -> 130532026831584
+	130532026831632 [label="layout.tsx\n(This file defines the shared UI layout for all pag...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines the shared UI layout for all pages within the `/dashboard` section of the Next.js application. It typically includes persistent components like a navigation bar, sidebar, or header that wrap the content of individual dashboard pages."]
+	130532026831584 -> 130532026831632
+	130532026831680 [label="page.tsx\n(Based on its location and name, `page.tsx` is the ...)" fillcolor=lightblue shape=box style=filled tooltip="Based on its location and name, `page.tsx` is the primary React component that defines the user interface for the `/dashboard` route. This file is the main view users see after logging in, responsible for displaying key application data, controls, and status information, such as managing and monitoring data processing jobs."]
+	130532026831584 -> 130532026831680
+	130532026831776 [label="login/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026831440 -> 130532026831776
+	130532026831824 [label="page.tsx\n(This file defines the React component that renders...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines the React component that renders the user interface for the `/login` route. It contains the login form, handles user input, and manages the logic for authenticating users against the backend API."]
+	130532026831776 -> 130532026831824
+	130532026831872 [label="globals.css\n(This file defines the global CSS styles for the en...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines the global CSS styles for the entire Next.js frontend application. It typically contains CSS resets, base styles for HTML elements, and the necessary `@tailwind` directives to inject Tailwind CSS's foundational styles across all pages and components."]
+	130532026831440 -> 130532026831872
+	130532026831920 [label="layout.tsx\n(This file is the root layout for the Next.js appli...)" fillcolor=lightblue shape=box style=filled tooltip="This file is the root layout for the Next.js application, defining the main HTML structure (like `<html>` and `<body>` tags) and shared UI components that wrap every page. It is responsible for applying global styles, fonts, and providing a consistent shell for the entire user interface."]
+	130532026831440 -> 130532026831920
+	130532026831968 [label="page.tsx\n(This file defines the main landing page or home pa...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines the main landing page or home page for the Next.js application, rendering the UI for the root URL (`/`). It is the primary entry point for users visiting the site and may redirect to the login page or dashboard based on authentication status."]
+	130532026831440 -> 130532026831968
+	130532026832016 [label="components/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026831344 -> 130532026832016
+	130532026832112 [label="jobs/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026832016 -> 130532026832112
+	130532026832160 [label="JobProgressBar.tsx\n(This file defines a reusable React component, `Job...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines a reusable React component, `JobProgressBar.tsx`, responsible for visually displaying the progress of a background job. It likely receives the job's status and completion percentage as props to render a dynamic progress bar for the user interface."]
+	130532026832112 -> 130532026832160
+	130532026832256 [label="layout/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026832016 -> 130532026832256
+	130532026832304 [label="Navbar.tsx\n(This file defines the main navigation bar React co...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines the main navigation bar React component for the application's user interface. It is a reusable layout element responsible for displaying the application logo, navigation links, and user-related controls like login or logout buttons."]
+	130532026832256 -> 130532026832304
+	130532026832400 [label="ui/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026832016 -> 130532026832400
+	130532026832448 [label="Button.tsx\n(This file defines a reusable, general-purpose UI b...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines a reusable, general-purpose UI button component for the frontend application. It is used to ensure a consistent look and feel for all buttons across the user interface and likely accepts props to control its appearance (e.g., variant, size) and behavior."]
+	130532026832400 -> 130532026832448
+	130532026832544 [label="hooks/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026831344 -> 130532026832544
+	130532026832592 [label="useAuth.ts\n(This file defines the `useAuth` custom React hook,...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines the `useAuth` custom React hook, which encapsulates authentication logic for the frontend application. It provides React components with a simple interface to access the current user's authentication status, user data, and functions like login and logout."]
+	130532026832544 -> 130532026832592
+	130532026832688 [label="lib/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026831344 -> 130532026832688
+	130532026832784 [label="api.ts\n(This file defines the frontend's type-safe API cli...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines the frontend's type-safe API client for communicating with the FastAPI backend. It centralizes all HTTP request logic, providing functions for specific endpoints and managing details like authentication headers and base URLs."]
+	130532026832688 -> 130532026832784
+	130532026832880 [label="auth.ts\n(This file contains client-side authentication logi...)" fillcolor=lightblue shape=box style=filled tooltip="This file contains client-side authentication logic and helper functions for the frontend application. It is responsible for managing user sessions, handling authentication tokens (e.g., JWTs), and providing utilities for login, logout, and checking the current user's authentication status."]
+	130532026832688 -> 130532026832880
+	130532026832976 [label="types/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026831344 -> 130532026832976
+	130532026833024 [label="index.ts\n(This file serves as the central module for all sha...)" fillcolor=lightblue shape=box style=filled tooltip="This file serves as the central module for all shared TypeScript type definitions used in the frontend application. It likely exports interfaces, types, and enums for data structures such as API responses, component props, and application state, providing a single, convenient import point for the rest of the codebase."]
+	130532026832976 -> 130532026833024
+	130532026833120 [label="tests/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026831056 -> 130532026833120
+	130532026833216 [label="e2e/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026833120 -> 130532026833216
+	130532026833264 [label="auth.spec.ts\n(This file contains end-to-end (E2E) tests for the ...)" fillcolor=lightblue shape=box style=filled tooltip="This file contains end-to-end (E2E) tests for the user authentication flow of the frontend application. It simulates real user interactions, such as logging in with valid/invalid credentials and logging out, to verify that the entire authentication system works correctly from the user's perspective in a browser environment."]
+	130532026833216 -> 130532026833264
+	130532026833312 [label="component/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026833120 -> 130532026833312
+	130532026833360 [label="Button.test.tsx\n(This file contains component tests for the reusabl...)" fillcolor=lightblue shape=box style=filled tooltip="This file contains component tests for the reusable `Button` UI component (`src/components/ui/Button.tsx`). It uses a testing framework like Jest or Vitest to verify that the button renders correctly, handles user interactions such as clicks, and properly reflects different states and props (e.g., disabled, variant styles)."]
+	130532026833312 -> 130532026833360
+	130532026833408 [label=".env.local.example\n(This file is a template that lists the environment...)" fillcolor=lightblue shape=box style=filled tooltip="This file is a template that lists the environment variables required for running the frontend application in a local development environment. Developers should copy this file to `.env.local` and fill in the specific values, such as the backend API endpoint URL, for their local setup."]
+	130532026831056 -> 130532026833408
+	130532026833456 [label="next.config.mjs\n(This file is the main configuration file for the N...)" fillcolor=lightblue shape=box style=filled tooltip="This file is the main configuration file for the Next.js frontend application. It allows developers to customize the framework's default behavior, such as setting up redirects, managing environment variables, and configuring the build process."]
+	130532026831056 -> 130532026833456
+	130532026833504 [label="package.json\n(This file is the standard Node.js project manifest...)" fillcolor=lightblue shape=box style=filled tooltip="This file is the standard Node.js project manifest for the frontend application. It defines project metadata, lists dependencies (e.g., React, Next.js, Tailwind CSS), and contains `scripts` for tasks like running the development server, building for production, and executing tests."]
+	130532026831056 -> 130532026833504
+	130532026833552 [label="postcss.config.js\n(This file configures PostCSS, a tool used to trans...)" fillcolor=lightblue shape=box style=filled tooltip="This file configures PostCSS, a tool used to transform CSS with JavaScript plugins. Its primary role in this Next.js project is to define the plugins, such as Tailwind CSS and Autoprefixer, that process the project's stylesheets during the build process."]
+	130532026831056 -> 130532026833552
+	130532026833600 [label="tailwind.config.ts\n(This TypeScript file configures the Tailwind CSS f...)" fillcolor=lightblue shape=box style=filled tooltip="This TypeScript file configures the Tailwind CSS framework for the Next.js frontend. It is used to define the project's design system, including custom themes (colors, fonts, spacing), plugins, and specifying which source files to scan for utility classes."]
+	130532026831056 -> 130532026833600
+	130532026833648 [label="tsconfig.json\n(This file is the TypeScript compiler configuration...)" fillcolor=lightblue shape=box style=filled tooltip="This file is the TypeScript compiler configuration for the Next.js frontend application. It defines the rules and settings for transpiling TypeScript code (`.ts`, `.tsx`) into JavaScript, enabling features like static type-checking, module resolution, and path aliases."]
+	130532026831056 -> 130532026833648
+	130532026833696 [label="infra/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026629968 -> 130532026833696
+	130532026833792 [label="kubernetes/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026833696 -> 130532026833792
+	130532026833888 [label="base/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026833792 -> 130532026833888
+	130532026833936 [label="api-deployment.yaml\n(This file is a Kubernetes `Deployment` manifest th...)" fillcolor=lightblue shape=box style=filled tooltip="This file is a Kubernetes `Deployment` manifest that defines how to run the backend API service on a Kubernetes cluster. As a Kustomize `base` configuration, it contains the common, environment-agnostic specifications for the API pods, including the container image, replica count, and resource requirements."]
+	130532026833888 -> 130532026833936
+	130532026833984 [label="configmap.yaml\n(This file defines a base Kubernetes `ConfigMap` re...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines a base Kubernetes `ConfigMap` resource using Kustomize. It stores non-sensitive, environment-agnostic configuration data as key-value pairs, which are consumed by the various application pods (backend API, workers, frontend) at runtime."]
+	130532026833888 -> 130532026833984
+	130532026834032 [label="frontend-deployment.yaml\n(This YAML file is a baseline Kubernetes `Deploymen...)" fillcolor=lightblue shape=box style=filled tooltip="This YAML file is a baseline Kubernetes `Deployment` manifest for the project's frontend application. It defines the desired state for the frontend service, including the container image to use, the number of replicas, and how to perform updates, which serves as a common template for all deployment environments."]
+	130532026833888 -> 130532026834032
+	130532026834080 [label="kustomization.yaml\n(This is the primary Kustomize configuration file f...)" fillcolor=lightblue shape=box style=filled tooltip="This is the primary Kustomize configuration file for the `base` layer. It defines the common, environment-agnostic Kubernetes resources for the application by referencing all other manifest files (like `api-deployment.yaml`, `service.yaml`) within this directory."]
+	130532026833888 -> 130532026834080
+	130532026834128 [label="service.yaml\n(This file is a Kubernetes manifest that defines a ...)" fillcolor=lightblue shape=box style=filled tooltip="This file is a Kubernetes manifest that defines a base `Service` resource. Its purpose is to create a stable network endpoint, such as an internal IP address or DNS name, for accessing the application's pods (like the backend API or frontend) within the Kubernetes cluster."]
+	130532026833888 -> 130532026834128
+	130532026834176 [label="worker-deployment.yaml\n(This file is a base Kubernetes `Deployment` manife...)" fillcolor=lightblue shape=box style=filled tooltip="This file is a base Kubernetes `Deployment` manifest for the application's background worker processes (e.g., Celery). It defines the core, environment-agnostic configuration for deploying and managing the worker pods that execute asynchronous tasks within the cluster."]
+	130532026833888 -> 130532026834176
+	130532026834224 [label="overlays/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026833792 -> 130532026834224
+	130532026834272 [label="production/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026834224 -> 130532026834272
+	130532026834320 [label="kustomization.yaml\n(This Kustomize configuration file defines the prod...)" fillcolor=lightblue shape=box style=filled tooltip="This Kustomize configuration file defines the production environment's specific settings for the Kubernetes deployment. It references the common manifests from the `base` directory and applies production-specific patches and overrides, such as scaling configurations or image tags."]
+	130532026834272 -> 130532026834320
+	130532026834368 [label="scaling-patch.yaml\n(This Kustomize patch file defines production-speci...)" fillcolor=lightblue shape=box style=filled tooltip="This Kustomize patch file defines production-specific scaling configurations, such as replica counts and resource requests/limits, for the Kubernetes deployments. It overrides the base configurations to ensure the application is provisioned with appropriate resources to handle production-level traffic."]
+	130532026834272 -> 130532026834368
+	130532026834416 [label="staging/" fillcolor=lightgreen shape=folder style=filled tooltip=""]
+	130532026834224 -> 130532026834416
+	130532026834464 [label="kustomization.yaml\n(This Kustomize configuration file orchestrates the...)" fillcolor=lightblue shape=box style=filled tooltip="This Kustomize configuration file orchestrates the Kubernetes deployment for the **staging** environment. It references the common manifests in the `base` directory and applies staging-specific patches, such as `config-patch.yaml`, to customize the application's configuration for pre-production testing."]
+	130532026834416 -> 130532026834464
+	130532026834512 [label="config-patch.yaml\n(This file is a Kustomize patch that defines enviro...)" fillcolor=lightblue shape=box style=filled tooltip="This file is a Kustomize patch that defines environment-specific configuration values for the staging deployment. It overrides or extends the base `ConfigMap` to provide settings, such as API endpoints or log levels, tailored specifically for the staging environment."]
+	130532026834416 -> 130532026834512
+	130532026834560 [label=".dockerignore\n(The `.dockerignore` file lists patterns for files ...)" fillcolor=lightblue shape=box style=filled tooltip="The `.dockerignore` file lists patterns for files and directories that should be excluded from the Docker build context when creating container images. This prevents unnecessary or sensitive files like Git history, local dependencies, and test artifacts from being copied into the image, resulting in smaller, faster, and more secure builds for both the backend and frontend services."]
+	130532026629968 -> 130532026834560
+	130532026834608 [label=".gitignore\n(This file specifies intentionally untracked files ...)" fillcolor=lightblue shape=box style=filled tooltip="This file specifies intentionally untracked files and directories for the Git version control system. Its purpose is to prevent build artifacts, local configuration files, dependency folders, and other generated files from being committed to the repository."]
+	130532026629968 -> 130532026834608
+	130532026834656 [label="docker-compose.yml\n(This file defines and configures the multi-contain...)" fillcolor=lightblue shape=box style=filled tooltip="This file defines and configures the multi-container application for local development using Docker Compose. It orchestrates the building and running of all necessary services, such as the backend API, frontend, database, and message broker, to create a consistent development environment."]
+	130532026629968 -> 130532026834656
+	130532026834704 [label="Dockerfile.backend\n(This file is a Docker build script used to create ...)" fillcolor=lightblue shape=box style=filled tooltip="This file is a Docker build script used to create a container image for the Python backend application. It defines the environment, dependencies (from `pyproject.toml`), and runtime commands needed to run both the FastAPI web server and the Celery background workers."]
+	130532026629968 -> 130532026834704
+	130532026834752 [label="Dockerfile.frontend\n(This `Dockerfile` contains the instructions to bui...)" fillcolor=lightblue shape=box style=filled tooltip="This `Dockerfile` contains the instructions to build a production-ready, containerized Docker image for the Next.js frontend application. It defines a multi-stage build process to create a lightweight and optimized image for deployment."]
+	130532026629968 -> 130532026834752
+	130532026834848 [label="LICENSE\n(This file contains the legal license for the softw...)" fillcolor=lightblue shape=box style=filled tooltip="This file contains the legal license for the software, defining the terms under which others may use, modify, and distribute the project's code. It is a crucial legal document that specifies the permissions and restrictions for anyone interacting with the project."]
+	130532026629968 -> 130532026834848
+	130532026834896 [label="Makefile\n(The `Makefile` is a build automation script that d...)" fillcolor=lightblue shape=box style=filled tooltip="The `Makefile` is a build automation script that defines a set of convenient command-line shortcuts for common development tasks. It orchestrates commands across the project's various components, such as building services, running tests, linting code, and managing the local development environment."]
+	130532026629968 -> 130532026834896
+	130532026834944 [label="README.md\n(The `README.md` file serves as the project's main ...)" fillcolor=lightblue shape=box style=filled tooltip="The `README.md` file serves as the project's main documentation, providing a high-level overview of the \"Pravaah\" application, its purpose, and key features. It contains essential instructions for developers on how to set up, configure, and run the project locally."]
+	130532026629968 -> 130532026834944
+}

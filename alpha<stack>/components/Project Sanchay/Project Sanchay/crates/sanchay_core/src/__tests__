@@ -1,0 +1,113 @@
+```rust
+use super::{error::SanchayCoreError, file_processor, walker};
+use std::{
+    collections::HashSet,
+    fs::{self, File},
+    io::Write,
+    path::PathBuf,
+};
+use tempfile::tempdir;
+
+#[test]
+fn test_walk_directory_basic() -> Result<(), SanchayCoreError> {
+    let tmp_dir = tempdir().map_err(|e| SanchayCoreError::IOError(e.to_string()))?;
+    let root_path = tmp_dir.path();
+
+    // Create some dummy files and directories
+    fs::create_dir_all(root_path.join("sub_dir_a"))
+        .map_err(|e| SanchayCoreError::IOError(e.to_string()))?;
+    fs::create_dir_all(root_path.join("sub_dir_b"))
+        .map_err(|e| SanchayCoreError::IOError(e.to_string()))?;
+
+    File::create(root_path.join("file1.txt"))
+        .map_err(|e| SanchayCoreError::IOError(e.to_string()))?
+        .write_all(b"content of file 1")
+        .map_err(|e| SanchayCoreError::IOError(e.to_string()))?;
+    File::create(root_path.join("sub_dir_a/file2.log"))
+        .map_err(|e| SanchayCoreError::IOError(e.to_string()))?
+        .write_all(b"content of file 2")
+        .map_err(|e| SanchayCoreError::IOError(e.to_string()))?;
+    File::create(root_path.join("sub_dir_b/file3.csv"))
+        .map_err(|e| SanchayCoreError::IOError(e.to_string()))?
+        .write_all(b"content of file 3")
+        .map_err(|e| SanchayCoreError::IOError(e.to_string()))?;
+
+    // Walk the directory
+    let entries = walker::walk_directory(root_path.to_path_buf())?;
+
+    // Collect expected paths
+    let mut expected_paths: HashSet<PathBuf> = HashSet::new();
+    expected_paths.insert(root_path.join("file1.txt"));
+    expected_paths.insert(root_path.join("sub_dir_a/file2.log"));
+    expected_paths.insert(root_path.join("sub_dir_b/file3.csv"));
+
+    // Collect actual paths from the walker output
+    let mut actual_paths: HashSet<PathBuf> = HashSet::new();
+    for entry in entries {
+        if entry.is_file() {
+            actual_paths.insert(entry.path().to_path_buf());
+        }
+    }
+
+    assert_eq!(actual_paths.len(), 3, "Should find 3 files");
+    assert_eq!(
+        actual_paths, expected_paths,
+        "Actual and expected paths should match"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_calculate_hash_basic() -> Result<(), SanchayCoreError> {
+    let tmp_dir = tempdir().map_err(|e| SanchayCoreError::IOError(e.to_string()))?;
+    let file_path = tmp_dir.path().join("test_file.txt");
+
+    let mut file =
+        File::create(&file_path).map_err(|e| SanchayCoreError::IOError(e.to_string()))?;
+    file.write_all(b"Hello, Sanchay!")
+        .map_err(|e| SanchayCoreError::IOError(e.to_string()))?;
+
+    let hash = file_processor::calculate_hash(&file_path)?;
+
+    // Expected SHA256 hash for "Hello, Sanchay!"
+    assert_eq!(
+        hash,
+        "02b1372d8e063f91572c68f1883395b057793a52e1f400787e2b7f5c5314f3ff"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_calculate_hash_empty_file() -> Result<(), SanchayCoreError> {
+    let tmp_dir = tempdir().map_err(|e| SanchayCoreError::IOError(e.to_string()))?;
+    let file_path = tmp_dir.path().join("empty_file.txt");
+
+    File::create(&file_path).map_err(|e| SanchayCoreError::IOError(e.to_string()))?;
+
+    let hash = file_processor::calculate_hash(&file_path)?;
+
+    // Expected SHA256 hash for an empty string
+    assert_eq!(
+        hash,
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_file_not_found_error() {
+    let non_existent_path = PathBuf::from("/non/existent/path/file.txt");
+    let result = file_processor::calculate_hash(&non_existent_path);
+
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        SanchayCoreError::IOError(msg) => {
+            assert!(msg.contains("No such file or directory") || msg.contains("The system cannot find the path specified"));
+        }
+        _ => panic!("Expected IOError"),
+    }
+}
+```

@@ -1,0 +1,4 @@
+networkx g
+oogle-generativeai 
+mock 
+graphviz
