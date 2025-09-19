@@ -2,6 +2,7 @@ import os
 import pathlib
 import google.generativeai as genai
 from tree_thing import TreeNode
+from openai import OpenAI
 
 def gen_file_content(context, file_path, project_desc, project_name, is_top_level=True, desc="", folder_structure=None):
     prompt = f"""
@@ -94,14 +95,30 @@ def gen_file_content(context, file_path, project_desc, project_name, is_top_leve
     """
 
     try:
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            genai.configure(api_key="AIzaSyDqA_anmBc5of17-j2OOjy1_R6Fv_mwu5Y")
-        else:
-            genai.configure(api_key=api_key)
+        # api_key = os.getenv("GEMINI_API_KEY")
+        # if not api_key:
+        #     genai.configure(api_key="AIzaSyDqA_anmBc5of17-j2OOjy1_R6Fv_mwu5Y")
+        # else:
+        #     genai.configure(api_key=api_key)
 
-        resp = genai.GenerativeModel("gemini-2.5-flash-preview-05-20").generate_content(contents=prompt)
-        return resp.text
+        # resp = genai.GenerativeModel("gemini-2.5-flash-preview-05-20").generate_content(contents=prompt)
+        # return resp.text
+        # using a coding model to generate the codes actually
+        client = OpenAI(
+          base_url="https://openrouter.ai/api/v1",
+          api_key="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",
+        )
+        completion = client.chat.completions.create(
+          model="qwen/qwen3-coder:free",
+          messages=[
+            {
+              "role": "user",
+              "content": f"{prompt}"
+            }
+          ]
+        )
+        print(f"Code generated: {completion.choices[0].message.content}")
+        return completion.choices[0].message.content
     
     except Exception as e:
         print(f"Error generating content for {file_path}: {e}")
