@@ -1,16 +1,15 @@
 from google import genai
-import folder_tree
 from google.genai import types
 from dotenv import load_dotenv
 import re
 import json
 import os
-import string
-from gen_file import GENERATABLE_FILENAMES,GENERATABLE_FILES
 from folder_tree import TreeNode,DependencyAnalyzer
 from prompt import software_blueprint_prompt,folder_structure_prompt,file_format_prompt
 from genai_client import get_client
 from dfs_tree_gen import dfs_tree_and_gen
+import time
+from concurrent.futures import ThreadPoolExecutor
 load_dotenv(dotenv_path='.env')
 
 # --- Your Functions (Modified to use get_client()) ---
@@ -141,11 +140,12 @@ def main():
     json_file_name = "projects_metadata.json"
     metadata_dict = {project_name: []}
     output_dir = os.path.dirname(json_file_name)
+    start_time=time.time()
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
     
-    dfs_tree_and_gen(root=folder_tree, refined_prompt=software_blueprint, tree_structure=folder_struc, project_name=project_name, current_path="", parent_context="", json_file_name=json_file_name, metadata_dict=metadata_dict, dependency_analyzer=dependency_analyzer,
-    file_output_format=file_format)
+    with ThreadPoolExecutor() as executor :
+        dfs_tree_and_gen(root=folder_tree, refined_prompt=software_blueprint, tree_structure=folder_struc, project_name=project_name, current_path="", parent_context="", json_file_name=json_file_name, metadata_dict=metadata_dict, dependency_analyzer=dependency_analyzer,file_output_format=file_format,executor=executor)
     
     dependency_analyzer.visualize_graph()
     for entry in metadata_dict[project_name]:
@@ -153,6 +153,9 @@ def main():
         entry["couples_with"] = dependency_analyzer.get_dependencies(entry["path"])
     with open(json_file_name, 'w') as f:
         json.dump(metadata_dict, f, indent=4)
-    
+        end_time = time.time()
+    elapsed = end_time - start_time
+    print(f"\n✅ Completed in {elapsed:.2f} seconds")
     print("Running final validation pass...")
-main()
+if __name__ == '__main__':   
+    main()

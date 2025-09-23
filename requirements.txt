@@ -7,3 +7,4 @@ transformers
 pydantic
 google-genai
 Pyside6
+tree-sitter

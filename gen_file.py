@@ -32,7 +32,6 @@ GENERATABLE_FILES = {
     '.sh', '.bash', '.zsh', '.fish', '.bat', '.cmd', '.ps1', '.mk', '.make', '.cmake', '.gradle', '.mvn', #shell scripts, makefiles, gradle, maven
     '.md', '.rst', '.txt', '.adoc', '.asciidoc', #markdown, text files
     '.sql', '.sqlite', '.db', '.migration', #sql, database migrations
-    '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.bmp', '.tiff', '.avif', # Images
     '.mp3', '.wav', '.ogg', '.mp4', '.mov', '.webm', #audio, video
     '.dockerfile', '.tf', '.hcl', '.circleci', '.gitlab-ci.yml', '.jenkins', '.travis.yml', #docker, terraform, ci/cd
     '.sol', '.vy', '.cairo', '.move', '.clar', #solidity, vyper, cairo, move, clarity

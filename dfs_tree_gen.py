@@ -4,6 +4,7 @@ from gen_file import GENERATABLE_FILES,GENERATABLE_FILENAMES
 from google import genai
 from resp_clean import clean_ai_generated_code
 from genai_client import get_client
+from concurrent.futures import  as_completed
 #should think of a better way to do this
 def should_generate_content(filepath):
     ext = os.path.splitext(filepath)[1].lower()
@@ -47,8 +48,7 @@ def generate_file_content(context: str, filepath: str, refined_prompt: str, tree
     file_type = os.path.splitext(filepath)[1]
     filename = os.path.basename(filepath)
     
-    prompt = f"""# Refined Django File Content Generation prompt
-
+    prompt = f"""
                 You are a senior developer. Your task is to generate production-ready file content for the technical projects based on specific file requirements and project context[1].
 
                 ## Analysis Phase
@@ -62,7 +62,7 @@ def generate_file_content(context: str, filepath: str, refined_prompt: str, tree
 
     ## Content Generation Template
 
-    Generate the complete file content for filenameof type file_type within the context of `{context}` for the Django project described in refined_prompt.
+    Generate the complete file content for filenameof type file_type within the context of for  project described in refined_prompt.
     Generate the complete file content based on the provided file name, file type, project context, project description, and folder structure.
     Core Requirements
     Architectural Compliance: Follow established best practices and conventions for the specified technology stack (e.g., framework idioms, language-specific patterns).
@@ -134,18 +134,9 @@ def dfs_tree_and_gen(
     metadata_dict: dict = None,
     dependency_analyzer: DependencyAnalyzer = None,
     is_top_level: bool = True,
-    file_output_format:str=""
+    file_output_format:str="",
+    executor=None
 ) -> None:
-    # if metadata_dict is None:
-    #     if json_file_name and os.path.exists(json_file_name):
-    #         try:
-    #             with open(json_file_name, 'r') as f:
-    #                 metadata_dict = json.load(f)
-    #         except Exception:
-    #             metadata_dict = {}
-    #     else:
-    #         metadata_dict = {}
-
     clean_name = root.value.split('#')[0].strip()
     clean_name = clean_name.replace('(', '').replace(')', '')
     clean_name = clean_name.replace('uploads will go here, e.g., ', '')
@@ -157,15 +148,6 @@ def dfs_tree_and_gen(
         full_path = os.path.join(current_path, clean_name)
 
     context = os.path.join(parent_context, clean_name) if parent_context else clean_name
-
-    # Traverse context into nested dict
-    # path_part = context.split('/')
-    # current_dict = metadata_dict
-    # for part in path_part[:-1]:
-    #     if part and part not in current_dict:
-    #         current_dict[part] = {}
-    #     if part:
-    #         current_dict = current_dict[part]
 
     if root.is_file:
         parent_dir = os.path.dirname(full_path)
@@ -193,16 +175,6 @@ def dfs_tree_and_gen(
                 )
                 with open(full_path, 'w') as f:
                     f.write(content)
-                # parts = context.split('/')
-                # current = metadata_dict[project_name]
-                # for part in parts[:-1]:
-                #     current = current.setdefault(part, {})
-                # current[parts[-1]] = {
-                #     "type": "file",
-                #     "description": metadata,
-                #     "path": full_path
-                # }
-
                 if dependency_analyzer:
                     dependency_analyzer.add_file(full_path, content=content,folder_structure=tree_structure)
                 
@@ -211,12 +183,6 @@ def dfs_tree_and_gen(
                     "description": metadata,
                 })
                 print(f"Generated content for {full_path}")
-
-                # current_dict[clean_name] = {
-                #     "type": "file",
-                #     "description": metadata,
-                #     "path": full_path
-                # }
             except Exception as e:
                 print(f"Error generating file {full_path}: {e}")
         else:
@@ -227,8 +193,10 @@ def dfs_tree_and_gen(
             os.makedirs(full_path, exist_ok=True)
             print(f"Created directory: {full_path}")
             # current_dict[clean_name] = {"type": "directory"}
+            futures=[]
             for child in root.children:
-                dfs_tree_and_gen(
+                futures.append(executor.submit(
+                    dfs_tree_and_gen,
                     root=child,
                     refined_prompt=refined_prompt,
                     tree_structure=tree_structure,
@@ -239,8 +207,11 @@ def dfs_tree_and_gen(
                     metadata_dict=metadata_dict,
                     dependency_analyzer=dependency_analyzer,
                     is_top_level=False,
-                    file_output_format=file_output_format
-                )
+                    file_output_format=file_output_format,
+                    executor=executor
+                ))
+            for f in as_completed(futures):
+                f.result()
         except OSError as e:
             print(f"Error creating directory {full_path}: {e}")
             return
