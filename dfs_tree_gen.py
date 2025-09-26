@@ -4,12 +4,24 @@ from gen_file import GENERATABLE_FILES,GENERATABLE_FILENAMES
 from google import genai
 from resp_clean import clean_ai_generated_code
 from genai_client import get_client
-from concurrent.futures import  as_completed
+from concurrent.futures import as_completed
+from typing import Optional
+from _thread import LockType
 #should think of a better way to do this
 def should_generate_content(filepath):
     ext = os.path.splitext(filepath)[1].lower()
     filename = os.path.basename(filepath)
     return ext in GENERATABLE_FILES or filename in GENERATABLE_FILENAMES
+def clean_agent_output(content: str) -> str:
+    if not content:
+        return ""
+    lines = content.strip().splitlines()
+    if len(lines) > 1:
+        cleaned = "\n".join(lines[1:])
+    else:
+        cleaned = ""
+
+    return cleaned.strip() + "\n"
 def generate_file_metadata(context: str, filepath: str, refined_prompt: str, tree: str, json_file_name: str, file_content: str,file_output_format: str) -> str:
     file_type = os.path.splitext(filepath)[1]
     filename = os.path.basename(filepath)
@@ -53,74 +65,73 @@ def generate_file_content(context: str, filepath: str, refined_prompt: str, tree
 
                 ## Analysis Phase
                 First, analyze the provided parameters:
-    - **File Name**: `{filename}` - Determine the exact purpose and scope
-    - **File Type** file_type: `{file_type}` - Apply type-specific best practices
-    - **Project Context**: `{context}` - Understand the file's role in the application architecture
-    - **Project Idea** refined_prompt: `{refined_prompt}` - Align content with business requirements
-    - **Folder Structure** : `{tree}` - Ensure consistency with project organization
-    - **Fileoutput format**: `{file_output_format}`- Ensure the consistency of exports and imports from each of the file
-
-    ## Content Generation Template
-
-    Generate the complete file content for filenameof type file_type within the context of for  project described in refined_prompt.
-    Generate the complete file content based on the provided file name, file type, project context, project description, and folder structure.
-    Core Requirements
-    Architectural Compliance: Follow established best practices and conventions for the specified technology stack (e.g., framework idioms, language-specific patterns).
-    Consistency: Maintain consistency with the provided folder structure.
-    Dependencies: Include only necessary imports, require statements, or module dependencies.
-    Readability: Use appropriate docstrings, comments, and clear naming for all variables, functions, and classes.
-    Code Quality: Ensure the generated code is modular, maintainable, and production-ready.
-    Frontend & Data Handling Guidelines
-    UI Framework: Specify the UI framework and version (e.g., 'Bootstrap 5', 'Tailwind CSS', 'Material-UI').
-    Icon Library: Specify the icon library to be used (e.g., 'Bootstrap Icons', 'Font Awesome').
-    Client-Side Scripting: Define the client-side scripting approach (e.g., 'Use vanilla JavaScript for all logic,' 'Use Axios for API calls,' 'No jQuery').
-    Data Submission: Define clear contracts for data submission, such as the expected structure of a JSON request body.
-    Validation: Implement robust client-side and server-side validation and user-friendly error handling.
-    General Implementation Guidelines
-    Separation of Concerns: Avoid mixing logic and presentation (e.g., no inline JavaScript in HTML, no business logic in UI components).
-    Responsiveness: Default to a mobile-first responsive design.
-    Accessibility: Ensure accessibility best practices are followed, such as providing alt text for all images.
-    User Experience: Implement loading states for all asynchronous operations, such as form submissions and data fetching.
-    File-Role Specific Requirements
-    Disclaimer: Please note that the roles and file extensions mentioned below are common examples. This template is designed to be versatile and can be adapted for any file type relevant to your project.
-
-    Configuration Files (.env, .json, .yaml, config.js)
-    Define how secrets and environment variables are managed (e.g., 'Direct declaration, no .env files').
-    Structure configuration for different environments (development, production).
-    API / Routing Files
-    Define route structures and naming conventions (e.g., router.post('/api/resource', handlerFunction)).
-    Specify how request handlers or controllers are imported and registered.
-    Data Model / Schema Files
-    Define data structures using the appropriate ORM/ODM classes or schema definitions (e.g., Mongoose Schema, SQLAlchemy Model, Prisma Schema).
-    Specify field types, validation rules, default values, and relationships.
-    Include necessary helper methods (e.g., __str__, .toJSON()).
-    Business Logic / Controller Files
-    Adhere to the specified programming paradigm (e.g., 'Function-based handlers only,' 'Use class-based services').
-    Handle incoming requests, process data, interact with data models, and return appropriate responses (e.g., JSON, rendered templates).
-    UI Component / Template Files (.html, .jsx, .vue, .svelte)
-    Utilize a component-based architecture with an emphasis on reusability.
-    Implement layout inheritance or composition where applicable.
-    Clearly separate props/inputs from internal state.
-    Styling Files (.css, .scss, .less)
-    Follow a consistent naming convention (e.g., BEM, CUBE CSS).
-    Organize styles modularly, often co-located with their respective components.
-    Client-Side Scripting Files (.js, .ts)
-    Implement AJAX/Fetch for asynchronous data operations.
-    Manage application state effectively.
-    Handle user events and perform DOM manipulation cleanly.
-       Output Requirements
-    Return only the raw file content as it would appear in the actual file.
-        Do not include any markdown formatting, code blocks, or additional explanations.
-       The content must be immediately usable in a project using the specified technology.
-       Follow the exact syntax and conventions for the specified file type.
-       The output should not contain any other things dont add the the language name in the output"""
+                - **File Name**: `{filename}` - Determine the exact purpose and scope
+                - **File Type** file_type: `{file_type}` - Apply type-specific best practices
+                - **Project Context**: `{context}` - Understand the file's role in the application architecture
+                - **Project Idea** refined_prompt: `{refined_prompt}` - Align content with business requirements
+                - **Folder Structure** : `{tree}` - Ensure consistency with project organization
+                - **Fileoutput format**: `{file_output_format}`- Ensure the consistency of exports and imports from each of the file
+            
+                ## Content Generation Template
+            
+                Generate the complete file content for filenameof type file_type within the context of for  project described in refined_prompt.
+                Generate the complete file content based on the provided file name, file type, project context, project description, and folder structure.
+                Core Requirements
+                Architectural Compliance: Follow established best practices and conventions for the specified technology stack (e.g., framework idioms, language-specific patterns).
+                Consistency: Maintain consistency with the provided folder structure.
+                Dependencies: Include only necessary imports, require statements, or module dependencies.
+                Readability: Use appropriate docstrings, comments, and clear naming for all variables, functions, and classes.
+                Code Quality: Ensure the generated code is modular, maintainable, and production-ready.
+                Frontend & Data Handling Guidelines
+                UI Framework: Specify the UI framework and version (e.g., 'Bootstrap 5', 'Tailwind CSS', 'Material-UI').
+                Icon Library: Specify the icon library to be used (e.g., 'Bootstrap Icons', 'Font Awesome').
+                Client-Side Scripting: Define the client-side scripting approach (e.g., 'Use vanilla JavaScript for all logic,' 'Use Axios for API calls,' 'No jQuery').
+                Data Submission: Define clear contracts for data submission, such as the expected structure of a JSON request body.
+                Validation: Implement robust client-side and server-side validation and user-friendly error handling.
+                General Implementation Guidelines
+                Separation of Concerns: Avoid mixing logic and presentation (e.g., no inline JavaScript in HTML, no business logic in UI components).
+                Responsiveness: Default to a mobile-first responsive design.
+                Accessibility: Ensure accessibility best practices are followed, such as providing alt text for all images.
+                User Experience: Implement loading states for all asynchronous operations, such as form submissions and data fetching.
+                File-Role Specific Requirements
+                Disclaimer: Please note that the roles and file extensions mentioned below are common examples. This template is designed to be versatile and can be adapted for any file type relevant to your project.
+            
+                Configuration Files (.env, .json, .yaml, config.js)
+                Define how secrets and environment variables are managed (e.g., 'Direct declaration, no .env files').
+                Structure configuration for different environments (development, production).
+                API / Routing Files
+                Define route structures and naming conventions (e.g., router.post('/api/resource', handlerFunction)).
+                Specify how request handlers or controllers are imported and registered.
+                Data Model / Schema Files
+                Define data structures using the appropriate ORM/ODM classes or schema definitions (e.g., Mongoose Schema, SQLAlchemy Model, Prisma Schema).
+                Specify field types, validation rules, default values, and relationships.
+                Include necessary helper methods (e.g., __str__, .toJSON()).
+                Business Logic / Controller Files
+                Adhere to the specified programming paradigm (e.g., 'Function-based handlers only,' 'Use class-based services').
+                Handle incoming requests, process data, interact with data models, and return appropriate responses (e.g., JSON, rendered templates).
+                UI Component / Template Files (.html, .jsx, .vue, .svelte)
+                Utilize a component-based architecture with an emphasis on reusability.
+                Implement layout inheritance or composition where applicable.
+                Clearly separate props/inputs from internal state.
+                Styling Files (.css, .scss, .less)
+                Follow a consistent naming convention (e.g., BEM, CUBE CSS).
+                Organize styles modularly, often co-located with their respective components.
+                Client-Side Scripting Files (.js, .ts)
+                Implement AJAX/Fetch for asynchronous data operations.
+                Manage application state effectively.
+                Handle user events and perform DOM manipulation cleanly.
+                Output Requirements
+                - The first line of the output must be the programming language name (e.g., "python", "javascript", "html", "css").
+                - Starting from the second line, return only the raw file content as it would appear in the actual file.
+                - Do not wrap code in markdown formatting or code blocks.
+                - Do not include explanations or extra commentary — just the language name on the first line and then the file content.
+                - The content must be immediately usable in a project using the specified technology.
+                - Follow the exact syntax and conventions for the specified file type."""
     client=get_client()
     response = client.models.generate_content(model="gemini-2.5-flash-preview-05-20", contents=prompt)
-    # metadata = generate_file_metadata(context, filepath, refined_prompt, tree, json_file_name, response.text)
-    
-    # Clean AI-generated code to remove markdown artifacts
-    
-    return response.text
+    # metadata = generate_file_metadata(context, filepath, refined_prompt, tree, json_file_name, response.text) 
+    cleaned_output=clean_agent_output(response.text)
+    return cleaned_output
 
 
 def dfs_tree_and_gen(
@@ -135,7 +146,8 @@ def dfs_tree_and_gen(
     dependency_analyzer: DependencyAnalyzer = None,
     is_top_level: bool = True,
     file_output_format:str="",
-    executor=None
+    executor=None,
+    lock: Optional[LockType] = None
 ) -> None:
     clean_name = root.value.split('#')[0].strip()
     clean_name = clean_name.replace('(', '').replace(')', '')
@@ -176,12 +188,23 @@ def dfs_tree_and_gen(
                 with open(full_path, 'w') as f:
                     f.write(content)
                 if dependency_analyzer:
-                    dependency_analyzer.add_file(full_path, content=content,folder_structure=tree_structure)
-                
-                metadata_dict[project_name].append({
-                    "path": full_path,
-                    "description": metadata,
-                })
+                    if lock:
+                        with lock:
+                            dependency_analyzer.add_file(full_path, content=content,folder_structure=tree_structure)
+                    else:
+                        dependency_analyzer.add_file(full_path, content=content,folder_structure=tree_structure)
+                    print("analysis done \n")
+                if lock:
+                    with lock:
+                        metadata_dict[full_path] = []
+                        metadata_dict[full_path].append({
+                            "description": metadata
+                        })
+                else:
+                    metadata_dict[full_path] = []
+                    metadata_dict[full_path].append({
+                        "description": metadata
+                    })
                 print(f"Generated content for {full_path}")
             except Exception as e:
                 print(f"Error generating file {full_path}: {e}")
@@ -208,7 +231,8 @@ def dfs_tree_and_gen(
                     dependency_analyzer=dependency_analyzer,
                     is_top_level=False,
                     file_output_format=file_output_format,
-                    executor=executor
+                    executor=executor,
+                    lock=lock
                 ))
             for f in as_completed(futures):
                 f.result()
