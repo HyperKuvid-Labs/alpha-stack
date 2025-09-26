@@ -14,7 +14,7 @@ from threading import Lock
 load_dotenv(dotenv_path='.env')
 import matplotlib.pyplot as plt
 import networkx as nx
-
+from dfs_feedback import dfs_feedback
 # --- Your Functions (Modified to use get_client()) ---
 
 def inital_software_blueprint(prompt:str)->str:
@@ -147,8 +147,9 @@ def main():
         os.makedirs(output_dir, exist_ok=True)
     lock = Lock()
     with ThreadPoolExecutor() as executor :
-        dfs_tree_and_gen(root=folder_tree, refined_prompt=software_blueprint, tree_structure=folder_struc, project_name=project_name, current_path="", parent_context="", json_file_name=json_file_name, metadata_dict=metadata_dict, dependency_analyzer=dependency_analyzer,file_output_format=file_format,executor=executor, lock=lock)
+        dfs_tree_and_gen(root=folder_tree, refined_prompt=software_blueprint, tree_structure=folder_struc, project_name=project_name, current_path="", parent_context="", json_file_name=json_file_name, metadata_dict=metadata_dict, dependency_analyzer=dependency_analyzer,file_output_format=file_format)
     dependency_analyzer.visualize_graph()
+    project_files=list(metadata_dict.keys())
     for file_path, entries in metadata_dict.items():
         deps = dependency_analyzer.get_dependencies(file_path)
         for entry in entries:
@@ -159,5 +160,6 @@ def main():
     elapsed = end_time - start_time
     print(f"\nCompleted in {elapsed:.2f} seconds")
     print("Running final validation pass...")
+    dfs_feedback(project_files)
 if __name__ == '__main__':   
     main()
