@@ -6,4 +6,11 @@ __pycache__/
 # Node.js
 .env
 test_cluster.ipynb
-dfs_feedback.py
+
+# IDE/Editor temporary files
+tempCodeRunnerFile.py
+*.swp
+*.swo
+*~
+.DS_Store
+.vscode/

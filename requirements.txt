@@ -8,3 +8,4 @@ pydantic
 google-genai
 Pyside6
 tree-sitter
+jinja2
