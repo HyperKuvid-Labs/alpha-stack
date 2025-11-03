@@ -1,2 +1,0 @@
-A simple terminal-based calculator using Python. When you run it, it asks for two numbers and an operation (addition, subtraction, or multiplication). It performs the calculation and displays the result. That's it - very simple, no frontend, just command line interface.
-
