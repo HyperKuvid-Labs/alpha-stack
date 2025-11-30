@@ -170,14 +170,6 @@ alphastack clean
 alphastack clean -f
 ```
 
-### Example Project Prompts
-
-- `"A REST API server using FastAPI with MongoDB integration"`
-- `"A React frontend application with TypeScript and Tailwind CSS"`
-- `"A Python CLI tool for file management with progress bars"`
-- `"A full-stack application with Express.js backend and React frontend"`
-- `"A machine learning project using TensorFlow for image classification"`
-
 ### What Happens During Generation?
 
 1. **Software Blueprint Creation** - AI analyzes your prompt and creates a detailed project specification
