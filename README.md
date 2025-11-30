@@ -81,12 +81,14 @@ iteration-1_alpha_stack/
    cd iteration-1_alpha_stack
    ```
 3. Run the installation script:
+
    ```bash
    chmod +x install.sh
    ./install.sh
    ```
-   
+
    Or install manually:
+
    ```bash
    pip install .
    ```
@@ -96,11 +98,13 @@ iteration-1_alpha_stack/
 1. Clone or download this repository
 2. Navigate to the project directory in Command Prompt or PowerShell
 3. Run the installation script:
+
    ```cmd
    install.bat
    ```
-   
+
    Or install manually:
+
    ```cmd
    pip install .
    ```
@@ -110,11 +114,13 @@ iteration-1_alpha_stack/
 After installation, you need to configure your Google Gemini API key:
 
 **Option 1: Interactive Setup (Recommended)**
+
 ```bash
 alphastack setup
 ```
 
 **Option 2: Environment Variable**
+
 ```bash
 export GOOGLE_API_KEY="your-api-key-here"
 ```
@@ -129,11 +135,13 @@ The API key is stored in `~/.alphastack/config.json` (or `%USERPROFILE%\.alphast
 #### Interactive Mode (Recommended)
 
 Simply run:
+
 ```bash
 alphastack
 ```
 
 This launches the interactive TUI where you can:
+
 1. Enter your project description
 2. Specify the output directory (absolute path required)
 3. Watch the generation progress in real-time
@@ -141,31 +149,37 @@ This launches the interactive TUI where you can:
 #### Command Line Mode
 
 **Generate a project:**
+
 ```bash
 alphastack generate "A Flask web application for managing tasks with user authentication"
 ```
 
 **Specify output directory:**
+
 ```bash
 alphastack generate "A Python CLI tool" -o /path/to/output
 ```
 
 **List generated projects:**
+
 ```bash
 alphastack list
 ```
 
 **List projects in specific directory:**
+
 ```bash
 alphastack list -o /path/to/projects
 ```
 
 **Clean up generated projects:**
+
 ```bash
 alphastack clean
 ```
 
 **Clean without confirmation:**
+
 ```bash
 alphastack clean -f
 ```
@@ -184,6 +198,7 @@ alphastack clean -f
 ### Output
 
 Generated projects are saved to the specified output directory (default: `./created_projects`). Each project includes:
+
 - Complete source code
 - Docker configuration files
 - Test files
@@ -198,17 +213,4 @@ Generated projects are saved to the specified output directory (default: `./crea
 
 ---
 
-## 🔮 Future Updates Incoming
-
-We're continuously improving AlphaStack! Upcoming features include:
-
-- Enhanced error detection and correction
-- Support for more programming languages and frameworks
-- Improved dependency resolution algorithms
-- Additional testing frameworks
-- Project templates and presets
-- Performance optimizations
-- Extended Docker support
-- Cloud deployment integration
-
-Stay tuned for updates! 🚀
+##  Future version release soon 🚀
