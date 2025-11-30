@@ -1,0 +1,64 @@
+Generate a production-ready Dockerfile for this project.
+
+## Project Context
+
+### Software Blueprint
+```json
+{{ software_blueprint | json_dumps }}
+```
+
+### Folder Structure
+```
+{{ folder_structure }}
+```
+
+### File Output Format
+```json
+{{ file_output_format | json_dumps }}
+```
+
+### Project Root
+{{ project_root }}
+
+### File Summaries
+{% if file_summaries %}
+{% for file_path, description in file_summaries.items() %}
+- **{{ file_path }}**: {{ description }}
+{% endfor %}
+{% else %}
+No file summaries available
+{% endif %}
+
+### External Dependencies
+{% if external_dependencies %}
+{% for dep in external_dependencies %}
+- {{ dep.get("raw", "") }}
+{% endfor %}
+{% else %}
+No external dependencies
+{% endif %}
+
+## Constraints
+
+1. **No linting/formatting tools** - Even if in dependency files, exclude code quality tools
+2. **Module paths** - Configure properly for `src/` structure before imports
+3. **Tests** - Run with appropriate framework, don't block build on failures
+
+## Requirements
+
+1. **Base image**: Match tech stack from blueprint
+2. **Dependencies**: Install using appropriate package manager (skip linting tools)
+3. **Working directory**: Set up properly
+4. **Copy files**: Setup files first, then code
+5. **Syntax validation**: Validate after copying files
+6. **Build commands**: Include compile/transpile steps if needed
+7. **Expose ports**: For web services
+8. **Entry point**: CMD/ENTRYPOINT to run the application
+9. **Non-root user**: Create and use (e.g., `useradd -m -u 1000 appuser`)
+10. **Tests**: Include test command (use `|| true` to allow failures)
+11. **Multi-stage builds**: Use if beneficial
+12. **Health checks**: For long-running services
+
+## Output
+
+Return ONLY raw Dockerfile content, no markdown or explanations.

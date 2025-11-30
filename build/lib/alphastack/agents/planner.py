@@ -1,0 +1,159 @@
+import os
+import json
+import re
+from typing import Dict, List, Optional
+from google.genai import types
+from ..utils.helpers import get_client, retry_api_call, build_project_structure_tree, MODEL_NAME
+from ..utils.tools import get_all_tools, extract_function_args
+
+
+class PlanningAgent:
+    def __init__(self, project_root: str, software_blueprint: Dict,
+                 folder_structure: str, file_output_format: Dict,
+                 pm, error_tracker, tool_handler, command_log_manager=None):
+        self.project_root = project_root
+        self.software_blueprint = software_blueprint
+        self.folder_structure = folder_structure
+        self.file_output_format = file_output_format
+        self.pm = pm
+        self.error_tracker = error_tracker
+        self.tool_handler = tool_handler
+        self.command_log_manager = command_log_manager
+        self._cached_project_structure_tree = None
+    
+    def _get_project_structure_tree(self) -> str:
+        if self._cached_project_structure_tree is None:
+            self._cached_project_structure_tree = build_project_structure_tree(self.project_root)
+        return self._cached_project_structure_tree
+    
+    def invalidate_cache(self):
+        self._cached_project_structure_tree = None
+    
+    def plan_fixes(self, errors: List[Dict] = None, logs: str = None, 
+                   error_type: str = "dependency") -> List[Dict[str, str]]:
+        try:
+            project_structure_tree = self._get_project_structure_tree()
+            
+            errors_list = []
+            if errors:
+                for e in errors:
+                    if isinstance(e, dict):
+                        errors_list.append(e)
+                    else:
+                        errors_list.append({
+                            "error": getattr(e, 'message', str(e)),
+                            "file": os.path.relpath(getattr(e, 'file_path', ''), self.project_root) if getattr(e, 'file_path', None) else "",
+                            "line_number": getattr(e, 'line_number', None),
+                            "error_type": getattr(e, 'error_type', 'unknown')
+                        })
+            
+            change_log = self.error_tracker.get_change_summary()
+            
+            command_execution_history = ""
+            if self.command_log_manager:
+                command_execution_history = self.command_log_manager.get_formatted_history_for_planning(max_tokens=10000)
+            
+            prompt = self.pm.render("common_error_planning.j2",
+                software_blueprint=self.software_blueprint,
+                folder_structure=self.folder_structure,
+                file_output_format=self.file_output_format,
+                project_structure_tree=project_structure_tree,
+                project_root=self.project_root,
+                errors=errors_list,
+                error_type=error_type,
+                logs=logs[-5000:] if logs else "",
+                change_log=change_log,
+                command_execution_history=command_execution_history
+            )
+            
+            client = get_client()
+            tools = get_all_tools()
+            
+            try:
+                response = retry_api_call(
+                    client.models.generate_content,
+                    model=MODEL_NAME,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        tools=[tools],
+                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
+                    )
+                )
+                
+                if hasattr(response, 'function_calls') and response.function_calls:
+                    function_response_parts = []
+                    
+                    for function_call in response.function_calls:
+                        func_name = function_call.name
+                        func_args = extract_function_args(function_call)
+                        
+                        result = self.tool_handler.handle_function_call(func_name, func_args)
+                        
+                        function_response_part = types.Part.from_function_response(
+                            name=func_name,
+                            response=result
+                        )
+                        function_response_parts.append(function_response_part)
+                    
+                    if function_response_parts:
+                        function_response_content = types.Content(
+                            role='tool',
+                            parts=function_response_parts
+                        )
+                        final_response = retry_api_call(
+                            client.models.generate_content,
+                            model=MODEL_NAME,
+                            contents=[
+                                types.Content(role='user', parts=[types.Part.from_text(text=prompt)]),
+                                function_response_content
+                            ]
+                        )
+                        
+                        if hasattr(final_response, 'text') and final_response.text:
+                            response = final_response
+                
+                response_text = response.text.strip()
+                json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
+                if json_match:
+                    fix_plan = json.loads(json_match.group())
+                else:
+                    fix_plan = json.loads(response_text)
+                
+                if isinstance(fix_plan, dict):
+                    fix_plan = [fix_plan]
+                
+                fix_plan = sorted(fix_plan, key=lambda x: x.get('priority', 999))
+                return fix_plan
+                
+            except Exception:
+                response = retry_api_call(
+                    client.models.generate_content,
+                    model=MODEL_NAME,
+                    contents=prompt
+                )
+                
+                response_text = response.text.strip()
+                json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
+                if json_match:
+                    fix_plan = json.loads(json_match.group())
+                else:
+                    fix_plan = json.loads(response_text)
+                
+                if isinstance(fix_plan, dict):
+                    fix_plan = [fix_plan]
+                
+                fix_plan = sorted(fix_plan, key=lambda x: x.get('priority', 999))
+                return fix_plan
+                
+        except Exception:
+            fix_plan = []
+            for e in (errors or []):
+                if isinstance(e, dict):
+                    fix_plan.append({
+                        "error": e.get("error", ""),
+                        "action": ["Fix error"],
+                        "filepath": e.get("file", ""),
+                        "priority": 1
+                    })
+            return fix_plan
+

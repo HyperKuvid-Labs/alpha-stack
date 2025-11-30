@@ -14,3 +14,6 @@ tempCodeRunnerFile.py
 *~
 .DS_Store
 .vscode/
+
+# Alpha Stack logs
+.alpha_stack/

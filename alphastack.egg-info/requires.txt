@@ -1,0 +1,12 @@
+google-genai>=0.1.0
+python-dotenv>=1.0.0
+jinja2>=3.1.0
+networkx>=3.0
+rich>=13.0.0
+pyfiglet>=0.8.0
+prompt_toolkit>=3.0.0
+
+[dev]
+pytest>=7.0
+black>=23.0
+isort>=5.0
