@@ -21,24 +21,24 @@ The tool uses a multi-agent system with planners and correctors to iteratively i
 
 ```
 iteration-1_alpha_stack/
-├── alphastack/                    # Main package directory
-│   ├── __init__.py               # Package initialization
-│   ├── cli.py                    # Command-line interface
-│   ├── tui.py                    # Terminal user interface
-│   ├── generator.py              # Core project generation logic
-│   ├── config.py                 # Configuration management
+├── alphastack/                    
+│   ├── __init__.py               
+│   ├── cli.py                    
+│   ├── tui.py                    
+│   ├── generator.py              
+│   ├── config.py                 
 │   │
-│   ├── agents/                   # AI agents for planning and correction
+│   ├── agents/                   
 │   │   ├── __init__.py
-│   │   ├── planner.py           # Planning agent
-│   │   └── corrector.py         # Error correction agent
+│   │   ├── planner.py           
+│   │   └── corrector.py        
 │   │
-│   ├── docker/                   # Docker-related functionality
+│   ├── docker/                   
 │   │   ├── __init__.py
-│   │   ├── generator.py         # Dockerfile generation
-│   │   └── testing.py           # Docker testing pipeline
+│   │   ├── generator.py         
+│   │   └── testing.py           
 │   │
-│   ├── prompts/                  # Jinja2 templates for AI prompts
+│   ├── prompts/                  
 │   │   ├── software_blueprint.j2
 │   │   ├── folder_structure.j2
 │   │   ├── file_content.j2
@@ -46,20 +46,20 @@ iteration-1_alpha_stack/
 │   │   ├── dep_resolution_prompt.j2
 │   │   └── ... (other prompt templates)
 │   │
-│   └── utils/                    # Utility modules
+│   └── utils/                    
 │       ├── __init__.py
-│       ├── prompt_manager.py    # Prompt template management
-│       ├── dependencies.py      # Dependency analysis
-│       ├── error_tracker.py     # Error tracking
-│       ├── helpers.py           # Helper functions
-│       ├── command_log.py       # Command logging
-│       └── tools.py             # Utility tools
+│       ├── prompt_manager.py    
+│       ├── dependencies.py      
+│       ├── error_tracker.py     
+│       ├── helpers.py           
+│       ├── command_log.py       
+│       └── tools.py             
 │
-├── pyproject.toml                # Project configuration and dependencies
-├── install.sh                    # Installation script (macOS/Linux)
-├── install.bat                   # Installation script (Windows)
-├── README.md                     # This file
-└── .gitignore                    # Git ignore rules
+├── pyproject.toml                
+├── install.sh                    
+├── install.bat                   
+├── README.md                     
+└── .gitignore                    
 ```
 
 ## 🛠️ Setup Instructions
@@ -213,4 +213,4 @@ Generated projects are saved to the specified output directory (default: `./crea
 
 ---
 
-## Future version release soon 🚀
+## Future version releasing soon 🚀
