@@ -213,4 +213,4 @@ Generated projects are saved to the specified output directory (default: `./crea
 
 ---
 
-##  Future version release soon 🚀
+## Future version release soon 🚀
