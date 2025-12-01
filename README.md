@@ -20,8 +20,8 @@ The tool uses a multi-agent system with planners and correctors to iteratively i
 ## 📁 Folder Structure
 
 ```
-iteration-1_alpha_stack/
-├── alphastack/                    
+alpha_stack/
+├─- alphastack/                    
 │   ├── __init__.py               
 │   ├── cli.py                    
 │   ├── tui.py                    
