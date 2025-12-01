@@ -17,3 +17,7 @@ tempCodeRunnerFile.py
 
 # Alpha Stack logs
 .alpha_stack/
+
+# Build artifacts
+build/
+alphastack.egg-info/
