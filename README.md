@@ -2,7 +2,7 @@
 
 **AI-Powered Project Generator with Docker Testing**
 
-AlphaStack is an intelligent project generation tool that uses Google's Gemini AI to create complete software projects from natural language descriptions. It features an interactive terminal user interface (TUI) with a retro aesthetic, automatic dependency resolution, Docker containerization, and comprehensive testing capabilities.
+AlphaStack is an intelligent project generation tool that uses Google's Gemini AI to create complete software projects from natural language descriptions. It features an interactive terminal user interface (TUI) , automatic dependency resolution, Docker containerization, and comprehensive testing capabilities.
 
 ## 📋 What is AlphaStack?
 
