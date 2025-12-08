@@ -8,8 +8,8 @@ const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "AlphaStack - AI-Powered CLI for Production-Ready Projects",
-  description: "Generate production-ready software projects from natural language descriptions with AlphaStack CLI",
+  title: "ALPHA STACK - A Grammar Agnostic Coding Agent",
+  description: "An autonomous AI-driven framework that converts natural language specifications into production-ready software systems using multi-agent orchestration and dependency-aware generation.",
   generator: "AlphaStack",
 }
 

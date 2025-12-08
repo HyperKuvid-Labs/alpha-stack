@@ -3,6 +3,7 @@ import { HeroSection } from "@/components/hero-section"
 import { FeaturesSection } from "@/components/features-section"
 import { InstallationSection } from "@/components/installation-section"
 import { UsageSection } from "@/components/usage-section"
+import { RoadmapSection } from "@/components/roadmap-section"
 import { Footer } from "@/components/footer"
 
 export default function Home() {
@@ -13,6 +14,7 @@ export default function Home() {
       <FeaturesSection />
       <InstallationSection />
       <UsageSection />
+      <RoadmapSection />
       <Footer />
     </main>
   )

@@ -10,7 +10,7 @@ const navItems = [
   { name: "Features", href: "#features" },
   { name: "Installation", href: "#installation" },
   { name: "Usage", href: "#usage" },
-  { name: "Docs", href: "#docs" },
+  { name: "Docs", href: "/docs" },
 ]
 
 export function FloatingNavbar() {
@@ -46,8 +46,8 @@ export function FloatingNavbar() {
         className={cn(
           "fixed top-4 inset-x-0 max-w-4xl mx-auto z-50",
           "px-6 py-3",
-          "border border-foreground/20 rounded-full",
-          "bg-background/80 backdrop-blur-md",
+          "border border-white/10 rounded-full",
+          "bg-black/50 backdrop-blur-md",
           "flex items-center justify-between",
         )}
       >
@@ -55,11 +55,11 @@ export function FloatingNavbar() {
           <Image
             src="/images/screenshot-20from-202025-12-03-2002-42-54.png"
             alt="AlphaStack Logo"
-            width={32}
-            height={32}
-            className="rounded"
+            width={28}
+            height={28}
+            className="rounded opacity-90"
           />
-          <span className="font-semibold text-foreground">AlphaStack</span>
+          <span className="font-medium text-white text-sm">AlphaStack</span>
         </Link>
 
         <div className="hidden md:flex items-center gap-6">
@@ -67,7 +67,7 @@ export function FloatingNavbar() {
             <Link
               key={item.name}
               href={item.href}
-              className="text-foreground/70 hover:text-foreground transition-colors text-sm"
+              className="text-white/60 hover:text-white/90 transition-colors text-sm"
             >
               {item.name}
             </Link>
@@ -75,10 +75,10 @@ export function FloatingNavbar() {
         </div>
 
         <Link
-          href="https://github.com/alphastack"
+          href="https://github.com/HyperKuvid-Labs/alpha-stack"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-2 px-4 py-2 border border-foreground rounded-full text-foreground hover:bg-foreground hover:text-background transition-all text-sm"
+          className="flex items-center gap-2 px-4 py-2 border border-white/20 rounded-full text-white/70 hover:bg-white/10 hover:text-white transition-all text-sm"
         >
           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path

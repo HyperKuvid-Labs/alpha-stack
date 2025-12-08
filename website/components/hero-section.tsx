@@ -2,86 +2,59 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { StarsBackground } from "./stars-background"
-import { TextGenerateEffect } from "./text-generate-effect"
-import { MovingBorderButton } from "./moving-border-button"
 
 export function HeroSection() {
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-      <StarsBackground className="z-0" />
-
-      <div className="relative z-10 max-w-5xl mx-auto px-6 text-center">
-        {/* Logo */}
-        <div className="mb-8 flex justify-center">
+    <section className="min-h-screen flex items-center justify-center px-6 py-24">
+      <div className="max-w-4xl mx-auto text-center">
+        {/* Logo & Title */}
+        <div className="mb-12 flex items-center justify-center gap-4">
           <Image
             src="/images/screenshot-20from-202025-12-03-2002-42-54.png"
             alt="AlphaStack Logo"
-            width={120}
-            height={120}
-            className="rounded-xl"
+            width={64}
+            height={64}
+            className="rounded-lg opacity-90"
             priority
           />
+          <h1 className="text-5xl md:text-6xl font-semibold text-white tracking-tight">
+            ALPHA STACK
+          </h1>
         </div>
 
-        {/* Title */}
-        <h1 className="text-5xl md:text-7xl font-bold text-foreground mb-6">AlphaStack</h1>
-
-        {/* Animated Tagline */}
-        <div className="mb-8">
-          <TextGenerateEffect
-            words="Generate Production-Ready Projects with AI"
-            className="text-xl md:text-2xl text-foreground/80"
-          />
-        </div>
-
-        {/* Description */}
-        <p className="text-lg text-foreground/60 max-w-2xl mx-auto mb-12">
-          Transform natural language descriptions into complete, production-ready software projects. From Docker configs
-          to automated testing, AlphaStack handles it all.
+        {/* Subtitle */}
+        <p className="text-xl md:text-2xl text-white/70 mb-6 font-light">
+          A Grammar Agnostic Coding Agent
         </p>
 
-        {/* CTA Buttons */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <MovingBorderButton as={Link} href="#installation">
-            Get Started
-          </MovingBorderButton>
+        {/* Description */}
+        <p className="text-base md:text-lg text-white/60 max-w-2xl mx-auto mb-12 leading-relaxed">
+          An intelligent project generation tool that uses AI to create complete software projects from natural language descriptions. 
+          Features automatic dependency resolution, Docker containerization, and comprehensive testing capabilities.
+        </p>
 
+        {/* CTA Button */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
           <Link
-            href="https://github.com/alphastack"
+            href="https://github.com/HyperKuvid-Labs/alpha-stack"
             target="_blank"
             rel="noopener noreferrer"
-            className="px-6 py-3 border border-foreground/30 rounded-full text-foreground hover:bg-foreground/10 transition-colors"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-white text-black rounded-lg hover:bg-white/90 transition-colors font-medium"
           >
-            View on GitHub →
+            <svg role="img" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+              <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
+            </svg>
+            View on GitHub
           </Link>
         </div>
 
-        {/* Quick Install */}
-        <div className="mt-12 inline-flex items-center gap-3 px-4 py-2 rounded-full border border-foreground/20 bg-background/50 backdrop-blur-sm">
-          <span className="text-foreground/50 text-sm">$</span>
-          <code className="text-foreground font-mono text-sm">pip install alphastack</code>
-          <button
-            onClick={() => navigator.clipboard.writeText("pip install alphastack")}
-            className="text-foreground/50 hover:text-foreground transition-colors"
-            aria-label="Copy install command"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-              />
-            </svg>
-          </button>
-        </div>
-
-        {/* Scroll Indicator */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
-          <svg className="w-6 h-6 text-foreground/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-          </svg>
+        {/* Status Badge */}
+        <div className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full border border-white/10 bg-white/5">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+          </span>
+          <span className="text-white/70 text-sm font-normal">AlphaStack CLI v1.0 Releasing Soon</span>
         </div>
       </div>
     </section>
