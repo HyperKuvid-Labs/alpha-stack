@@ -11,6 +11,11 @@ export const metadata: Metadata = {
   title: "ALPHA STACK - A Grammar Agnostic Coding Agent",
   description: "An autonomous AI-driven framework that converts natural language specifications into production-ready software systems using multi-agent orchestration and dependency-aware generation.",
   generator: "AlphaStack",
+  icons: {
+    icon: "/images/logo.png",
+    shortcut: "/images/logo.png",
+    apple: "/images/logo.png",
+  },
 }
 
 export const viewport = {
