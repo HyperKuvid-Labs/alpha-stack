@@ -1,163 +1,91 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import dynamicImport from "next/dynamic"
-import { ZoomIn, ZoomOut, Loader2, Home } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import Link from "next/link"
-
-// Dynamically import react-pdf components with SSR disabled
-const Document = dynamicImport(
-  () => import("react-pdf").then((mod) => mod.Document),
-  { ssr: false }
-)
-
-const Page = dynamicImport(
-  () => import("react-pdf").then((mod) => mod.Page),
-  { ssr: false }
-)
+import { useState } from "react"
+import { Download, FileText, ExternalLink } from "lucide-react"
+import { FloatingNavbar } from "@/components/floating-navbar"
 
 export default function DocsPage() {
-  const [numPages, setNumPages] = useState<number>(0)
-  const [scale, setScale] = useState<number>(1.0)
-  const [mounted, setMounted] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    // Configure worker only on client side
-    import("react-pdf").then((pdfjs) => {
-      pdfjs.pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.pdfjs.version}/build/pdf.worker.min.mjs`
-    })
-    setMounted(true)
-  }, [])
-
-  function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
-    setNumPages(numPages)
+  const handleDownload = () => {
+    const link = document.createElement('a')
+    link.href = '/alpha_stack_paper_draft2.pdf'
+    link.download = 'AlphaStack_Documentation.pdf'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
-  if (!mounted) {
-    return (
-      <div className="flex items-center justify-center h-screen w-full bg-gradient-to-br from-background via-background to-muted/20">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-muted-foreground font-medium">Loading documentation...</p>
-        </div>
-      </div>
-    )
+  const openInNewTab = () => {
+    window.open('/alpha_stack_paper_draft2.pdf', '_blank')
   }
 
   return (
-    <div className="flex flex-col h-screen w-full bg-gradient-to-br from-background via-background to-muted/20">
-      {/* Toolbar */}
-      <div className="bg-background/95 backdrop-blur-md border-b border-foreground/10 p-4 flex items-center justify-between z-10 sticky top-0 shadow-sm">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            asChild
-            className="h-9 w-9 hover:bg-foreground/10"
-          >
-            <Link href="/">
-              <Home className="h-5 w-5" />
-            </Link>
-          </Button>
-          <h1 className="font-bold text-xl bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-            Technical Documentation
-          </h1>
-          <span className="text-sm text-muted-foreground">
-            {numPages ? `${numPages} pages` : "Loading..."}
-          </span>
-        </div>
+    <div className="min-h-screen bg-background">
+      <FloatingNavbar />
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 bg-foreground/5 rounded-lg p-1 border border-foreground/10">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setScale((prev) => Math.max(0.5, prev - 0.1))}
-              className="h-8 w-8 hover:bg-foreground/10"
+      <main className="container mx-auto px-4 md:px-6 py-8 max-w-6xl mt-20">
+        {/* Header Section */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+          <div className="flex items-center gap-3">
+            <FileText className="w-6 h-6 text-muted-foreground" />
+            <div>
+              <h1 className="text-2xl font-semibold">AlphaStack - Technical Documentation</h1>
+              <p className="text-muted-foreground">Grammar Agnostic Coding Agent</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={openInNewTab}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
             >
-              <ZoomOut className="h-4 w-4" />
-            </Button>
-            <span className="text-sm font-semibold w-16 text-center">{Math.round(scale * 100)}%</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setScale((prev) => Math.min(2.5, prev + 0.1))}
-              className="h-8 w-8 hover:bg-foreground/10"
+              {/* <ExternalLink className="w-4 h-4" /> */}
+              {/* <span>Open PDF</span> */}
+            </button>
+            <button
+              onClick={handleDownload}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
             >
-              <ZoomIn className="h-4 w-4" />
-            </Button>
+              <Download className="w-4 h-4" />
+              <span>Download</span>
+            </button>
           </div>
         </div>
-      </div>
 
-      {/* PDF Viewer Container */}
-      <div className="flex-1 flex items-center justify-center p-8 overflow-hidden">
-        <div className="w-full max-w-5xl h-full flex flex-col">
-          {/* Custom PDF Box */}
-          <div className="flex-1 bg-background/50 backdrop-blur-sm rounded-2xl border-2 border-foreground/10 shadow-2xl overflow-hidden flex flex-col">
-            <div className="flex-1 overflow-auto custom-scrollbar p-6">
-              <div className="flex flex-col items-center gap-4">
-                <Document
-                  file="/alpha_stack_paper_draft2.pdf"
-                  onLoadSuccess={onDocumentLoadSuccess}
-                  loading={
-                    <div className="flex items-center justify-center h-96 w-[600px]">
-                      <div className="flex flex-col items-center gap-4">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                        <p className="text-muted-foreground font-medium">Loading documentation...</p>
-                      </div>
-                    </div>
-                  }
-                  error={
-                    <div className="flex items-center justify-center h-96 w-[600px]">
-                      <p className="text-destructive font-medium">Failed to load PDF file.</p>
-                    </div>
-                  }
-                >
-                  {Array.from(new Array(numPages), (el, index) => (
-                    <Page
-                      key={`page_${index + 1}`}
-                      pageNumber={index + 1}
-                      scale={scale}
-                      renderTextLayer={true}
-                      renderAnnotationLayer={true}
-                      className="shadow-lg rounded-lg overflow-hidden border border-foreground/10 mb-4"
-                    />
-                  ))}
-                </Document>
+        {/* PDF Viewer Section */}
+        <div className="bg-card border border-border rounded-lg overflow-hidden shadow-sm">
+          <div className="bg-muted/50 px-4 py-3 border-b border-border">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Documentation Viewer</span>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-red-500/60"></div>
+                <div className="w-2 h-2 rounded-full bg-yellow-500/60"></div>
+                <div className="w-2 h-2 rounded-full bg-green-500/60"></div>
               </div>
             </div>
           </div>
+
+          <div className="relative min-h-[80vh] bg-white">
+            {isLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-background">
+                <div className="flex flex-col items-center gap-4">
+                  <div className="w-8 h-8 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin"></div>
+                  <p className="text-muted-foreground">Loading documentation...</p>
+                </div>
+              </div>
+            )}
+
+            <iframe
+              src="/alpha_stack_paper_draft2.pdf#toolbar=0&navpanes=0&scrollbar=1&view=FitH"
+              className="w-full h-[80vh] border-0"
+              title="AlphaStack Documentation"
+              onLoad={() => setIsLoading(false)}
+              onError={() => setIsLoading(false)}
+            />
+          </div>
         </div>
-      </div>
-
-      <style jsx global>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 14px;
-          height: 14px;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: #1a1a1a;
-          border-radius: 10px;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #4a4a4a;
-          border-radius: 10px;
-          border: 3px solid #1a1a1a;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #666666;
-        }
-
-        .custom-scrollbar {
-          scrollbar-width: thin;
-          scrollbar-color: #4a4a4a #1a1a1a;
-        }
-      `}</style>
+      </main>
     </div>
   )
 }

@@ -1,48 +1,26 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 import Image from "next/image"
 import Link from "next/link"
 
 const navItems = [
-  { name: "Features", href: "#features" },
-  { name: "Installation", href: "#installation" },
-  { name: "Usage", href: "#usage" },
+  { name: "Features", href: "/#features" },
+  { name: "Installation", href: "/#installation" },
+  { name: "Usage", href: "/#usage" },
   { name: "Docs", href: "/docs" },
 ]
 
 export function FloatingNavbar() {
-  const [visible, setVisible] = useState(true)
-  const [lastScrollY, setLastScrollY] = useState(0)
-
-  useEffect(() => {
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY
-
-      if (currentScrollY > lastScrollY && currentScrollY > 100) {
-        setVisible(false)
-      } else {
-        setVisible(true)
-      }
-
-      setLastScrollY(currentScrollY)
-    }
-
-    window.addEventListener("scroll", handleScroll, { passive: true })
-    return () => window.removeEventListener("scroll", handleScroll)
-  }, [lastScrollY])
-
   return (
-    <AnimatePresence mode="wait">
       <motion.nav
-        initial={{ opacity: 1, y: 0 }}
+        initial={{ opacity: 0, y: -20 }}
         animate={{
-          y: visible ? 0 : -100,
-          opacity: visible ? 1 : 0,
+          y: 0,
+          opacity: 1,
         }}
-        transition={{ duration: 0.2 }}
+        transition={{ duration: 0.3 }}
         className={cn(
           "fixed top-4 inset-x-0 max-w-4xl mx-auto z-50",
           "px-6 py-3",
@@ -90,6 +68,5 @@ export function FloatingNavbar() {
           GitHub
         </Link>
       </motion.nav>
-    </AnimatePresence>
   )
 }

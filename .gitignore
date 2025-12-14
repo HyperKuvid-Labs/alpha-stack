@@ -21,3 +21,4 @@ tempCodeRunnerFile.py
 # Build artifacts
 build/
 alphastack.egg-info/
+/examples
