@@ -1,0 +1,4 @@
+Container Runtime with Namespace Isolation
+Create a lightweight container runtime that uses Linux namespaces, cgroups, and overlay filesystems. Implement process isolation with unshare syscalls, set up network namespaces with veth pairs, and manage resource limits. Support OCI image format parsing and layer extraction with concurrent downloads.
+
+Key Features: syscall package for low-level operations, os/exec for process management, CGO for C library integration, file descriptor passing, error wrapping with fmt.Errorf and %w

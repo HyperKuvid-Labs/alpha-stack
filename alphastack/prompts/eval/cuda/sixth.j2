@@ -1,0 +1,4 @@
+Multi-GPU Distributed Training Framework
+Build a data-parallel training system with gradient AllReduce using NCCL. Implement mixed-precision training with loss scaling, gradient accumulation across microbatches, and pipeline parallelism for large models. Support ZeRO optimizer states partitioning, overlap communication with computation, and provide fault tolerance with checkpointing.
+
+Key Features: CUDA IPC for zero-copy transfers, cudaStreamWaitEvent for synchronization, peer-to-peer access with cudaDeviceEnablePeerAccess, std::async for host parallelism, module pattern with CRTP

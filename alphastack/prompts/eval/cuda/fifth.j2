@@ -1,0 +1,4 @@
+GPU Database Query Engine with JIT Compilation
+Create a columnar database that JIT-compiles queries to PTX and executes on GPU. Implement parallel hash joins, aggregations with shared memory reduction, and predicate pushdown. Use LLVM for code generation, support vectorized execution with SIMD intrinsics, and optimize memory bandwidth with coalesced access patterns.
+
+Key Features: NVRTC for runtime compilation, template specialization for type dispatch, cuDF integration, arrow format parsing, expression templates for query AST, std::variant for polymorphic columns

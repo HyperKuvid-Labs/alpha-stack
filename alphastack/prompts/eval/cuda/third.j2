@@ -1,0 +1,4 @@
+Deep Learning Inference Engine from Scratch
+Build a minimal deep learning framework supporting conv2d, matmul, attention with custom CUDA kernels. Implement Winograd convolution, INT8 quantization with calibration, and kernel fusion for element-wise ops. Use cuBLAS/cuDNN for baseline comparison, support dynamic shapes with templated kernels, and provide Python bindings via pybind11.
+
+Key Features: Variadic templates for operator fusion, SFINAE for kernel selection, shared memory optimization, tensor cores with wmma API, CUDA graphs for kernel launch optimization, perfect forwarding with universal references

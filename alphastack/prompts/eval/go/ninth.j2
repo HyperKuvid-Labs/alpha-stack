@@ -1,0 +1,4 @@
+Memory-Efficient Graph Database
+Design a graph database that stores billion-node graphs in memory using compressed sparse rows. Implement graph algorithms (PageRank, shortest path, community detection) with parallel execution. Support Cypher-like query language with hand-written lexer/parser, and provide ACID transactions with MVCC.
+
+Key Features: Struct field alignment optimization, sync.Pool for temporary allocations, unsafe pointer arithmetic for compact storage, worker pools with semaphore patterns, property-based testing with gopter

@@ -1,0 +1,4 @@
+Async Task Scheduler with Work Stealing
+Build a multi-threaded task scheduler inspired by tokio's runtime but with custom scheduling policies. Implement work-stealing queues using crossbeam, support task priorities and deadlines, and provide CPU affinity controls. Design a reactor pattern for I/O events and integrate with io_uring on Linux.
+
+Key Features: Pin and Unpin traits for self-referential types, custom Future implementations, unsafe Cell patterns for thread-local storage, conditional compilation for platform-specific code, integration testing with loom

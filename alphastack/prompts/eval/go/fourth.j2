@@ -1,0 +1,4 @@
+Time-Series Database with Compression
+Build a time-series database optimized for IoT workloads with custom compression algorithms (Gorilla, delta-of-delta). Implement a write-ahead log, memtable with skiplist, and LSM tree compaction. Support windowed aggregations, downsampling policies, and retention management. Use mmap for efficient file access.
+
+Key Features: sync.RWMutex for concurrent access, generics for type-safe APIs, binary encoding with encoding/binary, buffer pools to reduce GC pressure, benchmarking with testing.B

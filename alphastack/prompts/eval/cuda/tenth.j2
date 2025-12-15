@@ -1,0 +1,4 @@
+GPU Graph Analytics Engine
+Create a graph processing framework supporting PageRank, BFS, connected components on billion-edge graphs. Implement edge-centric and vertex-centric processing models, use compressed sparse row format, and optimize with warp-level operations. Support dynamic graphs with streaming updates, provide multi-GPU partitioning with edge cuts, and use Gunrock as reference.
+
+Key Features: CUB for device-wide primitives, __ballot_sync for warp voting, atomicAdd for edge accumulation, managed memory with access hints, C++17 parallel algorithms with thrust execution policies

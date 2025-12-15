@@ -1,0 +1,5 @@
+Lock-Free GPU Work Queue with Host-Device Coordination
+Design a concurrent work queue accessible from both CPU and GPU with lock-free semantics. Implement device-side dynamic parallelism for recursive task spawning, use atomicExch for queue operations, and support priority scheduling. Integrate with CUDA streams for multi-queue execution and provide CPU-side monitoring with unified memory.
+
+Key Features: std::atomic for host coordination, __threadfence_system for coherence, volatile for device-host communication, C++20 concepts for queue policies, cuda::std::barrier for synchronization
+

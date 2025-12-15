@@ -1,0 +1,5 @@
+High-Performance HTTP Load Balancer
+Design a layer 7 load balancer with multiple algorithms (round-robin, least-connections, consistent hashing). Implement health checking with exponential backoff, connection pooling with sync.Pool, and request hedging. Support websocket proxying, HTTP/2 server push, and TLS termination with automatic certificate management via ACME.
+
+Key Features: net/http middleware chains, context.Context for request scoping, atomic operations for metrics, io.Copy for zero-copy proxying, pprof for profiling, custom ResponseWriter implementation
+

@@ -1,0 +1,4 @@
+Distributed Transaction Coordinator (2PC/3PC)
+Implement a distributed transaction manager supporting two-phase and three-phase commit protocols. Design a transaction log with checkpointing, handle coordinator failure recovery, and implement deadlock detection. Support savepoints, nested transactions, and isolation level guarantees with pessimistic locking.
+
+Key Features: State machines with type assertions, timeout management with time.Timer, persistent state with badger/bbolt, distributed locks with Redis, table-driven tests for protocol states

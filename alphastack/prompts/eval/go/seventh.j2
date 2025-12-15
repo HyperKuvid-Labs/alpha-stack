@@ -1,0 +1,4 @@
+Real-Time Log Processing Pipeline
+Build a stream processing system that ingests logs from Kafka, applies transformations, and outputs to multiple sinks. Implement exactly-once semantics with idempotent producers, support stateful aggregations with RocksDB backend, and provide a DSL for transformation rules using yacc/goyacc parser generator.
+
+Key Features: Fan-out/fan-in patterns with goroutines, buffered channels for backpressure, errgroup for coordinated error handling, reflection for dynamic field extraction, context-based pipeline cancellation

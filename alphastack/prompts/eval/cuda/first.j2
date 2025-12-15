@@ -1,0 +1,4 @@
+Custom CUDA Memory Allocator with Defragmentation
+Build a high-performance GPU memory allocator that reduces fragmentation and improves allocation speed. Implement buddy allocation for coalescing, slab caching for small objects, and async allocation with CUDA streams. Support unified memory with prefetching hints, memory pooling across multiple GPUs, and provide allocation telemetry with nvprof integration.
+
+Key Features: Template metaprogramming for size classes, RAII wrappers for cudaMalloc, placement new for device objects, std::pmr for polymorphic allocators, constexpr for compile-time optimization
