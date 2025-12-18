@@ -1,10 +1,14 @@
-# AlphaStack 🚀
+<div align="center">
+  <img src="https://github.com/user-attachments/assets/4e8c5b89-9b6f-4a4a-8b2e-1e5f3c8e9f0a" alt="AlphaStack Logo" width="200"/>
+</div>
+
+# AlphaStack
 
 **AI-Powered Project Generator with Docker Testing**
 
-AlphaStack is an intelligent project generation tool that uses Google's Gemini AI to create complete software projects from natural language descriptions. It features an interactive terminal user interface (TUI) , automatic dependency resolution, Docker containerization, and comprehensive testing capabilities.
+AlphaStack is an intelligent project generation tool that uses Google's Gemini AI to create complete software projects from natural language descriptions. It features an interactive terminal user interface (TUI), automatic dependency resolution, Docker containerization, and comprehensive testing capabilities.
 
-## 📋 What is AlphaStack?
+## What is AlphaStack?
 
 AlphaStack takes your project idea and transforms it into a fully functional codebase. It:
 
@@ -17,28 +21,74 @@ AlphaStack takes your project idea and transforms it into a fully functional cod
 
 The tool uses a multi-agent system with planners and correctors to iteratively improve generated code, ensuring high-quality output that's ready to use.
 
-## 📁 Folder Structure
+## System Architecture and Flow
+
+```mermaid
+graph TD
+    A[User Input<br/>Natural Language Description] --> B[CLI / TUI Interface<br/>cli.py / tui.py / config.py]
+
+    B --> C[Generator Orchestrator<br/>generator.py]
+
+    C --> C1[1. Software Blueprint Generation]
+    C1 --> C2[2. Folder Structure Planning]
+    C2 --> C3[3. File Format Contract Definition]
+    C3 --> C4[4. Code Generation]
+
+    C4 --> D[Agent System<br/>agents/planner.py<br/>agents/corrector.py]
+    C4 --> E[Prompt Management<br/>prompts/*.j2<br/>utils/prompt_manager.py]
+
+    D --> D1[• Planning Agent<br/>• Correction Agent<br/>• Multi-iteration Refinement]
+    E --> E1[• Jinja2 Templates<br/>• Dynamic Prompt Construction<br/>• Context Management]
+
+    E1 -.-> D1
+
+    D1 --> F[Dependency Resolution<br/>utils/dependencies.py]
+
+    F --> F1[• Analyze project dependencies<br/>• Detect missing packages<br/>• Iterative resolution with AI]
+
+    F1 --> G[Docker Integration<br/>docker/generator.py<br/>docker/testing.py]
+
+    G --> G1[• Dockerfile generation<br/>• Docker Compose configuration<br/>• Container build and testing]
+
+    G1 --> H[Error Tracking & Correction<br/>utils/error_tracker.py<br/>utils/command_log.py]
+
+    H --> H1[• Track build/test errors<br/>• AI-powered error analysis<br/>• Automated correction suggestions<br/>• Command execution logging]
+
+    H1 --> I[Validated Project Output<br/>• Complete source code<br/>• Docker configuration<br/>• Test files<br/>• Project metadata]
+
+    style A fill:#4A90E2,stroke:#2E5C8A,stroke-width:2px,color:#fff
+    style B fill:#50C878,stroke:#2E7D4E,stroke-width:2px,color:#fff
+    style C fill:#9B59B6,stroke:#6C3483,stroke-width:2px,color:#fff
+    style D fill:#E67E22,stroke:#A04000,stroke-width:2px,color:#fff
+    style E fill:#E67E22,stroke:#A04000,stroke-width:2px,color:#fff
+    style F fill:#3498DB,stroke:#1F618D,stroke-width:2px,color:#fff
+    style G fill:#1ABC9C,stroke:#117A65,stroke-width:2px,color:#fff
+    style H fill:#E74C3C,stroke:#922B21,stroke-width:2px,color:#fff
+    style I fill:#27AE60,stroke:#186A3B,stroke-width:2px,color:#fff
+```
+
+## Folder Structure
 
 ```
 alpha_stack/
-├─- alphastack/                    
-│   ├── __init__.py               
-│   ├── cli.py                    
-│   ├── tui.py                    
-│   ├── generator.py              
-│   ├── config.py                 
+├── alphastack/
+│   ├── __init__.py
+│   ├── cli.py
+│   ├── tui.py
+│   ├── generator.py
+│   ├── config.py
 │   │
-│   ├── agents/                   
+│   ├── agents/
 │   │   ├── __init__.py
-│   │   ├── planner.py           
-│   │   └── corrector.py        
+│   │   ├── planner.py
+│   │   └── corrector.py
 │   │
-│   ├── docker/                   
+│   ├── docker/
 │   │   ├── __init__.py
-│   │   ├── generator.py         
-│   │   └── testing.py           
+│   │   ├── generator.py
+│   │   └── testing.py
 │   │
-│   ├── prompts/                  
+│   ├── prompts/
 │   │   ├── software_blueprint.j2
 │   │   ├── folder_structure.j2
 │   │   ├── file_content.j2
@@ -46,23 +96,23 @@ alpha_stack/
 │   │   ├── dep_resolution_prompt.j2
 │   │   └── ... (other prompt templates)
 │   │
-│   └── utils/                    
+│   └── utils/
 │       ├── __init__.py
-│       ├── prompt_manager.py    
-│       ├── dependencies.py      
-│       ├── error_tracker.py     
-│       ├── helpers.py           
-│       ├── command_log.py       
-│       └── tools.py             
+│       ├── prompt_manager.py
+│       ├── dependencies.py
+│       ├── error_tracker.py
+│       ├── helpers.py
+│       ├── command_log.py
+│       └── tools.py
 │
-├── pyproject.toml                
-├── install.sh                    
-├── install.bat                   
-├── README.md                     
-└── .gitignore                    
+├── pyproject.toml
+├── install.sh
+├── install.bat
+├── README.md
+└── .gitignore
 ```
 
-## 🛠️ Setup Instructions
+## Setup Instructions
 
 ### Prerequisites
 
@@ -128,7 +178,7 @@ export GOOGLE_API_KEY="your-api-key-here"
 **Option 3: Manual Configuration**
 The API key is stored in `~/.alphastack/config.json` (or `%USERPROFILE%\.alphastack\config.json` on Windows)
 
-## 📖 User Instructions
+## User Instructions
 
 ### Basic Usage
 
@@ -213,4 +263,6 @@ Generated projects are saved to the specified output directory (default: `./crea
 
 ---
 
-## Future version releasing soon 🚀
+## Future Releases
+
+Additional features and improvements are planned for upcoming versions.
