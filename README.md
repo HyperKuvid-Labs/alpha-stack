@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/4e8c5b89-9b6f-4a4a-8b2e-1e5f3c8e9f0a" alt="AlphaStack Logo" width="200"/>
+  <img src="./website/public/images/logo.png" alt="AlphaStack Logo" width="200"/>
 </div>
 
 # AlphaStack
