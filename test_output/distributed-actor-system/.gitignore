@@ -1,0 +1,35 @@
+text
+# Build artifacts
+dist/
+.bun/
+*.tsbuildinfo
+
+# Dependency directories
+node_modules/
+
+# Logs
+*.log
+bun-debug.log*
+npm-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE-specific files
+.idea/
+.vscode/
+
+# OS-specific files
+.DS_Store
+
+# Test coverage
+coverage/
+
+# Misc
+*.bak
+*.swp

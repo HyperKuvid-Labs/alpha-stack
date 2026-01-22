@@ -12,8 +12,8 @@ from ..config import get_api_key
 
 load_dotenv(dotenv_path='.env')
 
-MODEL_NAME = "models/gemini-2.5-pro"
-MODEL_NAME_FLASH = "models/gemini-2.5-flash"
+MODEL_NAME = "models/gemini-3-pro-preview"
+MODEL_NAME_FLASH = "models/gemini-3-pro-preview"
 
 SKIP_DIRS = {'__pycache__', '.git', '.vscode', '.idea', 'node_modules', '.pytest_cache'}
 
@@ -379,16 +379,6 @@ def get_system_info() -> Dict[str, Any]:
             "platform": platform.platform(),
             "architecture": platform.machine(),
             "processor": platform.processor()
-        },
-        "python": {
-            "version": sys.version.split()[0],
-            "versionInfo": {
-                "major": sys.version_info.major,
-                "minor": sys.version_info.minor,
-                "micro": sys.version_info.micro
-            },
-            "executable": sys.executable,
-            "implementation": platform.python_implementation()
         },
         "environment": {
             "shell": os.environ.get("SHELL", "unknown"),
