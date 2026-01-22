@@ -3,9 +3,9 @@ FROM python:3.12-slim-bookworm
 
 # Set environment variables for best practices
 # Prevents Python from writing .pyc files to disc
-ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONDONTWRITEBYTECODE=1
 # Prevents Python from buffering stdout and stderr
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONUNBUFFERED=1
 
 # Set the working directory in the container
 WORKDIR /app

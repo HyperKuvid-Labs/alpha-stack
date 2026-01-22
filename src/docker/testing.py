@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import select
 import subprocess
 from typing import Dict, List, Optional, Tuple
 from ..utils.helpers import (
@@ -12,6 +13,7 @@ from ..utils.tools import ToolHandler
 from ..utils.command_log import CommandLogManager
 from ..agents.planner import PlanningAgent
 from ..agents.corrector import CorrectionAgent
+from .generator import generate_dockerignore_content
 
 
 class CommandExecutor:
@@ -521,23 +523,65 @@ class DockerTestingPipeline:
 
     def build_docker_image(self) -> Tuple[bool, str]:
         try:
-            result = subprocess.run(
-                ['docker', 'build', '-t', self.image_name, '.'],
+            # Use BuildKit with plain progress for better output streaming
+            env = os.environ.copy()
+            env['DOCKER_BUILDKIT'] = '1'
+            
+            # Stream output in real-time while also capturing it
+            process = subprocess.Popen(
+                ['docker', 'build', '--progress=plain', '-t', self.image_name, '.'],
                 cwd=self.project_root,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 text=True,
-                timeout=600
+                env=env
             )
-
-            combined_output = result.stdout + "\n" + result.stderr
-
-            if result.returncode == 0:
+            
+            output_lines = []
+            try:
+                # Stream output line by line with timeout handling
+                while True:
+                    # Check if process has finished
+                    if process.poll() is not None:
+                        # Read any remaining output
+                        remaining = process.stdout.read()
+                        if remaining:
+                            output_lines.append(remaining)
+                            self._emit("docker_build", remaining.strip())
+                        break
+                    
+                    # Read available output (non-blocking on Unix)
+                    if hasattr(select, 'select'):
+                        readable, _, _ = select.select([process.stdout], [], [], 1.0)
+                        if readable:
+                            line = process.stdout.readline()
+                            if line:
+                                output_lines.append(line)
+                                self._emit("docker_build", line.strip())
+                    else:
+                        # Fallback for Windows
+                        line = process.stdout.readline()
+                        if line:
+                            output_lines.append(line)
+                            self._emit("docker_build", line.strip())
+                        elif process.poll() is not None:
+                            break
+                
+                # Wait for process to complete with timeout
+                process.wait(timeout=600)
+                
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+                return False, "Docker build timeout (exceeded 10 minutes)"
+            
+            combined_output = "".join(output_lines)
+            
+            if process.returncode == 0:
                 return True, combined_output
             else:
                 return False, combined_output
 
-        except subprocess.TimeoutExpired:
-            return False, "Docker build timeout (exceeded 10 minutes)"
         except Exception as e:
             return False, f"Docker build error: {str(e)}"
 
@@ -574,12 +618,17 @@ class DockerTestingPipeline:
             with open(self.dockerfile_path, 'w', encoding='utf-8') as f:
                 f.write(dockerfile_content)
 
+            # Generate .dockerignore to speed up builds
+            dockerignore_path = os.path.join(self.project_root, ".dockerignore")
+            with open(dockerignore_path, 'w', encoding='utf-8') as f:
+                f.write(generate_dockerignore_content())
+
             if self.error_tracker:
                 self.error_tracker.log_change(
                     file_path=self.dockerfile_path,
-                    change_description="Generated Dockerfile from software blueprint",
+                    change_description="Generated Dockerfile and .dockerignore from software blueprint",
                     error_context="Dockerfile generation phase",
-                    actions=["generate_dockerfile"]
+                    actions=["generate_dockerfile", "generate_dockerignore"]
                 )
 
             return True
