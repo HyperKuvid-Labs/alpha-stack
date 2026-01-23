@@ -1,4 +1,2 @@
-GPU-Accelerated Ray Tracing Engine with BVH
-Create a physically-based path tracer using CUDA with bounding volume hierarchies for acceleration. Implement SAH-based BVH construction on GPU, support multiple importance sampling, and optimize with warp-level primitives. Use OptiX for denoising, implement texture compression with BC7, and support real-time updates for dynamic scenes.
+Write a CUDA kernel for transposing a square matrix (4096×4096 floats) with two implementations: naive global memory access and optimized shared memory tiling. The shared memory version should use 32×32 tiles to minimize bank conflicts and improve coalescing. Compare bandwidth utilization between both approaches using NVIDIA profiling tools. Your code should handle non-square matrices and include boundary checking for edge tiles.
 
-Key Features: Device lambda functions, thrust for parallel algorithms, cooperative groups for warp operations, texture objects and surface writes, atomicCAS for lock-free updates, device host dual compilation

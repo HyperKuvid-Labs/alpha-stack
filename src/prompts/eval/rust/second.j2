@@ -1,4 +1,19 @@
-High-Performance Memory Allocator
-Implement a custom memory allocator from scratch that outperforms jemalloc for specific workloads. Design a slab allocator for small objects, implement thread-local caching, and use lock-free data structures for allocation metadata. Support NUMA-aware allocation and provide hooks for memory profiling. Benchmark against standard allocators using criterion.
+Build a simple single-threaded reference-counted smart pointer MyRc<T> mimicking std::rc::Rc.
 
-Key Features: Unsafe Rust and raw pointers, atomics and memory ordering, const generics for size classes, inline assembly for fast paths, FFI boundary design
+Features:
+
+Store T and a reference count on the heap using Box.
+
+Implement Clone (increments count) and Drop (decrements; deallocates when zero).
+
+Provide strong_count() method.
+
+Implement Deref trait for ergonomic access.
+Constraints:
+
+Use Cell<usize> for interior mutability of the count.
+
+Add unit tests demonstrating multiple owners and proper cleanup.
+
+Show why this isn't Send or Sync (document with comments).
+

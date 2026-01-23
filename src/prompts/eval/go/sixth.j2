@@ -1,4 +1,22 @@
-Distributed Transaction Coordinator (2PC/3PC)
-Implement a distributed transaction manager supporting two-phase and three-phase commit protocols. Design a transaction log with checkpointing, handle coordinator failure recovery, and implement deadlock detection. Support savepoints, nested transactions, and isolation level guarantees with pessimistic locking.
+Create a minimal WebSocket chat server that supports multiple rooms.
+Packages:
 
-Key Features: State machines with type assertions, timeout management with time.Timer, persistent state with badger/bbolt, distributed locks with Redis, table-driven tests for protocol states
+hub (core types and interfaces).
+
+transport/ws (WebSocket implementation, e.g. using gorilla/websocket or standard library).
+Behavior:
+
+Each room maintains:
+
+A set of connected clients.
+
+Broadcast channel for messages.
+
+Clients send messages tagged with room ID; server broadcasts to all clients in that room.
+Use:
+
+Goroutines per client for read and write loops.
+
+Channels in the hub for register, unregister, and broadcast actions.
+Expose a small API to create/join rooms that could later be swapped for another transport.
+

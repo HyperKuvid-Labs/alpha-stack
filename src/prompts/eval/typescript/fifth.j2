@@ -1,4 +1,31 @@
-GraphQL Schema-First Code Generator
-Create a code generator that produces fully-typed resolvers, DTOs, and client SDK from GraphQL schema. Implement schema stitching for federated graphs, support custom scalars with validation, and generate optimized DataLoader batching. Provide subscription resolvers with async iterables, implement field-level authorization with directives, and optimize with query complexity analysis.
+Create a small component library (3-5 components) with strict prop typing and component composition patterns.
+Components:
 
-Key Features: Utility types for GraphQL primitives, mapped types for resolver signatures, generic constraints for context types, type predicates for union resolution, overload signatures for flexible APIs, satisfies operator for type checking
+Button<T> (generic for onClick event data).
+
+Select<Option> (typed options array and onChange callback).
+
+Form<Schema> (typed field names and validation).
+Requirements:
+
+Use React.FC<Props> or function components with explicit types.
+
+Prop validation using discriminated unions (e.g., variant: 'primary' | 'secondary').
+
+Generic components where appropriate.
+
+Strict children typing (children?: React.ReactNode).
+Structure:
+
+components/Button/Button.tsx and Button.types.ts.
+
+components/Select/Select.tsx and Select.types.ts.
+
+index.ts for exports.
+Tests (using @testing-library/react):
+
+Component rendering.
+
+Event handlers with correct types.
+
+Type errors for invalid props (use @ts-expect-error).

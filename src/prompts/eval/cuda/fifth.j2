@@ -1,4 +1,1 @@
-GPU Database Query Engine with JIT Compilation
-Create a columnar database that JIT-compiles queries to PTX and executes on GPU. Implement parallel hash joins, aggregations with shared memory reduction, and predicate pushdown. Use LLVM for code generation, support vectorized execution with SIMD intrinsics, and optimize memory bandwidth with coalesced access patterns.
-
-Key Features: NVRTC for runtime compilation, template specialization for type dispatch, cuDF integration, arrow format parsing, expression templates for query AST, std::variant for polymorphic columns
+Implement GPU-accelerated Sparse Matrix-Vector multiplication using the Compressed Sparse Row (CSR) format. Your implementation should handle matrices with >10^6 non-zero elements and demonstrate three parallelization strategies: one thread per row, warp per row for medium-length rows, and block per row for very long rows. Include automatic load balancing that selects the appropriate kernel based on row length distribution. Validate against dense matrix multiplication and report achieved memory bandwidth and GFLOPS.

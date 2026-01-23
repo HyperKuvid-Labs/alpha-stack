@@ -1,5 +1,26 @@
-Distributed Tracing and Observability System
-Create an APM system that collects traces, metrics, and logs from distributed microservices. Implement sampling strategies, span aggregation, and time-series compression. Use OpenTelemetry protocol, design a columnar storage engine, and provide a SQL-like query language with a hand-written parser and query executor.
+Build a simple JSON serializer supporting basic types.
 
-Key Features: Channels for actor-based concurrency, dashmap for concurrent collections, arrow2 for columnar data, async streams with futures-util, compile-time dependency injection
+Traits:
+
+Serialize trait with serialize(&self, serializer: &mut Serializer).
+
+Implement for primitives, String, Vec<T>, Option<T>, and structs (via derive macro or manual impl).
+Output format:
+
+JSON (objects, arrays, strings, numbers, null).
+Features:
+
+Support generics: Vec<T: Serialize>.
+
+Handle recursive structures (nested objects).
+Optional:
+
+Write a simple derive macro #[derive(Serialize)] for structs.
+Tests:
+
+Serialize primitive types.
+
+Nested structures.
+
+Round-trip with a JSON parser (use serde_json for validation only).
 

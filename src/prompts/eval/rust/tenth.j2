@@ -1,4 +1,32 @@
-Compiler for Domain-Specific Language
-Build a full compiler for a custom DSL targeting LLVM IR. Implement lexing with logos, recursive descent parsing, semantic analysis with symbol tables, and code generation. Support type inference using Hindley-Milner algorithm, implement a borrow checker for linear types, and optimize with constant folding and dead code elimination.
+Implement a simple bump allocator (arena allocator) and use it as a global allocator.
 
-Key Features: Recursive types with Rc/Arc, arena-based tree structures, visitor pattern with pattern matching, LLVM bindings via inkwell, integration tests with golden file testing, error reporting with codespan
+Features:
+
+Allocate from a fixed-size buffer by incrementing a pointer.
+
+Implement GlobalAlloc trait (alloc, dealloc).
+
+Use unsafe to manage raw pointers and alignment.
+
+Track allocated vs used bytes.
+Constraints:
+
+No deallocation (bump pointer only moves forward).
+
+Alignment handling (align pointer to requested alignment).
+
+Panic on out-of-memory.
+Demo:
+
+Use #[global_allocator] in a small program.
+
+Allocate Vec and String using your allocator.
+
+Print allocator stats at program end.
+Tests:
+
+Allocation alignment correctness.
+
+Multiple allocations don't overlap.
+
+Demonstrate memory exhaustion handling.

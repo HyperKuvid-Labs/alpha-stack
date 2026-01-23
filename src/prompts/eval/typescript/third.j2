@@ -1,5 +1,27 @@
-Real-Time Collaborative Document Engine (CRDT)
-Build operational transformation or CRDT-based document sync supporting text, rich formatting, and nested data structures. Implement Yjs-like algorithms with conflict resolution, support undo/redo with time-travel, and provide awareness for cursor positions. Use WebSockets with binary protocol (MessagePack), implement snapshot compression, and sync with IndexedDB for offline support.
+Implement functional Result<T, E> and Option<T> types with chainable methods.
+API:
 
-Key Features: Recursive type definitions for document tree, type-level state machines, intersection types for operation types, branded primitives for node IDs, generator functions for traversal, weak maps for metadata
+typescript
+const result = Result.ok(42)
+  .map(x => x * 2)
+  .andThen(x => x > 50 ? Result.ok(x) : Result.err("too small"));
 
+if (result.isOk()) {
+  console.log(result.value); // type narrowed to number
+}
+Requirements:
+
+Result<T, E> with .ok(), .err(), .map(), .mapErr(), .andThen(), .unwrap().
+
+Option<T> with .some(), .none(), .map(), .filter(), .unwrap().
+
+Type guards: .isOk(), .isErr(), .isSome(), .isNone() narrow types.
+
+No runtime classes, use discriminated unions ({ kind: 'ok', value: T }).
+Tests:
+
+Chaining transformations.
+
+Error propagation with .andThen().
+
+Type narrowing in conditionals.

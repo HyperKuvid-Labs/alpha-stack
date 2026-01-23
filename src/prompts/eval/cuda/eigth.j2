@@ -1,4 +1,1 @@
-GPU-Based Spatial Index (R-Tree) for GIS
-Implement a parallel R-tree construction and query algorithm on GPU for geospatial data. Support bulk loading with STR packing, concurrent insertions with atomic operations, and k-nearest neighbor search. Use thrust for sorting and partitioning, implement efficient bounding box tests, and provide spatial join operations.
-
-Key Features: Structure of arrays (SoA) layout, Hilbert curve for spatial sorting, parallel tree traversal with stack, custom allocators for node pools, constexpr if for compile-time branching
+Generate a 1920×1080 visualization of the Mandelbrot set with adjustable zoom level. Each thread computes one pixel's escape time (max 256 iterations). Implement dynamic parallelism where pixels that don't escape quickly spawn child threads for higher precision refinement. Add color mapping based on iteration count. Support interactive zoom/pan by regenerating regions.

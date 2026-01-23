@@ -1,4 +1,23 @@
-Zero-Copy Network Protocol Parser
-Create a high-performance parser for HTTP/2 and gRPC protocols using nom combinators and zero-copy techniques. Implement streaming parsing with backpressure, handle fragmented frames, and support header compression (HPACK). Design a state machine using enum-based type states to enforce protocol correctness at compile time.
+Implement a generic BST BinaryTree<T> where T: Ord.
 
-Key Features: Lifetime annotations for zero-copy parsing, phantom types for type-state pattern, trait objects vs static dispatch tradeoffs, SIMD optimization with packed_simd, benchmarking with flamegraphs
+Operations:
+
+insert(&mut self, value: T)
+
+contains(&self, value: &T) -> bool
+
+iter(&self) -> InOrderIter<T> (returns iterator over &T in sorted order).
+Challenges:
+
+Use Box<Node<T>> for heap allocation.
+
+Handle lifetimes correctly for the iterator (iterator borrows the tree).
+
+Implement recursive or iterative traversal using a stack in the iterator.
+Add tests for:
+
+Inserting duplicates (define behavior).
+
+Iterating empty tree.
+
+Collecting iterator into a Vec and verifying sorted order.

@@ -1,4 +1,2 @@
-Multi-GPU Distributed Training Framework
-Build a data-parallel training system with gradient AllReduce using NCCL. Implement mixed-precision training with loss scaling, gradient accumulation across microbatches, and pipeline parallelism for large models. Support ZeRO optimizer states partitioning, overlap communication with computation, and provide fault tolerance with checkpointing.
+Develop a parallel radix sort implementation for sorting 10^7 32-bit integers on the GPU. Implement the algorithm using 4-bit or 8-bit radix passes with three phases per pass: histogram computation, prefix sum (scan), and data redistribution. Use shared memory for local histograms and demonstrate proper synchronization between passes. Compare performance against CUDA Thrust's sorting primitives and analyze scalability with varying input sizes and bit distributions (uniform, sorted, reverse-sorted).
 
-Key Features: CUDA IPC for zero-copy transfers, cudaStreamWaitEvent for synchronization, peer-to-peer access with cudaDeviceEnablePeerAccess, std::async for host parallelism, module pattern with CRTP

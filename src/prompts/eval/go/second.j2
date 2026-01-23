@@ -1,4 +1,20 @@
-Container Runtime with Namespace Isolation
-Create a lightweight container runtime that uses Linux namespaces, cgroups, and overlay filesystems. Implement process isolation with unshare syscalls, set up network namespaces with veth pairs, and manage resource limits. Support OCI image format parsing and layer extraction with concurrent downloads.
+Implement an in-process token bucket rate limiter and apply it to a dummy “external API client” interface.
+Requirements:
 
-Key Features: syscall package for low-level operations, os/exec for process management, CGO for C library integration, file descriptor passing, error wrapping with fmt.Errorf and %w
+A Limiter struct that:
+
+Has capacity N tokens and refills at R tokens per second via a goroutine.
+
+Exposes Allow() (non-blocking, boolean) and Wait() (blocking until token available or context done).
+
+Use channels and time.Ticker for refill logic, and context.Context for cancellation.
+
+Write a toy “API client” that simulates an expensive call with time.Sleep and is wrapped by the limiter.
+Add tests showing:
+
+Burst behavior up to capacity.
+
+Respecting rate over time.
+
+Context cancellation when waiting for tokens.
+

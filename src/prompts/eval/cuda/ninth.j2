@@ -1,4 +1,1 @@
-CUDA-Accelerated Computational Fluid Dynamics Solver
-Build a Navier-Stokes solver using finite difference methods with GPU acceleration. Implement Poisson equation solver with conjugate gradient, support adaptive time stepping, and optimize stencil operations with shared memory tiling. Use multi-GPU domain decomposition with halo exchange, and visualize with CUDA-OpenGL interop.
-
-Key Features: constant memory for stencil coefficients, grid-stride loops for scalability, cuSPARSE for sparse linear algebra, cooperative groups for block-wide reductions, texture memory for interpolation
+Create a 2D particle system with 10,000 particles interacting via short-range forces. Divide space into a 32×32 uniform grid. Implement three kernels: (1) assign particles to grid cells, (2) compute forces using spatial hashing to check only neighboring cells, (3) update positions. Use shared memory for neighbor queries. Demonstrate 100× speedup over naive all-pairs interaction.

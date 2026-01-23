@@ -1,4 +1,37 @@
-Event Sourcing Framework with CQRS
-Build an event store with optimistic concurrency control, snapshot generation, and projection rebuilding. Implement aggregate roots with type-safe event application, support saga pattern for distributed transactions, and provide event versioning with upcasters. Use PostgreSQL for event log, Redis for read models, and support temporal queries.
+Implement a finite state machine where states and valid transitions are type-checked.
+API:
 
-Key Features: Discriminated unions for event types, const enums for event names, abstract base classes for aggregates, higher-order types for event handlers, type narrowing with in operator, builder pattern with method chaining
+typescript
+type States = {
+  idle: {};
+  loading: { startTime: number };
+  success: { data: string };
+  error: { message: string };
+};
+
+type Transitions = {
+  idle: 'START_LOADING';
+  loading: 'LOAD_SUCCESS' | 'LOAD_ERROR';
+  success: never;
+  error: 'RETRY';
+};
+
+const machine = createMachine<States, Transitions>({ initial: 'idle' });
+machine.transition('START_LOADING', { startTime: Date.now() }); // OK
+machine.transition('LOAD_SUCCESS', { data: 'result' }); // Type error if not in 'loading'
+Requirements:
+
+Current state tracked with discriminated union.
+
+.transition() only accepts valid events for current state.
+
+State data must match the target state's shape.
+
+Support guards/actions (functions executed on transition).
+Tests:
+
+Valid transitions.
+
+Type errors for invalid transitions.
+
+State context updates.

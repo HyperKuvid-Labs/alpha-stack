@@ -1,4 +1,38 @@
-WebAssembly Runtime with Type Bridge
-Build a TypeScript-friendly WebAssembly loader that generates typed bindings from WASM modules. Implement memory management with views, support async instantiation with streaming compilation, and provide table imports for callbacks. Create zero-copy data transfer using SharedArrayBuffer, support WASI system calls, and optimize with workers for parallelism.
+Create a form library where field paths like "user.address.city" are type-safe.
+API:
 
-Key Features: Typed arrays for memory views, interface for WASM exports, namespace for module organization, utility types for function signatures, awaited type for async operations, type assertions for FFI
+typescript
+type User = {
+  name: string;
+  address: { city: string; zip: number };
+  tags: string[];
+};
+
+const form = useForm<User>();
+form.register('address.city'); // OK
+form.register('address.country'); // Type error
+form.setValue('address.zip', 12345); // OK
+form.setValue('address.zip', 'abc'); // Type error
+Requirements:
+
+Use template literal types and recursive conditional types for path parsing.
+
+Type helper: Path<T> generates all valid paths ("name" | "address.city" | "address.zip" | "tags" | "tags.0").
+
+Type helper: PathValue<T, P> extracts value type at path.
+
+Support nested objects and arrays.
+Implementation:
+
+Recursive type that traverses object structure.
+
+Handle array indices (tags.0, tags.1).
+
+Use infer to extract property types at each level.
+Tests:
+
+Path generation for complex nested types.
+
+Value type extraction correctness.
+
+Compiler errors for invalid paths.

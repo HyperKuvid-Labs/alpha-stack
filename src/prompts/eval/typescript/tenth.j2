@@ -1,5 +1,40 @@
-Multi-Tenant SaaS Backend Scaffold
-Design a production-ready multi-tenant architecture with row-level security, tenant isolation, and resource quotas. Implement JWT authentication with refresh tokens, role-based access control with permissions, and audit logging. Support tenant-specific configurations, background job processing with BullMQ, and feature flags. Use Prisma with PostgreSQL row-level security.
+Build a full-stack type-safe RPC framework where client calls are typed from server procedures.
+API:
 
-Key Features: Strict null checks enforcement, readonly properties for immutability, private class fields, decorators for authorization, namespace merging for plugin system, module augmentation for extending third-party types
+typescript
+// Server
+const appRouter = router({
+  getUser: procedure.input(z.string()).query(async ({ input }) => {
+    return { id: input, name: 'Alice' };
+  }),
+  createPost: procedure.input(z.object({ title: z.string() })).mutation(async ({ input }) => {
+    return { id: 1, ...input };
+  }),
+});
 
+// Client (auto-typed from server)
+const client = createClient<typeof appRouter>();
+const user = await client.getUser('123'); // type: { id: string; name: string }
+Requirements:
+
+Server defines procedures with input validation (reuse your schema validator).
+
+Client proxy object where method names match procedures.
+
+Type inference: client methods return types from server handlers.
+
+Transport abstraction (start with in-memory, add HTTP later).
+Structure:
+
+server/router.ts (procedure definitions).
+
+client/proxy.ts (typed client proxy).
+
+shared/types.ts (type extraction utilities).
+Tests:
+
+End-to-end type safety (server change reflects in client).
+
+Input validation errors.
+
+Query vs mutation distinction.

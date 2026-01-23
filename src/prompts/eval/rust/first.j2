@@ -1,6 +1,21 @@
-Distributed Key-Value Store with Raft Consensus
+1. Custom Range Iterator with Step and Filter
+Prompt:
+Implement a custom iterator StepRange<T> that yields values from start to end with a configurable step size.
 
-Build a production-grade distributed key-value database implementing the Raft consensus algorithm. Support cluster membership changes, log compaction, and snapshot transfers. Use tokio for async networking, implement custom serialization with serde, and design a write-ahead log with memory-mapped files. Test linearizability under network partitions and node failures using chaos engineering.
+Requirements:
 
-Key Features: Async/await patterns, trait-based state machine design, zero-copy serialization, custom error types with thiserror, property-based testing with proptest
+Implement Iterator trait with proper associated types.
+
+Support generic numeric types (T: Add + PartialOrd + Copy).
+
+Add a filter_even() method that returns another iterator adaptor (demonstrates iterator chaining).
+
+Handle edge cases: zero step, negative ranges, overflow.
+Write tests showing:
+
+Consuming the iterator with .collect().
+
+Lazy evaluation (iterator doesn't compute until .next() is called).
+
+Composing with standard library adaptors (.map(), .take()).
 

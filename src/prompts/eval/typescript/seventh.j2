@@ -1,4 +1,38 @@
-Rate Limiter with Multiple Strategies
-Design a distributed rate limiting system supporting token bucket, leaky bucket, sliding window, and fixed window algorithms. Implement Redis-backed counters with Lua scripts for atomicity, support dynamic rate adjustment, and provide per-user/per-endpoint policies. Create type-safe configuration with Zod schema validation and middleware for Express/Fastify/Hono.
+Create a query builder where table schemas and query results are fully typed.
+API:
 
-Key Features: Function overloads for different strategies, type-level configuration validation, branded types for rate limits, const type parameters, pipeline operator usage, assertion functions for guards
+typescript
+const schema = {
+  users: { id: 'number', name: 'string', email: 'string' },
+  posts: { id: 'number', userId: 'number', title: 'string' },
+} as const;
+
+const query = db(schema)
+  .select('users')
+  .where('id', '=', 123)
+  .fields('id', 'name');
+
+type Result = Infer<typeof query>; // { id: number; name: string }[]
+Requirements:
+
+Use mapped types to convert schema to typed objects.
+
+.select(), .where(), .fields() return new query objects with updated types.
+
+.fields() narrows return type to selected columns.
+
+Support joins with type-safe foreign keys.
+Implementation:
+
+Chain builder pattern with generics tracking state.
+
+Use as const and typeof for schema inference.
+
+Conditional types for filtering selected fields.
+Tests:
+
+Type inference from schema.
+
+Field selection type narrowing.
+
+Type errors for non-existent fields/tables.

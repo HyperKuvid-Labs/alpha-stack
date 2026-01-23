@@ -1,5 +1,15 @@
-High-Performance HTTP Load Balancer
-Design a layer 7 load balancer with multiple algorithms (round-robin, least-connections, consistent hashing). Implement health checking with exponential backoff, connection pooling with sync.Pool, and request hedging. Support websocket proxying, HTTP/2 server push, and TLS termination with automatic certificate management via ACME.
+Implement a simple in-memory LRU cache with:
 
-Key Features: net/http middleware chains, context.Context for request scoping, atomic operations for metrics, io.Copy for zero-copy proxying, pprof for profiling, custom ResponseWriter implementation
+Get(key string) (value any, ok bool)
 
+Set(key string, value any)
+Constraints:
+
+Safe for concurrent access via multiple goroutines.
+
+Use sync.RWMutex for guarding the internal map + doubly linked list (you can use container/list).
+
+Optionally expose a Close() that stops a background goroutine which periodically evicts expired entries (TTL per key).
+Add a small benchmark that compares:
+
+Single-threaded vs multi-goroutine Get/Set performance.

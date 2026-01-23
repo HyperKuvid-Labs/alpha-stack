@@ -1,4 +1,28 @@
-Lock-Free Data Structures Library
-Implement a suite of concurrent data structures: MPMC queue, skip list, hash map, and B-tree using lock-free algorithms. Use compare-and-swap loops, hazard pointers for memory reclamation, and epoch-based garbage collection. Provide formal verification using model checking and linearizability testing.
+Create a procedural derive macro #[derive(Validate)] that generates a validate(&self) -> Result<(), Vec<String>> method.
 
-Key Features: Advanced atomics (SeqCst, AcqRel, Relaxed), memory orderings deep dive, ABA problem solutions, crossbeam-epoch integration, stress testing with thread sanitizer
+Attributes:
+
+#[validate(range(min = 0, max = 100))] for numeric fields.
+
+#[validate(length(min = 5))] for strings.
+
+#[validate(email)] for email format (simple regex check).
+Implementation:
+
+Parse field attributes using syn.
+
+Generate code with quote!.
+
+Return all validation errors, not just first.
+Example:
+
+rust
+#[derive(Validate)]
+struct User {
+    #[validate(length(min = 3))]
+    name: String,
+    #[validate(range(min = 18, max = 120))]
+    age: u8,
+}
+
+Include tests showing macro expansion (use cargo expand) and runtime validation.

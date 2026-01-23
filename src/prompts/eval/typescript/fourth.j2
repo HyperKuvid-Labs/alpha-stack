@@ -1,5 +1,35 @@
-Compile-Time Dependency Injection Container
-Design a DI framework that resolves dependencies at compile time with zero runtime reflection. Implement circular dependency detection with type-level graphs, support scoped lifetimes (singleton, transient, request), and provide decorators for metadata. Generate dependency graphs with type validation, support async factory functions, and integrate with testing frameworks for mocking.
+Build a router where route paths and parameters are fully typed.
+API:
 
-Key Features: Infer keyword for type inference, conditional types for dependency resolution, const assertions for configuration, symbol as injection tokens, proxy objects for lazy initialization, type-only imports for tree-shaking
+typescript
+const router = createRouter({
+  '/users/:userId': (params: { userId: string }) => {},
+  '/posts/:postId/comments/:commentId': (params: { postId: string; commentId: string }) => {},
+});
+
+router.navigate('/users/123'); // OK
+router.navigate('/users/123/extra'); // Type error
+Requirements:
+
+Use template literal types to parse route patterns.
+
+Extract parameter names into typed objects.
+
+Type-safe navigate() and link() functions.
+
+Support query parameters with optional typing.
+Modules:
+
+router/parser.ts (path parsing utilities).
+
+router/index.ts (main router class).
+
+router/types.ts (utility types).
+Tests:
+
+Route matching with different patterns.
+
+Type errors for invalid paths.
+
+Parameter extraction correctness.
 

@@ -1,4 +1,19 @@
-Service Mesh Control Plane
-Create a control plane for microservices that handles service discovery, traffic management, and policy enforcement. Implement xDS protocol for dynamic configuration, support circuit breaking with state machines, and provide distributed tracing integration. Use gRPC bidirectional streaming for configuration push.
+Implement a toy job queue HTTP service with endpoints to:
 
-Key Features: Protocol buffers with protoc-gen-go, reflection for dynamic message handling, context cancellation chains, rate limiting with golang.org/x/time/rate, custom gRPC interceptors
+Enqueue a job (POST /jobs) with a small JSON payload.
+
+Poll next job (POST /workers/next) for workers.
+
+Mark job done / failed.
+Architecture:
+
+Packages: queue, storage, api, worker.
+
+queue exposes an interface for enqueuing, reserving, and updating job status.
+
+Provide an in-memory storage implementation, and an optional simple file-backed (append-only JSON log) implementation.
+Use:
+
+sync.Cond or channels to wake waiting workers when new jobs arrive.
+
+A background goroutine to retry jobs that have been reserved but not completed within a timeout.

@@ -1,5 +1,11 @@
-Distributed Job Queue with At-Least-Once Semantics
-Build a horizontally scalable job queue system with worker pools, priority scheduling, and failure recovery. Implement distributed locking using etcd, design a visibility timeout mechanism, and support delayed job execution. Use context propagation for cancellation, implement graceful shutdown with sync.WaitGroup, and provide metrics via expvar.
+Build a small CLI tool that takes a list of URLs from stdin and fetches them concurrently using a bounded worker pool. Each worker should:
 
-Key Features: Goroutine pools with worker management, channels for job distribution, select statements for timeout handling, interface-based plugin system, recovery from panics in workers
+Fetch the URL with net/http, measure latency, and return status code + duration.
 
+Use a WaitGroup to know when all work is done and a channel to distribute jobs.
+Add:
+
+Context-based cancellation (cancel all in-flight requests if any request exceeds a global timeout).
+
+A thread-safe stats struct (using sync.Mutex) that tracks min/avg/max latency and total failures.
+Expose a WorkerPool type that is reusable and unit-testable.

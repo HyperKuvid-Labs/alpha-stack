@@ -1,4 +1,24 @@
-WASM Runtime with JIT Compilation
-Build a WebAssembly runtime that validates, interprets, and JIT-compiles WASM modules. Implement a stack-based VM, memory sandboxing with guard pages, and cranelift integration for JIT. Support WASI system calls and provide a host function interface. Handle trap recovery and async execution.
+Implement a lock-free bounded ring buffer queue using atomics.
 
-Key Features: Custom bytecode interpreter, FFI with C libraries, mmap for memory management, signal handling for trap recovery, no_std compatibility considerations
+API:
+
+try_push(&self, T) -> Result<(), T> (fails if full).
+
+try_pop(&self) -> Option<T> (returns None if empty).
+Internals:
+
+Use AtomicUsize for head/tail indices.
+
+Use UnsafeCell or MaybeUninit array for storage.
+
+Careful use of Ordering::Acquire / Ordering::Release.
+Tests:
+
+Single-threaded correctness.
+
+Multi-threaded stress test (spawn producer and consumer threads).
+
+Demonstrate zero allocation after initialization.
+
+Show it's Send + Sync.
+

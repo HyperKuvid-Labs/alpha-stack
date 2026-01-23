@@ -1,5 +1,24 @@
-Database Query Optimizer with Cost-Based Execution
-Design a SQL query optimizer that builds execution plans using dynamic programming and cost estimation. Implement a type-safe AST with recursive enums, support query rewriting rules, and generate optimized execution code. Use procedural macros to generate boilerplate for different join algorithms (hash, merge, nested loop).
+Build a tiny single-threaded async executor that can run Futures to completion.
 
-Key Features: Visitor pattern with traits, arena allocation for AST nodes, Cow for copy-on-write optimization, macro_rules and proc_macros, GATs (Generic Associated Types) for query planning
+Components:
+
+Executor with a task queue (using VecDeque).
+
+Custom Waker that re-enqueues tasks when woken.
+
+A block_on(future) function that drives a future to completion.
+Demonstrate:
+
+Running multiple tasks concurrently (cooperative multitasking).
+
+A simple TimerFuture that completes after a duration (use std::time::Instant and a waker).
+
+Composing futures with .await.
+Constraints:
+
+No external async runtime (tokio/async-std).
+
+Use std::task::{Context, Poll, Wake}.
+
+Document limitations (no I/O, just timer-based).
 
