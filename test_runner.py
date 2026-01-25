@@ -161,6 +161,7 @@ def run_test():
     print("Building project tree and generating all files...")
 
     from src_pi.generator import generate_tree, dfs_tree_and_gen
+
     from src_pi.utils.dependencies import DependencyAnalyzer
 
     phase4_start = time.time()

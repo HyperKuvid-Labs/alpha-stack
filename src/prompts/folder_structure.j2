@@ -1,4 +1,4 @@
-You are an expert software architect. Generate a production-grade, modular folder structure based on the System Blueprint.
+You are an expert software architect. Generate a **minimal, production-grade** folder structure based on the System Blueprint.
 
 ## Analysis
 
@@ -9,8 +9,9 @@ You are an expert software architect. Generate a production-grade, modular folde
 
 ### Architectural Principles
 - **Configuration**: Centralize environment variables at root or config directory
-- **Modularity**: Structure around features/domains
+- **Modularity**: Structure around features/domains (only essential ones)
 - **Separation of Concerns**: Separate business logic, data access, and API definitions
+- **Minimalism**: Include only essential directories and files needed for functionality
 
 ### Technical Standards
 
@@ -20,34 +21,38 @@ You are an expert software architect. Generate a production-grade, modular folde
 
 **Frontend**: Purely functional structure for backend testing. Components, services, state management only.
 
+**Minimal Structure**: Avoid over-engineering. Create only necessary directories based on actual features.
+
 ### Required Files
 - Dependency file: `requirements.txt`, `package.json`, `pom.xml`, `Cargo.toml`, or `go.mod`
 - `README.md` (required at root)
 - `.gitignore`
-- `.env.example` if needed
-- Build config files as needed (`tsconfig.json`, etc.)
+- `.env.example` if environment variables are needed
+- Build config files only if required (`tsconfig.json`, `cargo.toml`, etc.)
 
-**Note**: Dockerfile and test files generated separately.
+**Note**: Dockerfile and test files are generated separately and should not be included.
 
 ## Output Format
 
-Return ONLY the tree view structure:
+Return ONLY the tree view structure with **minimal essential directories**.
 
-```
+**Example structure** (adapt to actual tech stack and features):
+
 project-root/
 ├── README.md
 ├── requirements.txt
 ├── .gitignore
 ├── src/
-│   ├── __init__.py
-│   ├── main.py
-│   └── utils/
-│       └── helpers.py
+│ ├── init.py
+│ ├── main.py
+│ └── utils/
+│ └── helpers.py
 └── configs/
-    └── settings.yaml
-```
+└── settings.yaml
 
-No code, explanations, or conversational text.
+**Important**: The above is just an example. Generate the minimal structure based on the actual project requirements below.
+
+No code content, explanations, or conversational text in output.
 
 ## Project Overview
 
