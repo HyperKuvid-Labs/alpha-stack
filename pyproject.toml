@@ -30,6 +30,7 @@ dependencies = [
     "rich>=13.0.0",
     "pyfiglet>=0.8.0",
     "prompt_toolkit>=3.0.0",
+    "openai>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -40,7 +41,7 @@ dev = [
 ]
 
 [project.scripts]
-alphastack = "alphastack.cli:main"
+alphastack = "src_pi.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/alphastack/alphastack"
@@ -53,10 +54,10 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["alphastack*"]
+include = ["src_pi", "src_pi.*"]
 
 [tool.setuptools.package-data]
-alphastack = ["prompts/*.j2"]
+src_pi = ["prompts/*.j2"]
 
 [tool.black]
 line-length = 100

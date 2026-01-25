@@ -20,20 +20,25 @@ from .config import get_api_key, set_api_key
 # Initialize Rich Console
 console = Console()
 
-# Stranger Things Color Palette (adjusted)
-STRANGER_RED = "#E40066"   # Neon magenta
-STRANGER_ACCENT = "#FFD1DC"  # Soft pink highlight
-DARK_BG = "#050315"        # Deep midnight purple
+# Prime Intellect Color Palette
+PI_PURPLE = "#8B5CF6"      # Prime Intellect purple
+PI_ACCENT = "#C4B5FD"      # Soft violet highlight
+PI_GLOW = "#A78BFA"        # Vibrant purple glow
+DARK_BG = "#0F0A1A"        # Deep purple-black
+
+# Legacy colors (keeping for compatibility)
+STRANGER_RED = PI_PURPLE   # Mapped to Prime Intellect purple
+STRANGER_ACCENT = PI_ACCENT
 
 def display_logo():
-    """Displays the ALPHASTACK logo in Stranger Things style."""
+    """Displays the ALPHASTACK logo with Prime Intellect branding."""
     term_width = console.size.width
 
     # Use 'slant' font - clean and always readable
     f = pyfiglet.Figlet(font="slant")
     logo_text = f.renderText("ALPHASTACK")
 
-    styled_logo = Text(logo_text, style=f"bold {STRANGER_RED}")
+    styled_logo = Text(logo_text, style=f"bold {PI_PURPLE}")
 
     # Calculate panel width based on the actual logo width
     logo_lines = logo_text.splitlines()
@@ -42,21 +47,21 @@ def display_logo():
 
     panel = Panel(
         Align.center(styled_logo),
-        border_style=STRANGER_RED,
+        border_style=PI_PURPLE,
         padding=(1, 2),
         width=panel_width,
-        title="[bold white]PROJECT GENERATOR[/]",
-        subtitle="[dim white]v0.1.0[/]",
+        title=f"[bold {PI_ACCENT}]⚡ PRIME INTELLECT[/]",
+        subtitle="[dim white]v0.1.0 | Powered by Prime Intellect API[/]",
     )
     console.print(Align.center(panel))
 
 def setup_api_key():
     """Interactive setup for the Prime Intellect API key."""
-    console.print(f"[{STRANGER_RED}]INITIALIZATION REQUIRED[/{STRANGER_RED}]")
+    console.print(f"[{PI_PURPLE}]⚡ PRIME INTELLECT INITIALIZATION[/{PI_PURPLE}]")
     console.print("[dim]Enter your Prime Intellect API Key to unlock the generator.[/dim]\n")
 
     style = PromptStyle.from_dict({
-        'prompt': '#ff0000 bold',
+        'prompt': '#8B5CF6 bold',
         'input': '#ffffff',
     })
 
@@ -81,12 +86,12 @@ def setup_api_key():
 def get_user_input():
     """Gets project details from the user with history support."""
 
-    console.print(f"[{STRANGER_RED}]Welcome to the Upside Down of Code Generation...[/{STRANGER_RED}]")
+    console.print(f"[{PI_PURPLE}]⚡ Welcome to AlphaStack powered by Prime Intellect[/{PI_PURPLE}]")
     console.print("[dim]Type your request below. Use [bold]Up/Down[/bold] arrows for history.[/dim]")
 
     existing_key = get_api_key()
     if existing_key:
-        change_style = PromptStyle.from_dict({'prompt': '#ff0000 bold', 'input': '#ffffff'})
+        change_style = PromptStyle.from_dict({'prompt': '#8B5CF6 bold', 'input': '#ffffff'})
         change = prompt(
             [('class:prompt', 'Update API key? (y/N) > ')],
             style=change_style
@@ -99,16 +104,16 @@ def get_user_input():
     # History file location
     history_file = os.path.expanduser("~/.alphastack_history")
 
-    # Custom style for prompt_toolkit
+    # Custom style for prompt_toolkit (Prime Intellect purple)
     style = PromptStyle.from_dict({
-        'prompt': '#ff0000 bold',
+        'prompt': '#8B5CF6 bold',
         'input': '#ffffff',
     })
 
 
 
     # Project Prompt
-    console.print(Panel("[bold]What should we build?[/bold]", border_style=STRANGER_RED))
+    console.print(Panel("[bold]What should we build?[/bold]", border_style=PI_PURPLE))
     user_prompt = prompt(
         [('class:prompt', '> ')],
         history=FileHistory(history_file),
@@ -138,14 +143,15 @@ def get_user_input():
 
 class StatusDisplay:
     """Context manager for displaying a live status with sections."""
-    def __init__(self, title="Simmering..."):
+    def __init__(self, title="Processing..."):
         self.title = title
         self.messages = []
+        self.all_messages = []  # Keep full log history
         self.current_phase = "Initializing..."
         self.completed_phases = set()
         self.layout = Layout()
         self.live = None
-        self.spinner = Spinner("dots", style=STRANGER_RED)
+        self.spinner = Spinner("dots", style=PI_PURPLE)
 
     def generate_layout(self):
         """Generates the dynamic layout table."""
@@ -154,8 +160,8 @@ class StatusDisplay:
         grid = Table.grid(expand=True)
         grid.add_column(justify="center", ratio=1)
 
-        # Header
-        header = Text("ALPHASTACK WORKING...", style=f"bold {STRANGER_RED}")
+        # Header with Prime Intellect branding
+        header = Text("⚡ ALPHASTACK × PRIME INTELLECT", style=f"bold {PI_PURPLE}")
 
         # Phase Section with Spinner
         phase_table = Table.grid(expand=True)
@@ -165,16 +171,16 @@ class StatusDisplay:
 
         phase_panel = Panel(
             phase_table,
-            border_style="dim white",
-            title="[cyan]Current Phase[/cyan]",
+            border_style=PI_ACCENT,
+            title=f"[{PI_GLOW}]Current Phase[/]",
             padding=(0, 1)
         )
 
-        # Log Section
+        # Log Section - show more messages
         if not self.messages:
             log_rows = ["[dim]Waiting for updates...[/dim]"]
         else:
-            recent = self.messages[-8:]
+            recent = self.messages[-12:]  # Show more recent logs
             log_rows = [row for row in recent]
 
         log_table = Table.grid()
@@ -184,10 +190,10 @@ class StatusDisplay:
 
         log_panel = Panel(
             log_table,
-            border_style=STRANGER_RED,
-            title="[white]Progress Log[/white]",
+            border_style=PI_PURPLE,
+            title=f"[{PI_ACCENT}]Progress Log[/]",
             padding=(0, 1),
-            height=12
+            height=16  # Increased height for more visibility
         )
 
         term_width = console.size.width
@@ -199,7 +205,7 @@ class StatusDisplay:
         grid.add_row(log_panel)
 
         centered_panel = Align.center(
-            Panel(grid, border_style=STRANGER_RED, padding=(1, 2), width=panel_width),
+            Panel(grid, border_style=PI_PURPLE, padding=(1, 2), width=panel_width),
             vertical="middle"
         )
         layout = Layout()
@@ -216,7 +222,9 @@ class StatusDisplay:
             self.completed_phases.add(self.current_phase)
 
     def __enter__(self):
-        self.live = Live(self.generate_layout(), refresh_per_second=10, console=console, screen=True)
+        # NOTE: screen=False keeps logs visible after Live display ends
+        # screen=True would clear terminal and lose all logs on exit
+        self.live = Live(self.generate_layout(), refresh_per_second=10, console=console, screen=False)
         self.live.start()
         return self
 
@@ -224,6 +232,16 @@ class StatusDisplay:
         self._mark_current_phase_complete()
         if self.live:
             self.live.stop()
+
+        # Print summary of all logs after completion
+        if self.all_messages:
+            console.print()
+            console.print(Panel(
+                f"[bold {PI_PURPLE}]📋 Complete Log Summary[/]",
+                border_style=PI_PURPLE
+            ))
+            for msg in self.all_messages:
+                console.print(f"  {msg}")
 
     def update(self, message, event_type="progress"):
         """Adds a message and updates the display."""
@@ -247,11 +265,15 @@ class StatusDisplay:
         else:
             formatted_msg = f"{icon} {message}"
             self.messages.append(formatted_msg)
+            self.all_messages.append(formatted_msg)  # Keep full history
 
         self.live.update(self.generate_layout())
 
 def print_success(message):
-    console.print(Panel(f"[bold green]{message}[/]", border_style="green"))
+    console.print(Panel(f"[bold green]✅ {message}[/]", border_style="green"))
 
 def print_error(message):
-    console.print(Panel(f"[bold red]{message}[/]", border_style="red"))
+    console.print(Panel(f"[bold red]❌ {message}[/]", border_style="red"))
+
+def print_info(message):
+    console.print(Panel(f"[bold {PI_PURPLE}]ℹ️  {message}[/]", border_style=PI_PURPLE))
