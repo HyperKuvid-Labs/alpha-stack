@@ -269,7 +269,7 @@ def initial_software_blueprint(prompt, pm):
 
     response = retry_api_call(
         client.chat.completions.create,
-        model='hermes-3-llama-3.1-405b',
+        model='arcee-ai/trinity-mini',
         messages=messages
     )
 
@@ -298,7 +298,7 @@ def folder_structure(project_overview, pm):
 
     resp = retry_api_call(
         client.chat.completions.create,
-        model="models/gemini-2.5-pro",
+        model="arcee-ai/trinity-mini",
         messages=messages
     )
     return resp.choices[0].message.content
@@ -319,7 +319,7 @@ def files_format(project_overview, folder_structure, pm):
 
     resp = retry_api_call(
         client.chat.completions.create,
-        model="models/gemini-2.5-pro",
+        model="arcee-ai/trinity-mini",
         messages=messages
     )
 

@@ -143,7 +143,7 @@ Jenkinsfile
 class DockerTestFileGenerator:
     def __init__(self, project_root: str, software_blueprint: Dict,
                  folder_structure: str, file_output_format: Dict,
-                 metadata_dict: Dict, dependency_analyzer, model_name: str = "hermes-3-llama-3.1-405b",
+                 metadata_dict: Dict, dependency_analyzer, model_name: str = "arcee-ai/trinity-mini",
                  pm: Optional[PromptManager] = None, on_status=None):
         self.project_root = project_root
         self.software_blueprint = software_blueprint

@@ -2,7 +2,7 @@ import os
 import json
 from typing import Dict
 from ..utils.helpers import (
-    get_client, retry_api_call, build_project_structure_tree,
+    retry_api_call, build_project_structure_tree,
     get_language_from_extension, extract_code_from_response, is_valid_code,
     MODEL_NAME_FLASH, prime_intellect_client
 )

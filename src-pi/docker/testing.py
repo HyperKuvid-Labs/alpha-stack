@@ -5,7 +5,7 @@ import select
 import subprocess
 from typing import Dict, List, Optional, Tuple
 from ..utils.helpers import (
-    get_client, retry_api_call, build_project_structure_tree, MODEL_NAME, prime_intellect_client
+    retry_api_call, build_project_structure_tree, MODEL_NAME, prime_intellect_client
 )
 from ..utils.prompt_manager import PromptManager
 from ..utils.error_tracker import ErrorTracker
@@ -284,7 +284,7 @@ class LogSummarizerAgent:
 
             response = retry_api_call(
                 self.client.chat.completions.create,
-                model="models/gemini-2.5-flash",
+                model="arcee-ai/trinity-mini",
                 messages=messages
             )
 

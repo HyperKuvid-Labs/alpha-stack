@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Set
 from pathlib import Path
 import networkx as nx
 from jinja2 import Environment, FileSystemLoader
-from .helpers import get_client, retry_api_call, SKIP_DIRS, MODEL_NAME, GENERATABLE_FILES, GENERATABLE_FILENAMES, prime_intellect_client
+from .helpers import retry_api_call, SKIP_DIRS, MODEL_NAME, GENERATABLE_FILES, GENERATABLE_FILENAMES, prime_intellect_client
 
 class TreeNode:
     def __init__(self, value):

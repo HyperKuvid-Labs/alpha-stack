@@ -12,8 +12,8 @@ from ..config import get_api_key, get_api_key_pi
 
 load_dotenv(dotenv_path='.env')
 
-MODEL_NAME = "models/gemini-3-pro-preview"
-MODEL_NAME_FLASH = "models/gemini-3-pro-preview"
+MODEL_NAME = "arcee-ai/trinity-mini"
+MODEL_NAME_FLASH = "arcee-ai/trinity-mini"
 
 SKIP_DIRS = {'__pycache__', '.git', '.vscode', '.idea', 'node_modules', '.pytest_cache'}
 

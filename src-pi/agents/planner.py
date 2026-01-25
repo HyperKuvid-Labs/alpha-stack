@@ -3,7 +3,7 @@ import json
 import re
 from typing import Dict, List, Optional
 from google.genai import types
-from ..utils.helpers import get_client, retry_api_call, build_project_structure_tree, MODEL_NAME, prime_intellect_client
+from ..utils.helpers import retry_api_call, build_project_structure_tree, MODEL_NAME, prime_intellect_client
 from ..utils.tools import get_all_tools, extract_function_args
 
 
@@ -129,7 +129,7 @@ class PlanningAgent:
                 response = retry_api_call(
                     client.chat.completions.create,
                     model=MODEL_NAME,
-                    contents=prompt
+                    messages=messages
                 )
 
                 response_text = response.choices[0].message.content.strip()
