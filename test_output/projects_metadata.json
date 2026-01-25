@@ -1,0 +1,32 @@
+{
+    "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/test_output/number_adder/src/calculator.py": [
+        {
+            "description": "This file provides the core calculation logic for the Number_Adder application. It contains a pure function for summing two numbers, separating the business logic from I/O operations to enhance testability. The primary component is the `add(num1, num2)` function, which accepts two numeric inputs (integer or float) and returns their sum. This module has no internal dependencies on other project files and uses no external third-party libraries, relying solely on built-in Python functionality."
+        }
+    ],
+    "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/test_output/number_adder/src/__init__.py": [
+        {
+            "description": "This file initializes the `src` directory as a Python package. It simplifies the package's public API by importing the `add` function from the `calculator` module, making it directly accessible at the package level.\n\nCore Components:\nExposed Members: `add` (function) - Re-exports the core addition function from the `calculator` module.\n\nInternal Dependencies:\nsrc/calculator.py: Imports the `add` function.\n\nExternal Dependencies:\nNone."
+        }
+    ],
+    "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/test_output/number_adder/src/main.py": [
+        {
+            "description": "This file acts as the main executable entry point for the command-line application. It is responsible for handling user interaction, parsing command-line arguments, validating inputs, and printing the final output to the console.\n\nCore Components:\nmain(): The primary function that controls the application's lifecycle. It reads two numbers from `sys.argv`, validates that exactly two numeric arguments are provided, calls the `add` function to perform the calculation, and prints the result. It also handles error conditions, such as incorrect argument count or non-numeric inputs, by printing messages to standard error and exiting.\n\nInternal Dependencies:\nsrc/calculator.py (imports the `add` function).\n\nExternal Dependencies:\nsys (standard library)"
+        }
+    ],
+    "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/test_output/number_adder/README.md": [
+        {
+            "description": "This markdown file is the primary documentation for the Number_Adder project. It provides a comprehensive overview of the application's purpose, features, and technology stack. The document guides users and developers on how to install, run, and test the command-line tool.\n\nCore Components: The document details project features, the tech stack (Python 3, pytest), and prerequisites. It includes sections on getting started, usage examples with command-line execution, instructions for running tests, and an explanation of the project's file structure.\n\nInternal Dependencies: This file describes the project's architecture and directly references `src/main.py` for usage instructions and `requirements.txt` for dependency installation.\n\nExternal Dependencies: The documentation specifies the use of Python 3 and the pytest framework for testing."
+        }
+    ],
+    "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/test_output/number_adder/requirements.txt": [
+        {
+            "description": "This file specifies the project's external Python package dependencies. It is used by package managers like `pip` to install the third-party libraries required for development and testing. This ensures a consistent and reproducible environment for the project.\n\nThis file does not contain executable components; its content is a list of package specifiers.\n\nNone. The project's testing and setup processes rely on this file.\n\npytest"
+        }
+    ],
+    "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/test_output/number_adder/.gitignore": [
+        {
+            "description": "This .gitignore file instructs the version control system (Git) on which files and directories to intentionally ignore. Its purpose is to keep the repository clean by excluding generated artifacts, local configurations, and sensitive data from being committed. It is configured for a standard Python project, covering bytecode, virtual environments, packaging directories, and test caches.\nThe file defines ignore patterns grouped by category: Python-specific artifacts (__pycache__/, *.pyc), virtual environments (.venv/, venv/), packaging output (build/, dist/), testing caches and reports (.pytest_cache/, .coverage), environment variable files (.env), and common IDE (.idea/, .vscode/) and OS-specific (.DS_Store) files.\nNone. This file operates at the repository level and does not import or depend on any other project files.\nNone. This is a configuration file for Git and does not use any third-party libraries."
+        }
+    ]
+}

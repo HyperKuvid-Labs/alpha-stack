@@ -40,9 +40,7 @@ GENERATABLE_FILENAMES = {
     'Info.plist', 'Podfile', 'Podfile.lock', 'Cartfile', 'Cartfile.resolved',
     'build.gradle.kts', 'settings.gradle.kts', 'AndroidManifest.xml',
     'truffle-config.js', 'hardhat.config.js', 'foundry.toml', 'Anchor.toml',
-    '.gitignore', '.gitattributes', '.env', '.env.example', '.editorconfig', '.prettierrc', '.prettierrc.js', '.prettierrc.json', '.eslintrc', '.eslintrc.js', '.eslintrc.json', '.eslintignore', '.stylelintrc', '.stylelintrc.json', '.lintstagedrc', '.huskyrc', '.flake8', '.pylintrc', '.pydocstyle', '.mypy.ini', '.github', '.github/workflows', '.gitlab-ci.yml', '.circleci/config.yml', 'Jenkinsfile', 'azure-pipelines.yml', '.travis.yml', '.appveyor.yml', 'netlify.toml', 'vercel.json',
-    'README.md', 'README.rst', 'LICENSE', 'CONTRIBUTING.md', 'CHANGELOG.md', 'CODEOWNERS', 'SECURITY.md',
-    'Procfile', 'Procfile.dev', 'Procfile.prod', 'now.json', 'firebase.json', 'manifest.json', 'robots.txt', 'sitemap.xml', 'favicon.ico', 'index.html', 'index.js', 'index.ts', 'index.jsx', 'index.tsx'
+    '.gitignore', '.gitattributes', '.env', '.env.example', '.editorconfig', '.prettierrc', '.prettierrc.js', '.prettierrc.json', '.eslintrc', '.eslintrc.js', '.eslintrc.json', '.eslintignore', '.stylelintrc', '.stylelintrc.json', '.lintstagedrc', '.huskyrc', '.flake8', '.pylintrc', '.pydocstyle', '.mypy.ini', '.github', '.github/workflows', '.gitlab-ci.yml', '.circleci/config.yml', 'Jenkinsfile', 'azure-pipelines.yml', '.travis.yml', '.appveyor.yml', 'netlify.toml', 'vercel.json','Procfile', 'Procfile.dev', 'Procfile.prod', 'now.json', 'firebase.json', 'manifest.json', 'robots.txt', 'sitemap.xml', 'index.html', 'index.js', 'index.ts', 'index.jsx', 'index.tsx'
 }
 
 GENERATABLE_FILES = {
@@ -223,13 +221,17 @@ def clean_agent_output(content: str) -> str:
     return content
 
 
-def retry_api_call(func, *args, **kwargs):
+def retry_api_call(func, *args, max_retries: int = 10, **kwargs):
+    """Retry API call with exponential backoff"""
     attempt = 1
-    while True:
+    while attempt <= max_retries:
         try:
             return func(*args, **kwargs)
-        except Exception:
-            time.sleep(0.5)
+        except Exception as e:
+            if attempt == max_retries:
+                raise  # Re-raise on final attempt
+            wait_time = min(0.5 * (2 ** (attempt - 1)), 10)  # Exponential backoff, max 10s
+            time.sleep(wait_time)
             attempt += 1
 
 def extract_code_from_response(content: str, language: str = "python") -> str:

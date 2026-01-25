@@ -1,12 +1,9 @@
-#!/usr/bin/env python3
-"""
-AlphaStack Test Runner - Run the generator step-by-step and see outputs from each phase.
-"""
-
 import os
 import sys
 import json
 import time
+import argparse
+import argparse
 
 # Add the project to path
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -15,7 +12,7 @@ sys.path.insert(0, os.path.join(project_root, "src"))
 
 # Import from src modules (since source code is in src/)
 from src.utils.prompt_manager import PromptManager
-from src.utils.helpers import get_client
+from src.utils.inference import InferenceManager
 from src.config import get_api_key, set_api_key
 
 # ============================================================================
@@ -28,8 +25,11 @@ TEST_PROMPT = """ADD TWO NUMBERS"""
 # Output directory for generated projec"
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_output")
 
-# Set your API key here (or use environment variable GOOGLE_API_KEY)
+# Set your API key here (or use environment variable)
 API_KEY = None  # Set to your key like "your-api-key-here" or leave None to use env/config
+
+# Set provider: "google" or "openrouter" (defaults to providers.json default if None)
+PROVIDER_NAME = None  # Set to "google" or "openrouter", or None to use default from providers.json
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -73,21 +73,30 @@ def status_handler(event_type, message, **kwargs):
 # MAIN TEST RUNNER
 # ============================================================================
 
-def run_test():
+def run_test(provider_name_arg=None):
     print_header("ALPHASTACK TEST RUNNER")
     
-    # Step 0: Check/Set API Key
-    print_header("PHASE 0: API KEY CHECK")
+    # Step 0: Check/Set API Key and Provider
+    print_header("PHASE 0: CONFIGURATION CHECK")
+    
+    # Get provider (priority: command-line arg > PROVIDER_NAME > default from config)
+    provider_name = provider_name_arg or PROVIDER_NAME or InferenceManager.get_default_provider()
+    print(f" Provider: {provider_name}")
+    
+    # Get model from provider config
+    provider_config = InferenceManager.get_provider_config(provider_name)
+    model_name = provider_config.get("model", "unknown")
+    print(f" Model: {model_name}")
     
     if API_KEY:
-        os.environ["GOOGLE_API_KEY"] = API_KEY
-        print(" Using API key from script configuration")
-    elif get_api_key():
-        print(" API key found in config/environment")
+        env_key = f"{provider_name.upper()}_API_KEY"
+        os.environ[env_key] = API_KEY
+        print(f" Using API key from script configuration ({env_key})")
+    elif get_api_key() or os.getenv(f"{provider_name.upper()}_API_KEY"):
+        print(f" API key found in config/environment")
     else:
-        print(" No API key found!")
-        print("   Set API_KEY in this script, or run: alphastack setup")
-        print("   Or set environment variable: export GOOGLE_API_KEY='your-key'")
+        print(f" No API key found for {provider_name}!")
+        print(f"   Set API_KEY in this script, or set environment variable: export {provider_name.upper()}_API_KEY='your-key'")
         return
     
     print(f"\n Test Prompt: {TEST_PROMPT}")
@@ -107,7 +116,7 @@ def run_test():
     from src.generator import initial_software_blueprint
     
     phase1_start = time.time()
-    software_blueprint = initial_software_blueprint(TEST_PROMPT, pm)
+    software_blueprint = initial_software_blueprint(TEST_PROMPT, pm, provider_name)
     phase1_time = time.time() - phase1_start
     
     print_json(software_blueprint, "Software Blueprint Output")
@@ -126,7 +135,7 @@ def run_test():
     from src.generator import folder_structure
     
     phase2_start = time.time()
-    folder_struc = folder_structure(software_blueprint, pm)
+    folder_struc = folder_structure(software_blueprint, pm, provider_name)
     phase2_time = time.time() - phase2_start
     
     print_subheader("Folder Structure Output")
@@ -142,7 +151,7 @@ def run_test():
     from src.generator import files_format
     
     phase3_start = time.time()
-    file_format = files_format(software_blueprint, folder_struc, pm)
+    file_format = files_format(software_blueprint, folder_struc, pm, provider_name)
     phase3_time = time.time() - phase3_start
     
     print_subheader("File Format Output")
@@ -180,7 +189,8 @@ def run_test():
         file_output_format=file_format,
         output_base_dir=OUTPUT_DIR,
         pm=pm,
-        on_status=status_handler
+        on_status=status_handler,
+        provider_name=provider_name
     )
     
     project_root_path = os.path.join(OUTPUT_DIR, folder_tree.value)
@@ -431,8 +441,29 @@ def run_test():
 # ============================================================================
 
 if __name__ == "__main__":
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(
+        description="AlphaStack Test Runner - Run the generator step-by-step",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python test_runner.py              # Uses default from providers.json
+  python test_runner.py google       # Uses Google provider
+  python test_runner.py openrouter  # Uses OpenRouter provider
+        """
+    )
+    parser.add_argument(
+        "provider",
+        nargs="?",
+        default=None,
+        choices=["google", "openrouter"],
+        help="Provider name: 'google' or 'openrouter' (defaults to providers.json default if not specified)"
+    )
+    
+    args = parser.parse_args()
+    
     try:
-        run_test()
+        run_test(provider_name_arg=args.provider)
     except KeyboardInterrupt:
         print("\n\n Test interrupted by user")
     except Exception as e:

@@ -1,18 +1,17 @@
 import os
-from typing import Dict
-from google.genai import types
+from typing import Dict, Optional
 from ..utils.helpers import (
-    get_client, retry_api_call, build_project_structure_tree,
-    get_language_from_extension, extract_code_from_response, is_valid_code,
-    MODEL_NAME
+    build_project_structure_tree,
+    get_language_from_extension, extract_code_from_response
 )
-from ..utils.tools import get_all_tools, extract_function_args
+from ..utils.inference import InferenceManager
+from ..utils.tools import extract_function_args
 
 
 class CorrectionAgent:
     def __init__(self, project_root: str, software_blueprint: Dict,
                  folder_structure: str, file_output_format: Dict,
-                 pm, error_tracker, tool_handler):
+                 pm, error_tracker, tool_handler, provider_name: Optional[str] = None):
         self.project_root = project_root
         self.software_blueprint = software_blueprint
         self.folder_structure = folder_structure
@@ -21,6 +20,11 @@ class CorrectionAgent:
         self.error_tracker = error_tracker
         self.tool_handler = tool_handler
         self._cached_project_structure_tree = None
+        # Initialize provider
+        self.provider_name = provider_name or InferenceManager.get_default_provider()
+        self.provider = InferenceManager.create_provider(self.provider_name)
+        self.tool_definitions = InferenceManager.get_tool_definitions()
+        self.tools = self.provider.format_tools(self.tool_definitions)
     
     def _get_project_structure_tree(self) -> str:
         if self._cached_project_structure_tree is None:
@@ -69,26 +73,19 @@ class CorrectionAgent:
                 change_log=change_log
             )
             
-            client = get_client()
-            tools = get_all_tools()
+            messages = [{"role": "user", "content": prompt}]
             
             try:
-                response = retry_api_call(
-                    client.models.generate_content,
-                    model=MODEL_NAME,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        tools=[tools],
-                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
-                    )
-                )
+                response = self.provider.call_model(messages, tools=self.tools)
                 
-                if hasattr(response, 'function_calls') and response.function_calls:
-                    function_response_parts = []
+                function_calls = self.provider.extract_function_calls(response)
+                
+                if function_calls:
+                    function_responses = []
                     
-                    for function_call in response.function_calls:
-                        func_name = function_call.name
-                        func_args = extract_function_args(function_call)
+                    for fc in function_calls:
+                        func_name = fc["name"]
+                        func_args = fc.get("args", {})
                         
                         result = self.tool_handler.handle_function_call(func_name, func_args)
                         
@@ -111,33 +108,32 @@ class CorrectionAgent:
                             self.invalidate_cache()
                             return True
                         
-                        function_response_part = types.Part.from_function_response(
-                            name=func_name,
-                            response=result
+                        func_response = self.provider.create_function_response(
+                            func_name, result, fc.get("id")
                         )
-                        function_response_parts.append(function_response_part)
+                        function_responses.append(func_response)
                     
-                    update_file_called = any(fc.name == "update_file_code" for fc in response.function_calls)
-                    if function_response_parts and not update_file_called:
-                        function_response_content = types.Content(
-                            role='tool',
-                            parts=function_response_parts
-                        )
-                        final_response = retry_api_call(
-                            client.models.generate_content,
-                            model=MODEL_NAME,
-                            contents=[
+                    update_file_called = any(fc["name"] == "update_file_code" for fc in function_calls)
+                    if function_responses and not update_file_called:
+                        # Send function responses back to model
+                        if self.provider_name == "google":
+                            from google.genai import types
+                            tool_content = types.Content(role='tool', parts=function_responses)
+                            final_messages = [
                                 types.Content(role='user', parts=[types.Part.from_text(text=prompt)]),
-                                function_response_content
+                                tool_content
                             ]
-                        )
+                        else:  # openrouter
+                            final_messages = messages + function_responses
                         
-                        if hasattr(final_response, 'text') and final_response.text:
-                            response = final_response
+                        final_response = self.provider.call_model(final_messages, tools=self.tools)
+                        response = final_response
                 
-                if hasattr(response, 'text') and response.text:
+                response_text = self.provider.extract_text(response)
+                
+                if response_text:
                     language = get_language_from_extension(file_path)
-                    extracted_code = extract_code_from_response(response.text, language)
+                    extracted_code = extract_code_from_response(response_text, language)
                     
                     if extracted_code:
                         result = self.tool_handler.handle_function_call(
