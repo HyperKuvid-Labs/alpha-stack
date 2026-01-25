@@ -1,0 +1,28 @@
+Create a schema validation library with type inference from schema definitions.
+API:
+
+typescript
+const userSchema = z.object({
+  name: z.string(),
+  age: z.number().min(0).max(120),
+  email: z.string().email(),
+});
+
+type User = z.infer<typeof userSchema>; // { name: string; age: number; email: string }
+const result = userSchema.parse(data); // Result<User, ValidationError[]>
+Requirements:
+
+Chainable validators: .string(), .number(), .object(), .array().
+
+Refinements: .min(), .max(), .email(), .optional().
+
+Type inference using infer keyword and conditional types.
+
+Return { success: true, data: T } | { success: false, errors: string[] }.
+Tests:
+
+Nested object validation.
+
+Array of objects.
+
+Type inference correctness (use type assertions).

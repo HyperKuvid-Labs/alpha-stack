@@ -1,0 +1,19 @@
+Build a simple single-threaded reference-counted smart pointer MyRc<T> mimicking std::rc::Rc.
+
+Features:
+
+Store T and a reference count on the heap using Box.
+
+Implement Clone (increments count) and Drop (decrements; deallocates when zero).
+
+Provide strong_count() method.
+
+Implement Deref trait for ergonomic access.
+Constraints:
+
+Use Cell<usize> for interior mutability of the count.
+
+Add unit tests demonstrating multiple owners and proper cleanup.
+
+Show why this isn't Send or Sync (document with comments).
+

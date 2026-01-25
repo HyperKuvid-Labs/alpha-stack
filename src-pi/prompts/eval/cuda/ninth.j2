@@ -1,0 +1,1 @@
+Create a 2D particle system with 1000 particles interacting via short-range forces. Divide space into a 32×32 uniform grid. Implement three kernels: (1) assign particles to grid cells, (2) compute forces using spatial hashing to check only neighboring cells, (3) update positions. Use shared memory for neighbor queries. Demonstrate 100× speedup over naive all-pairs interaction.

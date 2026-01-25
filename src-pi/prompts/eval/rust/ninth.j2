@@ -1,0 +1,26 @@
+Build a simple JSON serializer supporting basic types.
+
+Traits:
+
+Serialize trait with serialize(&self, serializer: &mut Serializer).
+
+Implement for primitives, String, Vec<T>, Option<T>, and structs (via derive macro or manual impl).
+Output format:
+
+JSON (objects, arrays, strings, numbers, null).
+Features:
+
+Support generics: Vec<T: Serialize>.
+
+Handle recursive structures (nested objects).
+Optional:
+
+Write a simple derive macro #[derive(Serialize)] for structs.
+Tests:
+
+Serialize primitive types.
+
+Nested structures.
+
+Round-trip with a JSON parser (use serde_json for validation only).
+

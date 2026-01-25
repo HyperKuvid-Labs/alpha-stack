@@ -1,0 +1,2 @@
+Write a CUDA kernel for transposing a square matrix (4096×4096 floats) with two implementations: naive global memory access and optimized shared memory tiling. The shared memory version should use 32×32 tiles to minimize bank conflicts and improve coalescing. Compare bandwidth utilization between both approaches using NVIDIA profiling tools. Your code should handle non-square matrices and include boundary checking for edge tiles.
+

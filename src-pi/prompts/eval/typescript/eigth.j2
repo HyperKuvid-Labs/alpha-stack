@@ -1,0 +1,33 @@
+Build a DI container where services and their dependencies are type-checked.
+API:
+
+typescript
+const container = createContainer()
+  .register('config', { apiUrl: 'https://api.example.com' })
+  .register('logger', (deps) => new Logger(deps.config))
+  .register('api', (deps) => new API(deps.config, deps.logger));
+
+const api = container.resolve('api'); // Type inferred as API
+Requirements:
+
+.register(name, factory) where factory receives typed dependencies.
+
+.resolve(name) returns correctly typed service.
+
+Detect circular dependencies at type level (bonus: runtime check).
+
+Use recursive conditional types to build dependency graph.
+Implementation:
+
+Track registered services in type-level map.
+
+Factory functions typed as (deps: PickDeps<T>) => Service.
+
+Use infer to extract dependency names from factory parameters.
+Tests:
+
+Resolving services with dependencies.
+
+Type errors for missing dependencies.
+
+Singleton vs transient lifetime (optional).

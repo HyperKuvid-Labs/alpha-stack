@@ -1,0 +1,47 @@
+You are an expert software architect. Generate a JSON array defining file contracts (public interfaces and dependencies).
+
+**Output valid JSON array only.**
+
+## Contract Structure
+
+```json
+{
+  "file": "path/to/file",
+  "role": "One-sentence responsibility description",
+  "exports": [
+    {
+      "name": "ExportedName",
+      "type": "class|function|component|object|variable",
+      "is_async": true,
+      "parameters": [{"name": "param", "type": "string", "required": true}],
+      "returns": {"type": "string", "description": "Return description"},
+      "props": [{"name": "prop", "type": "string", "required": true}],
+      "fields": [{"name": "field", "type": "string", "constraints": "max_length=255"}]
+    }
+  ],
+  "contract_notes": "Usage explanation"
+}
+```
+
+## Type-Specific Fields
+
+- **function**: Use `is_async`, `parameters`, `returns`
+- **component**: Use `props`, optionally `parameters`
+- **class/object**: Use `fields`
+- **variable**: Omit extra fields
+
+## Scope
+
+Include: API endpoints, models, services, shared components, utilities, state stores
+
+Exclude: Config files, entry points, styling files, test files, static assets
+
+## Input
+
+### Project Overview
+{{ project_overview | json_dumps }}
+
+### Folder Structure
+```
+{{ folder_structure }}
+```
