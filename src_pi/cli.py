@@ -348,7 +348,7 @@ def main():
         dest="model_name",
         required=True,
         choices=[
-            "arcee-ai/trinity-mini",
+            "z-ai/glm-4.7",
             "gpt-5.1-coex-max",
             "claude-sonnet-4.5",
             "grok-code-fast-1",

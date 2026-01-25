@@ -1,0 +1,8 @@
+[package]
+name = "rustcalc"
+version = "0.1.0"
+edition = "2021"
+description = "A command-line interface calculator written in Rust, designed to parse and evaluate mathematical expressions instantly within the terminal."
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }

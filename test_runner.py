@@ -1,8 +1,3 @@
-#!/usr/bin/env python3
-"""
-AlphaStack Test Runner (Prime Intellect) - Run the generator step-by-step and see outputs from each phase.
-Uses Prime Intellect API with openai/gpt-oss-20 model.
-"""
 
 import os
 import sys
@@ -33,7 +28,7 @@ OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_outp
 API_KEY = None  # Set to your key like "your-api-key-here" or leave None to use env/config
 
 # Model configuration
-MODEL_NAME = "openai/gpt-oss-20"
+MODEL_NAME = "z-ai/glm-4.7"
 
 # ============================================================================
 # HELPER FUNCTIONS

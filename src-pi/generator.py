@@ -83,7 +83,7 @@ def generate_file_content(context, filepath, refined_prompt, tree, json_file_nam
 
 def dfs_tree_and_gen(root, refined_prompt, tree_structure, project_name, current_path="",
                      parent_context="", json_file_name="", metadata_dict=None,
-                     dependency_analyzer=None, file_output_format="", max_workers=2,
+                     dependency_analyzer=None, file_output_format="", max_workers=20,
                      output_base_dir="", pm=None, on_status=None):
     if metadata_dict is None:
         metadata_dict = {}
