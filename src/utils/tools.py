@@ -188,6 +188,7 @@ class ToolHandler:
         self.image_name = image_name
     
     def handle_function_call(self, function_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+        print("function_call")
         if function_name == "get_file_code":
             return self._get_file_code(args["file_path"])
         elif function_name == "update_file_code":
@@ -261,6 +262,7 @@ class ToolHandler:
             return {"error": f"Error reading file: {str(e)}"}
     
     def _log_change(self, file_path: str, change_description: str, error_context: str) -> Dict[str, Any]:
+        print("log_change")
         if self.error_tracker:
             full_path = os.path.join(self.project_root, file_path)
             self.error_tracker.log_change(
@@ -273,6 +275,7 @@ class ToolHandler:
             return {"success": True, "message": "Change logged (no tracker available)"}
 
     def _find_files(self, query: str, include_content: bool = False, max_results: int = 50) -> Dict[str, Any]:
+        print("find_files")
         if not query:
             return {"error": "query is required"}
         matches = []
@@ -301,6 +304,7 @@ class ToolHandler:
             return {"error": f"Error searching files: {str(e)}"}
     
     def _regenerate_file(self, file_path: str, context: str) -> Dict[str, Any]:
+        print("regenerate_file")
         return {
             "success": False,
             "error": "File regeneration requires blueprint context. Use update_file_code with content generated from blueprint.",
@@ -345,6 +349,7 @@ class ToolHandler:
             return {"error": f"Error updating file: {str(e)}"}
     
     def _check_file_exists(self, file_path: str) -> Dict[str, Any]:
+        print("check_file_exists")
         if not file_path:
             return {"error": "file_path is required"}
         
@@ -358,6 +363,7 @@ class ToolHandler:
         }
     
     def _list_directory(self, directory_path: str = "") -> Dict[str, Any]:
+        print("list_directory")
         if directory_path:
             full_path = os.path.join(self.project_root, directory_path)
         else:
@@ -396,6 +402,7 @@ class ToolHandler:
             return {"error": f"Error listing directory: {str(e)}"}
     
     def _create_directory(self, directory_path: str, create_parents: bool = True) -> Dict[str, Any]:
+        print("create_directory")
         if not directory_path:
             return {"error": "directory_path is required"}
         
@@ -428,6 +435,7 @@ class ToolHandler:
             return {"error": f"Error creating directory: {str(e)}"}
     
     def _delete_file(self, file_path: str) -> Dict[str, Any]:
+        print("delete_file")
         if not file_path:
             return {"error": "file_path is required"}
         

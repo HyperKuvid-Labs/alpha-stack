@@ -3,11 +3,12 @@ import re
 import json
 import os
 import time
-from .utils.helpers import get_client, retry_api_call, get_system_info, clean_agent_output, GENERATABLE_FILES, GENERATABLE_FILENAMES, MODEL_NAME_FLASH
+from .utils.helpers import get_client, retry_api_call, get_system_info, clean_agent_output, GENERATABLE_FILES, GENERATABLE_FILENAMES, MODEL_NAME
 from .utils.prompt_manager import PromptManager
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from threading import Lock
 from queue import Queue, Empty
+
 
 
 class TreeNode:
@@ -45,7 +46,7 @@ def generate_file_metadata(context, filepath, refined_prompt, tree, json_file_na
     client = get_client()
     resp = retry_api_call(
         client.models.generate_content,
-        model=MODEL_NAME_FLASH,
+        model=MODEL_NAME,
         contents=prompt
     )
     
@@ -66,7 +67,7 @@ def generate_file_content(context, filepath, refined_prompt, tree, json_file_nam
     client = get_client()
     response = retry_api_call(
         client.models.generate_content,
-        model=MODEL_NAME_FLASH,
+        model=MODEL_NAME,
         contents=prompt
     )
     cleaned_output = clean_agent_output(response.text)
@@ -259,8 +260,8 @@ def initial_software_blueprint(prompt, pm):
         model='models/gemini-2.5-pro',
         config=types.GenerateContentConfig(systemInstruction=system_instruction)
     )
-    
     response = retry_api_call(chat.send_message, prompt)
+    print("hi") 
     match = re.search(r'\{.*\}', response.text, re.DOTALL)
     
     if match:

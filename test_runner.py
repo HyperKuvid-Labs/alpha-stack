@@ -23,10 +23,7 @@ from src.config import get_api_key, set_api_key
 # ============================================================================
 
 # Set your test prompt here
-TEST_PROMPT = """Distributed Actor System with Type-Safe Messaging
-Create an actor framework inspired by Akka with strongly-typed message passing. Implement actor supervision hierarchies, mailbox patterns with backpressure, and distributed actor references. Support actor persistence with event sourcing, cluster sharding for horizontal scaling, and at-least-once delivery guarantees. Use Bun/Node.js worker threads for parallelism.
-
-Key Features: Generic constraints for message protocols, readonly tuples for immutable state, abstract classes for actor lifecycle, decorators for message handlers, async iterators for mailbox, namespace for actor addressing"""
+TEST_PROMPT = """ADD TWO NUMBERS"""
 
 # Output directory for generated projec"
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_output")

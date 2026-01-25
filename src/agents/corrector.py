@@ -4,7 +4,7 @@ from google.genai import types
 from ..utils.helpers import (
     get_client, retry_api_call, build_project_structure_tree,
     get_language_from_extension, extract_code_from_response, is_valid_code,
-    MODEL_NAME_FLASH
+    MODEL_NAME
 )
 from ..utils.tools import get_all_tools, extract_function_args
 
@@ -75,7 +75,7 @@ class CorrectionAgent:
             try:
                 response = retry_api_call(
                     client.models.generate_content,
-                    model=MODEL_NAME_FLASH,
+                    model=MODEL_NAME,
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         tools=[tools],
@@ -125,7 +125,7 @@ class CorrectionAgent:
                         )
                         final_response = retry_api_call(
                             client.models.generate_content,
-                            model=MODEL_NAME_FLASH,
+                            model=MODEL_NAME,
                             contents=[
                                 types.Content(role='user', parts=[types.Part.from_text(text=prompt)]),
                                 function_response_content
@@ -139,7 +139,7 @@ class CorrectionAgent:
                     language = get_language_from_extension(file_path)
                     extracted_code = extract_code_from_response(response.text, language)
                     
-                    if extracted_code and is_valid_code(extracted_code, language):
+                    if extracted_code:
                         result = self.tool_handler.handle_function_call(
                             "update_file_code",
                             {
