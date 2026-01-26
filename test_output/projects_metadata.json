@@ -1,69 +1,37 @@
 {
-<<<<<<< HEAD
-    "/home/pradheep/alpha-stack/test_output/RustCalc/.gitignore": [
+    "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/test_output/number_adder_cli/src/number_adder_cli/core.py": [
         {
-            "description": "Summary: This file instructs Git to exclude specific files and directories from version control, preventing build artifacts, editor backups, and operating system metadata from being committed. It ensures a clean repository state by ignoring Rust-specific compilation outputs and temporary files.\n\nCore Components: The target/ rule ignores the standard Rust directory for build artifacts and dependencies. The **/*.rs.bk pattern excludes Rust source file backups. The file also includes .DS_Store to ignore macOS folder settings and Thumbs.db to ignore Windows thumbnail caches.\n\nInternal Dependencies: None\n\nExternal Dependencies: None"
-        }
-    ],
-    "/home/pradheep/alpha-stack/test_output/RustCalc/Cargo.toml": [
-        {
-            "description": "Summary: The Cargo.toml file acts as the package manifest for the RustCalc project, defining essential metadata such as the project name, version, and Rust edition. It manages the build configuration and specifies the external dependencies required for the application to compile and run.\n\nCore Components: The [package] section establishes the project identity as rustcalc version 0.1.0 using the 2021 Rust edition and includes a project description. The [dependencies] section declares the clap library version 4.5 with the derive feature enabled to handle command-line argument parsing.\n\nInternal Dependencies: This file serves as the configuration root for the Rust project and implicitly links the binary crate structure including src/main.rs, src/cli.rs, and src/parser.rs.\n\nExternal Dependencies: clap 4.5"
-        }
-    ],
-    "/home/pradheep/alpha-stack/test_output/RustCalc/src/main.rs": [
-        {
-            "description": "Summary: The main.rs file serves as the application entry point for RustCalc, orchestrating the initialization and execution flow. It handles command-line argument parsing, invokes the core logic, and manages error reporting and process termination.\n\nCore Components: main function: This function parses command-line arguments using the Args struct, executes the application logic via the run function, and handles potential errors by printing to standard error and exiting with a non-zero status code.\n\nInternal Dependencies: cli: Imports the Args struct for parsing configuration and the run function to drive the application logic. parser: Declared as a module to support the underlying mathematical parsing functionality.\n\nExternal Dependencies: std::process: Provides the process::exit function used to terminate the application with a specific exit code upon failure."
-        }
-    ],
-    "/home/pradheep/alpha-stack/test_output/RustCalc/README.md": [
-        {
-            "description": "The README.md acts as the primary documentation hub for the RustCalc command-line calculator, outlining its capabilities and technical specifications. Core components include a project overview describing arithmetic and parsing features, detailed installation instructions for source builds and Docker environments, and usage guides for both single-line execution and interactive REPL modes. It also contains a structured JSON section defining the software contracts for the CLI controller and the parser evaluation logic. The file references internal project structure elements including src/main.rs, src/cli.rs, src/parser.rs, and Cargo.toml. External dependencies referenced are the Rust toolchain, Clap for argument parsing, and Docker for containerization."
-        }
-    ],
-    "/home/pradheep/alpha-stack/test_output/RustCalc/src/cli.rs": [
-        {
-            "description": "This file acts as the controller layer for RustCalc, managing command-line argument parsing via Clap and directing the execution flow. It handles both direct evaluation of mathematical expressions passed as arguments and an interactive Read-Eval-Print Loop (REPL) mode for multi-step calculations.\n\nKey components include the `Args` struct which utilizes Clap attributes to define configuration options such as an optional expression string and an interactive mode flag. The `run` function serves as the primary orchestrator, evaluating single expressions or managing the interactive loop which reads user input from standard input until a quit command is received.\n\nThe file depends internally on the `parser` module, specifically the `evaluate` function to compute results and the `ParseError` struct to handle and report calculation failures. Externally, it utilizes the `clap` crate's `Parser` trait for efficient argument parsing and the standard library's `std::io` module for handling standard input and output operations during the interactive session."
-        }
-    ],
-    "/home/pradheep/alpha-stack/test_output/RustCalc/src/parser.rs": [
-        {
-            "description": "Summary: This file implements the core mathematical parsing and evaluation logic for the RustCalc project using a recursive descent parser strategy. It handles tokenization of strings, operator precedence, and parentheses, exposing a public evaluate function to compute results or return specific syntax errors.\n\nCore Components: Backend/logic files include the evaluate function which accepts a string expression and returns a Result containing the f64 calculation or a ParseError. The ParseError struct provides detailed error information including kind and message. Internal components include the Token enum for lexical units and the Parser struct with methods parse_expression, parse_term, and parse_factor to manage operator precedence and parenthesis grouping.\n\nInternal Dependencies: Standard library modules std::iter::Peekable and std::str::Chars.\n\nExternal Dependencies: None."
-    "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/test_output/cli_number_adder/src/calculator.py": [
-=======
-    "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/test_output/number_adder_cli/src/number_adder_cli/calculator.py": [
->>>>>>> 966c54a (new planner executer architecture with new tools)
-        {
-            "description": "This file provides the core business logic for the Number_Adder_CLI application. It contains the fundamental arithmetic function responsible for calculating the sum of two numbers. The module is designed as a pure utility, decoupled from the command-line interface logic.\nCore Components: add(num1: float, num2: float) -> float: A pure function that takes two numbers as input and returns their sum.\nInternal Dependencies: None. This module is a self-contained utility with no dependencies on other project files.\nExternal Dependencies: None. This file uses only standard Python 3 built-in types and operators."
+            "description": "This file provides the core business logic for the Number Adder CLI application. It contains a pure function responsible for the arithmetic calculation, separating the core logic from the command-line interface layer. This modular design makes the addition functionality reusable and easy to test in isolation.\nadd_numbers(num1: float, num2: float): A function that accepts two floating-point numbers and returns their sum.\nNone.\nNone."
         }
     ],
     "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/test_output/number_adder_cli/src/number_adder_cli/__init__.py": [
         {
-            "description": "This file serves as the package initializer for the `number_adder_cli` module. It defines the package's version number and exposes key functions from its submodules to create a simplified, public-facing API. By doing so, it allows users to directly import core functionalities like `add` and `main` from the top-level package.\n\nCore Components: Defines the package `__version__`. Re-exports the `add` function from the `calculator` module and the `main` function from the `main` module via the `__all__` list.\n\nInternal Dependencies: src/number_adder_cli/calculator.py, src/number_adder_cli/main.py.\n\nExternal Dependencies: None."
-        }
-    ],
-    "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/test_output/number_adder_cli/src/number_adder_cli/main.py": [
-        {
-            "description": "This file serves as the primary command-line entry point for the Number Adder CLI application. It is responsible for parsing two numerical arguments from the user, orchestrating the calculation by calling the core logic, and printing the final sum to the standard output. The core component is the `main()` function, which initializes an `ArgumentParser` to define and read two required float arguments (`num1`, `num2`) from the command line. It imports the `add` function from the local `calculator.py` module to perform the summation. The script utilizes the `argparse` standard library for command-line argument parsing."
-        }
-    ],
-    "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/test_output/number_adder_cli/README.md": [
-        {
-            "description": "This file is the primary documentation for the Number_Adder_CLI project, acting as an entry point for users and developers. It outlines the tool's purpose, installation process, and provides clear usage examples with expected output. The README serves as a comprehensive guide to understanding, setting up, and running the command-line tool.\n\nCore Components:\nProject Overview: A description of the tool's function to add two numbers.\nFeatures: Lists capabilities including sum calculation, argument parsing, and standard output.\nInstallation: Provides step-by-step instructions for cloning the repository, creating a virtual environment, and installing dependencies.\nUsage: Details the command-line syntax with a practical example and its expected output.\nProject Structure: Explains the file layout and the purpose of key source files.\n\nInternal Dependencies:\nsrc/number_adder_cli/main.py: Described as the script for the command-line entry point.\nsrc/number_adder_cli/calculator.py: Described as the module containing the core addition logic.\nrequirements.txt: Referenced as the file for managing project dependencies.\n\nExternal Dependencies:\nPython 3: Listed as a core requirement for the project.\nshields.io: Used to display the Python version badge in the document."
+            "description": "This file initializes the `number_adder_cli` Python package, making it a regular package that can be imported. It defines the package version and exposes the `add_numbers` function from the `core` module, making it part of the package's public API. This simplifies access for consumers of the package.\nCore Components: The file exports the `__version__` string for package versioning and re-exports the `add_numbers` function. The `__all__` variable is set to control wildcard imports, explicitly exposing `add_numbers`.\nInternal Dependencies: `src/number_adder_cli/core.py`.\nExternal Dependencies: None."
         }
     ],
     "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/test_output/number_adder_cli/.gitignore": [
         {
-            "description": "This file specifies intentionally untracked files and directories for Git to ignore, preventing temporary files, build artifacts, and local configurations from being committed to version control. Key ignored patterns include Python cache directories (`__pycache__`), packaging outputs (`build/`, `dist/`), virtual environments (`.venv`), OS-specific metadata (`.DS_Store`), and IDE settings (`.vscode/`). The file has no internal dependencies on other project files. It does not use any external libraries, as it is a standard configuration file for the Git version control system."
+            "description": "This file is a standard Git configuration that specifies intentionally untracked files to be ignored by the version control system. It prevents build artifacts, Python cache, virtual environments, secrets, and editor-specific settings from being committed to the repository. This keeps the project history clean, portable, and secure.\n\nThe core components are the ignore patterns defined for various file types, including Python bytecode (`__pycache__/`, `*.pyc`), virtual environments (`venv/`, `.venv/`), distribution artifacts (`build/`, `dist/`), test caches (`.pytest_cache/`), IDE configurations (`.idea/`, `.vscode/`), and sensitive files (`.env`).\n\nThis file has no internal dependencies on other project files.\n\nThe file's functionality is dependent on the Git version control system."
         }
     ],
-    "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/test_output/number_adder_cli/tests/test_calculator.py": [
+    "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/test_output/number_adder_cli/README.md": [
         {
-            "description": "Unit tests for the core addition logic in calculator.py. It will test adding positive numbers, negative numbers, zero, and floating-point numbers."
+            "description": "This file serves as the main documentation for the Number_Adder_CLI project. It provides a comprehensive guide for developers and users, explaining the project's purpose, features, and how to install, use, and test the application. Its primary role is to ensure the project is understandable and accessible.\nThe document details the project's overview, features like sum calculation, and prerequisites such as Python 3.8+. It contains step-by-step installation and usage instructions, including command-line examples for running the tool and the pytest test suite. A project structure diagram is included to explain the layout of the source code.\nThe README describes the roles and interactions of key project files, including the entry point `src/number_adder_cli/__main__.py`, the core logic module `src/number_adder_cli/core.py`, and the dependency file `requirements.txt`.\nThe documentation specifies the need for Python, pip, and git for setup and execution. It explicitly mentions pytest as the testing framework required to run the project's tests."
+        }
+    ],
+    "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/test_output/number_adder_cli/src/number_adder_cli/__main__.py": [
+        {
+            "description": "This file serves as the main executable entry point for the Number Adder CLI application. It is responsible for parsing command-line arguments, coordinating with the core logic to perform the calculation, and printing the final result to the user. Its primary role is to manage the user interface and application flow.\n\nThe core component is the `main` function, which initializes an `ArgumentParser` to accept two floating-point numbers (`num1`, `num2`) as required command-line arguments. It then calls the `add_numbers` function to perform the calculation and prints the result to standard output.\n\nInternal Dependencies: `src/number_adder_cli/core.py` (imports the `add_numbers` function).\n\nExternal Dependencies: `argparse` (for command-line argument parsing)."
+        }
+    ],
+    "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/test_output/number_adder_cli/tests/test_core.py": [
+        {
+            "description": "Unit tests for the `add_numbers` function in `core.py`. These tests will cover various scenarios, including positive and negative numbers, zero, and floating-point values to ensure the calculation logic is correct."
         }
     ],
     "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/test_output/number_adder_cli/tests/test_main.py": [
         {
-            "description": "Tests for the command-line interface in main.py. It will test argument parsing, successful execution with valid inputs, and error handling for invalid or missing arguments."
+            "description": "Functional tests for the command-line interface in `__main__.py`. These tests will simulate command-line argument passing and capture standard output to verify that the application correctly parses inputs and prints the expected sum."
         }
     ]
 }

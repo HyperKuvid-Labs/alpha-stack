@@ -1,68 +1,91 @@
-# Number Adder CLI
+# Number_Adder_CLI
 
-![Python 3](https://img.shields.io/badge/python-3-blue.svg)
+![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)
 
 A command-line tool that accepts two numbers as input and outputs their sum.
 
+## Overview
+
+This is a simple yet robust command-line interface (CLI) application built with Python. It takes two numerical arguments from the user, calculates their sum, and prints the result to the standard output. The project is structured to separate core logic from the command-line interface, making it clean, testable, and maintainable.
+
 ## Features
 
--   **Sum Calculation**: The user provides two numbers as command-line arguments.
--   **Argument Parsing**: The tool parses the arguments and calculates the sum.
--   **Standard Output**: The result is printed to the standard output.
+-   **Sum Calculation**: Accepts two numbers (integers or decimals) as command-line arguments.
+-   **Core Logic**: Performs the addition.
+-   **Standard Output**: Prints the calculated sum directly to the console.
 
-## Requirements
+## Prerequisites
 
--   Python 3
+-   Python 3.8 or newer
+-   pip (Python package installer)
 
 ## Installation
 
 1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/your-username/Number_Adder_CLI.git
-    cd Number_Adder_CLI
+    ```sh
+    git clone <repository_url>
+    cd number_adder_cli
     ```
 
-2.  **(Recommended) Create and activate a virtual environment:**
-    ```bash
+2.  **Create and activate a virtual environment (recommended):**
+    ```sh
     python3 -m venv venv
     source venv/bin/activate
-    # On Windows, use `venv\Scripts\activate`
+    # On Windows, use: venv\Scripts\activate
     ```
 
 3.  **Install dependencies:**
     The project currently has no external dependencies, but if it did, you would install them using:
-    ```bash
+    ```sh
     pip install -r requirements.txt
     ```
 
 ## Usage
 
-Run the main script from the project's root directory, providing two numbers as arguments.
+Run the application from the root directory of the project using the `python -m` command, which executes the package as a script. Provide two numbers as arguments.
 
-### Syntax
-```bash
-python -m src.number_adder_cli.main <number1> <number2>
+**Syntax:**
+```sh
+python -m number_adder_cli <number1> <number2>
 ```
 
-### Example
-```bash
-python -m src.number_adder_cli.main 15 30.5
+**Example:**
+```sh
+python -m number_adder_cli 10 25.5
 ```
 
-### Expected Output
+**Expected Output:**
 ```
-The sum of 15.0 and 30.5 is: 45.5
+The sum of 10.0 and 25.5 is: 35.5
+```
+
+## Running Tests
+
+This project uses `pytest` for testing. To run the test suite, ensure you have `pytest` installed (`pip install pytest`) and then execute the following command from the project's root directory:
+
+```sh
+pytest
 ```
 
 ## Project Structure
 
+The project follows a standard Python application structure:
+
 ```
 number_adder_cli/
-├── .gitignore
-├── README.md
-├── requirements.txt
+├── .gitignore          # Git ignore file
+├── README.md           # Project documentation
+├── requirements.txt    # Project dependencies
 └── src/
     └── number_adder_cli/
-        ├── __init__.py       # Initializes the Python package
-        ├── calculator.py     # Contains the core addition logic
-        └── main.py           # Entry point for the CLI
+        ├── __init__.py     # Makes the directory a Python package
+        ├── __main__.py     # CLI entry point for `python -m`
+        └── core.py         # Core business logic for calculations
+```
+
+-   `src/number_adder_cli/core.py`: Contains pure functions for calculations, free of side effects. This is where the `add_numbers` function resides.
+-   `src/number_adder_cli/__main__.py`: Serves as the command-line entry point. It handles argument parsing, calls the core logic, and prints the output.
+
+## License
+
+This project is licensed under the MIT License.

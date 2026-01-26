@@ -1,6 +1,5 @@
 __version__ = "0.1.0"
 
-from .calculator import add
-from .main import main
+from .core import add_numbers
 
-__all__ = ["add", "main"]
+__all__ = ["add_numbers"]
