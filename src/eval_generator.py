@@ -23,11 +23,28 @@ class TreeNode:
         self.children.append(child_node)
 
 
+# Dependency files that should be skipped during initial generation
+DEPENDENCY_FILES_TO_SKIP = {
+    'requirements.txt', 'requirements-dev.txt', 'requirements-test.txt',
+    'Pipfile', 'Pipfile.lock', 'pyproject.toml', 'poetry.lock', 'setup.py', 'setup.cfg',
+    'package.json', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lockb',
+    'go.mod', 'go.sum',
+    'Cargo.toml', 'Cargo.lock',
+    'pom.xml', 'build.gradle', 'build.gradle.kts', 'settings.gradle', 'gradle.properties',
+    'composer.json', 'composer.lock',
+    'Gemfile', 'Gemfile.lock',
+    'mix.exs', 'mix.lock',
+    'pubspec.yaml', 'pubspec.lock',
+    'CMakeLists.txt', 'conanfile.txt', 'vcpkg.json',
+    'rebar.config', 'rebar.lock',
+}
+
 def should_generate_content(filepath):
     ext = os.path.splitext(filepath)[1].lower()
     filename = os.path.basename(filepath)
-    skip_names = {"Dockerfile", "docker-compose.yml", "docker-compose.yaml", "ci.yml", "di.yml","README.md"}
-    if filename in skip_names:
+    skip_names = {"Dockerfile", "docker-compose.yml", "docker-compose.yaml", "ci.yml", "di.yml", "README.md"}
+    # Skip dependency files during initial generation
+    if filename in skip_names or filename in DEPENDENCY_FILES_TO_SKIP:
         return False
     return ext in GENERATABLE_FILES or filename in GENERATABLE_FILENAMES
 
@@ -524,12 +541,6 @@ def eval_generate_project(user_prompt, output_base_dir, model_name, on_status=No
     if not os.path.exists(project_root_path):
         return None
 
-    emit("step", "Starting dependency analysis...")
-    dep_analysis_start = time.time()
-    dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
-    dep_analysis_end = time.time()
-    metrics['dependency_analysis_time'] = dep_analysis_end - dep_analysis_start
-
     with open(json_file_name, 'w') as f:
         json.dump(metadata_dict, f, indent=4)
 
@@ -571,6 +582,49 @@ def eval_generate_project(user_prompt, output_base_dir, model_name, on_status=No
 
     docker_gen_end = time.time()
     metrics['dockerfile_generation_time'] = docker_gen_end - docker_gen_start
+
+    emit("step", "Starting dependency analysis for entire project...")
+    dep_analysis_start = time.time()
+    dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
+    dep_analysis_end = time.time()
+    metrics['dependency_analysis_time'] = dep_analysis_end - dep_analysis_start
+
+    emit("step", "Extracting external dependencies and generating dependency files...")
+    dep_file_gen_start = time.time()
+    try:
+        from utils.dependency_file_generator import (
+            extract_all_external_dependencies,
+            DependencyFileGenerator
+        )
+        
+        # Extract all external dependencies from all files in the project
+        external_dependencies = extract_all_external_dependencies(dependency_analyzer, project_root_path)
+        
+        # Generate dependency files using the coding agent
+        dep_file_gen = DependencyFileGenerator(
+            project_root=project_root_path,
+            software_blueprint=software_blueprint,
+            folder_structure=folder_struc,
+            file_output_format=file_output_format,
+            external_dependencies=external_dependencies,
+            pm=pm,
+            model_name=model_name,
+            on_status=on_status
+        )
+        
+        dep_file_results = dep_file_gen.generate_all()
+        metrics['dependency_file_generation_success'] = True
+        metrics['dependency_files_generated'] = dep_file_results.get('generated_files', [])
+        
+        # Re-analyze project files to include the newly generated dependency files
+        dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
+    except Exception as e:
+        metrics['dependency_file_generation_success'] = False
+        metrics['dependency_file_generation_error'] = str(e)
+        print(f"Error generating dependency files: {e}")
+    
+    dep_file_gen_end = time.time()
+    metrics['dependency_file_generation_time'] = dep_file_gen_end - dep_file_gen_start
 
     emit("step", "Running dependency resolution...")
 

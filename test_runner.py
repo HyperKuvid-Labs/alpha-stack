@@ -214,23 +214,6 @@ def run_test(provider_name_arg=None):
     print(f"\n Phase 4 completed in {phase4_time:.2f}s")
     
     # ========================================================================
-    # PHASE 5: Dependency Analysis
-    # ========================================================================
-    print_header("PHASE 5: DEPENDENCY ANALYSIS")
-    print("Analyzing project dependencies...")
-    
-    phase5_start = time.time()
-    dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
-    phase5_time = time.time() - phase5_start
-    
-    # Save metadata
-    with open(json_file_name, 'w') as f:
-        json.dump(metadata_dict, f, indent=4)
-    
-    print(f" Dependency analysis complete")
-    print(f"\nPhase 5 completed in {phase5_time:.2f}s")
-    
-    # ========================================================================
     # PHASE 6: Docker & Test File Generation
     # ========================================================================
     print_header("PHASE 6: DOCKER & TEST FILE GENERATION")
@@ -269,6 +252,59 @@ def run_test(provider_name_arg=None):
     
     phase6_time = time.time() - phase6_start
     print(f"\n Phase 6 completed in {phase6_time:.2f}s")
+    
+    # ========================================================================
+    # PHASE 5: Dependency Analysis (after test generation)
+    # ========================================================================
+    print_header("PHASE 5: DEPENDENCY ANALYSIS")
+    print("Analyzing project dependencies...")
+    
+    phase5_start = time.time()
+    dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
+    phase5_time = time.time() - phase5_start
+    
+    # Save metadata
+    with open(json_file_name, 'w') as f:
+        json.dump(metadata_dict, f, indent=4)
+    
+    print(" Dependency analysis complete")
+    print(f"\nPhase 5 completed in {phase5_time:.2f}s")
+    
+    # ========================================================================
+    # PHASE 6.5: Dependency File Generation
+    # ========================================================================
+    print_header("PHASE 6.5: DEPENDENCY FILE GENERATION")
+    print("Generating dependency files from external dependencies...")
+    
+    from src.utils.dependency_file_generator import (
+        extract_all_external_dependencies,
+        DependencyFileGenerator
+    )
+    
+    phase65_start = time.time()
+    
+    try:
+        external_dependencies = extract_all_external_dependencies(dependency_analyzer, project_root_path)
+        
+        dep_file_gen = DependencyFileGenerator(
+            project_root=project_root_path,
+            software_blueprint=software_blueprint,
+            folder_structure=folder_struc,
+            file_output_format=file_output_format,
+            external_dependencies=external_dependencies,
+            pm=pm,
+            provider_name=provider_name,
+            on_status=status_handler
+        )
+        
+        dep_file_results = dep_file_gen.generate_all()
+        print_subheader("Dependency File Generation Results")
+        print_json(dep_file_results)
+    except Exception as e:
+        print(f"  Dependency file generation error: {e}")
+    
+    phase65_time = time.time() - phase65_start
+    print(f"\n Phase 6.5 completed in {phase65_time:.2f}s")
     
     # ========================================================================
     # PHASE 7: Dependency Resolution (Feedback Loop)
@@ -355,6 +391,7 @@ def run_test(provider_name_arg=None):
     print(f"   Phase 4 (File Generation):  {phase4_time:.2f}s")
     print(f"   Phase 5 (Dep Analysis):     {phase5_time:.2f}s")
     print(f"   Phase 6 (Docker Gen):       {phase6_time:.2f}s")
+    print(f"   Phase 6.5 (Dep Files):      {phase65_time:.2f}s")
     print(f"   Phase 7 (Dep Resolution):   {phase7_time:.2f}s")
     print(f"   Phase 8 (Docker Testing):   {phase8_time:.2f}s")
     print(f"   ─────────────────────────────────")
