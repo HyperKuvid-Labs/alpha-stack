@@ -1,4 +1,3 @@
-
 import os
 import sys
 import json
@@ -9,12 +8,8 @@ import argparse
 # Add the project to path
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
-sys.path.insert(0, os.path.join(project_root, "src_pi"))
+sys.path.insert(0, os.path.join(project_root, "src"))
 
-# Import from src_pi modules (Prime Intellect version)
-from src_pi.utils.prompt_manager import PromptManager
-from src_pi.utils.helpers import prime_intellect_client
-from src_pi.config import get_api_key_pi, set_api_key_pi
 # Import from src modules (since source code is in src/)
 from src.utils.prompt_manager import PromptManager
 from src.utils.inference import InferenceManager
@@ -25,16 +20,6 @@ from src.config import get_api_key, set_api_key
 # ============================================================================
 
 # Set your test prompt here
-TEST_PROMPT = """rust based cli calculator"""
-
-# Output directory for generated project
-OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_output")
-
-# Set your Prime Intellect API key here (or use environment variable PRIME_API_KEY)
-API_KEY = None  # Set to your key like "your-api-key-here" or leave None to use env/config
-
-# Model configuration
-MODEL_NAME = "z-ai/glm-4.7"
 TEST_PROMPT = """ADD TWO NUMBERS"""
 
 # Output directory for generated projec"
@@ -45,10 +30,6 @@ API_KEY = None  # Set to your key like "your-api-key-here" or leave None to use 
 
 # Set provider: "google" or "openrouter" (defaults to providers.json default if None)
 PROVIDER_NAME = None  # Set to "google" or "openrouter", or None to use default from providers.json
-
-# ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
 
 def print_header(title):
     """Print a nicely formatted header."""
@@ -88,37 +69,21 @@ def status_handler(event_type, message, **kwargs):
 # MAIN TEST RUNNER
 # ============================================================================
 
-def run_test():
-    print_header("ALPHASTACK TEST RUNNER (PRIME INTELLECT)")
-    print(f"Model: {MODEL_NAME}")
-
-    # Step 0: Check/Set API Key
-    print_header("PHASE 0: PRIME INTELLECT API KEY CHECK")
-
-    if API_KEY:
-        os.environ["PRIME_API_KEY"] = API_KEY
-        print(" Using API key from script configuration")
-    elif get_api_key_pi():
-        print(" Prime Intellect API key found in config/environment")
-    else:
-        print(" No Prime Intellect API key found!")
-        print("   Set API_KEY in this script, or run: alphastack setup")
-        print("   Or set environment variable: export PRIME_API_KEY='your-key'")
 def run_test(provider_name_arg=None):
     print_header("ALPHASTACK TEST RUNNER")
-    
+
     # Step 0: Check/Set API Key and Provider
     print_header("PHASE 0: CONFIGURATION CHECK")
-    
+
     # Get provider (priority: command-line arg > PROVIDER_NAME > default from config)
     provider_name = provider_name_arg or PROVIDER_NAME or InferenceManager.get_default_provider()
     print(f" Provider: {provider_name}")
-    
+
     # Get model from provider config
     provider_config = InferenceManager.get_provider_config(provider_name)
     model_name = provider_config.get("model", "unknown")
     print(f" Model: {model_name}")
-    
+
     if API_KEY:
         env_key = f"{provider_name.upper()}_API_KEY"
         os.environ[env_key] = API_KEY
@@ -144,7 +109,7 @@ def run_test(provider_name_arg=None):
     print_header("PHASE 1: SOFTWARE BLUEPRINT")
     print("Creating initial software blueprint from user prompt...")
 
-    from src_pi.generator import initial_software_blueprint
+    from src.generator import initial_software_blueprint
 
     phase1_start = time.time()
     software_blueprint = initial_software_blueprint(TEST_PROMPT, pm, provider_name)
@@ -163,7 +128,7 @@ def run_test(provider_name_arg=None):
     print_header("PHASE 2: FOLDER STRUCTURE")
     print("Generating folder structure from blueprint...")
 
-    from src_pi.generator import folder_structure
+    from src.generator import folder_structure
 
     phase2_start = time.time()
     folder_struc = folder_structure(software_blueprint, pm, provider_name)
@@ -179,7 +144,7 @@ def run_test(provider_name_arg=None):
     print_header("PHASE 3: FILE FORMAT CONTRACTS")
     print("Creating file format contracts...")
 
-    from src_pi.generator import files_format
+    from src.generator import files_format
 
     phase3_start = time.time()
     file_format = files_format(software_blueprint, folder_struc, pm, provider_name)
@@ -195,14 +160,12 @@ def run_test(provider_name_arg=None):
     print_header("PHASE 4: GENERATE PROJECT TREE & FILES")
     print("Building project tree and generating all files...")
 
-    from src_pi.generator import generate_tree, dfs_tree_and_gen
-
-    from src_pi.utils.dependencies import DependencyAnalyzer
+    from src.generator import generate_tree, dfs_tree_and_gen
+    from src.utils.dependencies import DependencyAnalyzer
 
     phase4_start = time.time()
 
     folder_tree = generate_tree(folder_struc, project_name="")
-    print(" Folder tree structure created")
     dependency_analyzer = DependencyAnalyzer()
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -225,7 +188,6 @@ def run_test(provider_name_arg=None):
         on_status=status_handler,
         provider_name=provider_name
     )
-    print(" Project files generated")
 
     project_root_path = os.path.join(OUTPUT_DIR, folder_tree.value)
     phase4_time = time.time() - phase4_start
@@ -248,29 +210,12 @@ def run_test(provider_name_arg=None):
     print(f"\n Phase 4 completed in {phase4_time:.2f}s")
 
     # ========================================================================
-    # PHASE 5: Dependency Analysis
-    # ========================================================================
-    print_header("PHASE 5: DEPENDENCY ANALYSIS")
-    print("Analyzing project dependencies...")
-
-    phase5_start = time.time()
-    dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
-    phase5_time = time.time() - phase5_start
-
-    # Save metadata
-    with open(json_file_name, 'w') as f:
-        json.dump(metadata_dict, f, indent=4)
-
-    print(f" Dependency analysis complete")
-    print(f"\nPhase 5 completed in {phase5_time:.2f}s")
-
-    # ========================================================================
     # PHASE 6: Docker & Test File Generation
     # ========================================================================
     print_header("PHASE 6: DOCKER & TEST FILE GENERATION")
     print("Generating Dockerfile and test files...")
 
-    from src_pi.docker.generator import DockerTestFileGenerator
+    from src.docker.generator import DockerTestFileGenerator
 
     # Parse file_format if it's a string
     try:
@@ -309,34 +254,34 @@ def run_test(provider_name_arg=None):
     # ========================================================================
     print_header("PHASE 5: DEPENDENCY ANALYSIS")
     print("Analyzing project dependencies...")
-    
+
     phase5_start = time.time()
     dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
     phase5_time = time.time() - phase5_start
-    
+
     # Save metadata
     with open(json_file_name, 'w') as f:
         json.dump(metadata_dict, f, indent=4)
-    
+
     print(" Dependency analysis complete")
     print(f"\nPhase 5 completed in {phase5_time:.2f}s")
-    
+
     # ========================================================================
     # PHASE 6.5: Dependency File Generation
     # ========================================================================
     print_header("PHASE 6.5: DEPENDENCY FILE GENERATION")
     print("Generating dependency files from external dependencies...")
-    
+
     from src.utils.dependency_file_generator import (
         extract_all_external_dependencies,
         DependencyFileGenerator
     )
-    
+
     phase65_start = time.time()
-    
+
     try:
         external_dependencies = extract_all_external_dependencies(dependency_analyzer, project_root_path)
-        
+
         dep_file_gen = DependencyFileGenerator(
             project_root=project_root_path,
             software_blueprint=software_blueprint,
@@ -347,95 +292,135 @@ def run_test(provider_name_arg=None):
             provider_name=provider_name,
             on_status=status_handler
         )
-        
+
         dep_file_results = dep_file_gen.generate_all()
         print_subheader("Dependency File Generation Results")
         print_json(dep_file_results)
     except Exception as e:
         print(f"  Dependency file generation error: {e}")
-    
+
     phase65_time = time.time() - phase65_start
     print(f"\n Phase 6.5 completed in {phase65_time:.2f}s")
-    
+
     # ========================================================================
     # PHASE 7: Dependency Resolution (Feedback Loop) - DISABLED
     # ========================================================================
     print_header("PHASE 7: DEPENDENCY RESOLUTION (FEEDBACK LOOP)")
-<<<<<<< HEAD
-    print("Running dependency resolution feedback loop...")
-
-    from src_pi.utils.dependencies import DependencyFeedbackLoop
-    from src_pi.utils.error_tracker import ErrorTracker
-
-    phase7_start = time.time()
-
-    error_tracker = ErrorTracker(project_root_path)
-
-    try:
-        feedback_loop = DependencyFeedbackLoop(
-            dependency_analyzer=dependency_analyzer,
-            project_root=project_root_path,
-            software_blueprint=software_blueprint,
-            folder_structure=folder_struc,
-            file_output_format=file_output_format,
-            pm=pm,
-            error_tracker=error_tracker
-        )
-        dep_results = feedback_loop.run_feedback_loop()
-    except Exception as e:
-        print(f" Dependency resolution failed with exception: {e}")
-        import traceback
-        traceback.print_exc()
-        dep_results = {"success": False, "error": str(e), "exception": True}
-
-    phase7_time = time.time() - phase7_start
-
-=======
     print("Skipping dependency resolution (disabled for ablation).")
-    
+
     from src.utils.error_tracker import ErrorTracker
     error_tracker = ErrorTracker(project_root_path)
     dep_results = {"success": True, "iterations": 0, "remaining_errors": [], "skipped": True}
     phase7_time = 0.0
-    
->>>>>>> 966c54a (new planner executer architecture with new tools)
+
     print_subheader("Dependency Resolution Results")
     print_json(dep_results)
     print(f"\n Phase 7 completed in {phase7_time:.2f}s")
 
     # ========================================================================
-    # PHASE 8: Docker Testing Pipeline
+    # PHASE 7.5: Dockerfile Validation & Fixing
     # ========================================================================
-    print_header("PHASE 8: DOCKER TESTING PIPELINE")
-    print("Running Docker build and tests...")
-    print("  Note: Docker must be running for this phase to succeed")
+    print_header("PHASE 7.5: DOCKERFILE VALIDATION & FIXING")
 
-    from src_pi.docker.testing import run_docker_testing
+    # Check if tests exist before proceeding
+    tests_dir = os.path.join(project_root_path, "tests")
+    has_tests = os.path.exists(tests_dir) and any(
+        f.endswith(('.py', '.js', '.java'))
+        for _, _, files in os.walk(tests_dir)
+        for f in files
+    )
 
-    phase8_start = time.time()
+    if not has_tests:
+        print("⏭️  No test files found - skipping Dockerfile validation and Docker testing")
+        validation_results = {
+            "success": True,
+            "skipped": True,
+            "reason": "No test files present"
+        }
+        phase75_time = 0.0
+        print(f"\n⏱️  Phase 7.5 completed in {phase75_time:.2f}s")
 
-    try:
-        docker_results = run_docker_testing(
-            project_root=project_root_path,
-            software_blueprint=software_blueprint,
-            folder_structure=folder_struc,
-            file_output_format=file_output_format,
-            pm=pm,
-            error_tracker=error_tracker,
-            dependency_analyzer=dependency_analyzer,
-            on_status=status_handler
-        )
-    except Exception as e:
-        print(f" Docker testing failed with exception: {e}")
-        import traceback
-        traceback.print_exc()
-        docker_results = {"success": False, "error": str(e), "exception": True}
+        # Skip Phase 8 as well
+        print_header("PHASE 8: DOCKER TESTING PIPELINE")
+        print("⏭️  Skipping Docker testing - no test files present")
+        docker_results = {
+            "success": True,
+            "skipped": True,
+            "reason": "No test files present"
+        }
+        phase8_time = 0.0
+        print(f"\n⏱️  Phase 8 completed in {phase8_time:.2f}s")
 
-    phase8_time = time.time() - phase8_start
+    else:
+        print(f"✅ Found test files in {tests_dir}")
+        print("Validating Dockerfile for test support...")
 
-    print_subheader("Docker Testing Results")
-    print_json(docker_results)
-    print(f"\n Phase 8 completed in {phase8_time:.2f}s")
+        from src.docker.validator import DockerfileValidator
+
+        phase75_start = time.time()
+
+        try:
+            dockerfile_validator = DockerfileValidator(
+                project_root=project_root_path,
+                software_blueprint=software_blueprint,
+                folder_structure=folder_struc,
+                pm=pm,
+                on_status=status_handler
+            )
+
+            validation_results = dockerfile_validator.validate_and_fix()
+
+            print_subheader("Dockerfile Validation Results")
+            print_json(validation_results)
+
+            if validation_results.get('success'):
+                if validation_results.get('fix', {}).get('modified'):
+                    print("✅ Dockerfile was fixed to add test support")
+                else:
+                    print("✅ Dockerfile already has proper test support")
+            else:
+                print("⚠️  Dockerfile validation/fixing had issues - tests may fail in Phase 8")
+
+        except Exception as e:
+            print(f"❌ Dockerfile validation error: {e}")
+            validation_results = {"success": False, "error": str(e)}
+
+        phase75_time = time.time() - phase75_start
+        print(f"\n⏱️  Phase 7.5 completed in {phase75_time:.2f}s")
+
+        # ========================================================================
+        # PHASE 8: Docker Testing Pipeline
+        # ========================================================================
+        print_header("PHASE 8: DOCKER TESTING PIPELINE")
+        print("Running Docker build and tests...")
+        print("📝 Note: Docker must be running for this phase to succeed")
+
+        from src.docker.testing import run_docker_testing
+
+        phase8_start = time.time()
+
+        try:
+            docker_results = run_docker_testing(
+                project_root=project_root_path,
+                software_blueprint=software_blueprint,
+                folder_structure=folder_struc,
+                file_output_format=file_output_format,
+                pm=pm,
+                error_tracker=error_tracker,
+                dependency_analyzer=dependency_analyzer,
+                on_status=status_handler
+            )
+        except Exception as e:
+            print(f"❌ Docker testing failed with exception: {e}")
+            import traceback
+            traceback.print_exc()
+            docker_results = {"success": False, "error": str(e), "exception": True}
+
+        phase8_time = time.time() - phase8_start
+
+        print_subheader("Docker Testing Results")
+        print_json(docker_results)
+        print(f"\n⏱️  Phase 8 completed in {phase8_time:.2f}s")
 
     # ========================================================================
     # SUMMARY
@@ -446,17 +431,18 @@ def run_test(provider_name_arg=None):
     print(f" Project Location: {project_root_path}")
     print()
     print("  Phase Timings:")
-    print(f"   Phase 1 (Blueprint):        {phase1_time:.2f}s")
-    print(f"   Phase 2 (Folder Structure): {phase2_time:.2f}s")
-    print(f"   Phase 3 (File Formats):     {phase3_time:.2f}s")
-    print(f"   Phase 4 (File Generation):  {phase4_time:.2f}s")
-    print(f"   Phase 5 (Dep Analysis):     {phase5_time:.2f}s")
-    print(f"   Phase 6 (Docker Gen):       {phase6_time:.2f}s")
-    print(f"   Phase 6.5 (Dep Files):      {phase65_time:.2f}s")
-    print(f"   Phase 7 (Dep Resolution):   {phase7_time:.2f}s")
-    print(f"   Phase 8 (Docker Testing):   {phase8_time:.2f}s")
-    print(f"   ─────────────────────────────────")
-    print(f"   TOTAL:                      {total_time:.2f}s")
+    print(f"   Phase 1 (Blueprint):          {phase1_time:.2f}s")
+    print(f"   Phase 2 (Folder Structure):   {phase2_time:.2f}s")
+    print(f"   Phase 3 (File Formats):       {phase3_time:.2f}s")
+    print(f"   Phase 4 (File Generation):    {phase4_time:.2f}s")
+    print(f"   Phase 5 (Dep Analysis):       {phase5_time:.2f}s")
+    print(f"   Phase 6 (Docker Gen):         {phase6_time:.2f}s")
+    print(f"   Phase 6.5 (Dep Files):        {phase65_time:.2f}s")
+    print(f"   Phase 7 (Dep Resolution):     {phase7_time:.2f}s")
+    print(f"   Phase 7.5 (Dockerfile Fix):   {phase75_time:.2f}s")
+    print(f"   Phase 8 (Docker Testing):     {phase8_time:.2f}s")
+    print(f"   ───────────────────────────────────")
+    print(f"   TOTAL:                        {total_time:.2f}s")
     print()
 
     overall_success = dep_results.get("success", False) and docker_results.get("success", False)
@@ -557,9 +543,9 @@ Examples:
         choices=["google", "openrouter"],
         help="Provider name: 'google' or 'openrouter' (defaults to providers.json default if not specified)"
     )
-    
+
     args = parser.parse_args()
-    
+
     try:
         run_test(provider_name_arg=args.provider)
     except KeyboardInterrupt:
@@ -568,4 +554,3 @@ Examples:
         print(f"\n Error: {e}")
         import traceback
         traceback.print_exc()
-

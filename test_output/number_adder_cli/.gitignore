@@ -1,35 +1,72 @@
-# Byte-compiled and cache files
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.pytest_cache/
-.mypy_cache/
-.cache
+
+# C extensions
+*.so
 
 # Distribution / packaging
+.Python
 build/
+develop-eggs/
 dist/
-*.egg-info/
-.eggs/
+downloads/
 eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# Virtual environments
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Virtual Environments
 .env
 .venv
 env/
 venv/
 ENV/
+env.bak/
+venv.bak/
 
-# OS-specific files
-.DS_Store
-Thumbs.db
-
-# IDE configuration
-.vscode/
+# IDEs
 .idea/
+.vscode/
 *.swp
 *.swo
 
+# OS generated files
+.DS_Store
+Thumbs.db
+
 # Logs
 *.log
+*.log.*
+logs/

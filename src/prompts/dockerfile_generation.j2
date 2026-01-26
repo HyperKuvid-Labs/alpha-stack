@@ -43,7 +43,8 @@ No external dependencies
 1. **No linting/formatting tools** - Even if in dependency files, exclude code quality tools
 2. **Module paths** - Configure properly for `src/` structure before imports
 3. **DO NOT run tests during build** - Tests will be executed separately via `docker run` after the image is built. Do not include any `RUN pytest`, `RUN npm test`, `RUN bun test`, or similar test commands.
-4. Rust image tags - Use correct format: rust:slim-bullseye or rust:slim-bookworm, NOT rust:bullseye-slim (which doesn't exist and causes "not found" errors)
+4. **ENV syntax** - ALWAYS use modern ENV format with equals sign: `ENV KEY=value` NOT `ENV KEY value` (legacy format causes Docker warnings)
+5. Rust image tags - Use correct format: rust:slim-bullseye or rust:slim-bookworm, NOT rust:bullseye-slim (which doesn't exist and causes "not found" errors)
 
 ## Requirements
 
@@ -64,6 +65,21 @@ No external dependencies
     - Node/bun: `RUN --mount=type=cache,target=/root/.bun bun install`
     - Go: `RUN --mount=type=cache,target=/go/pkg/mod go build`
     - Rust: `RUN --mount=type=cache,target=/usr/local/cargo/registry cargo build`
+
+## ENV Format Examples
+
+For Python projects, use this format:
+```dockerfile
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app/src
+```
+
+NOT this legacy format:
+```dockerfile
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+```
 
 ## Output
 

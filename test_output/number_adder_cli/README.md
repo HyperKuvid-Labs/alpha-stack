@@ -1,18 +1,17 @@
 # Number Adder CLI
 
-![Python 3](https://img.shields.io/badge/python-3-blue.svg)
-
-A command-line tool that accepts two numbers as input and outputs their sum.
+A simple command-line tool that takes two numbers as input and outputs their sum.
 
 ## Features
 
--   **Sum Calculation**: The user provides two numbers as command-line arguments.
--   **Argument Parsing**: The tool parses the arguments and calculates the sum.
--   **Standard Output**: The result is printed to the standard output.
+-   Accepts two numbers as command-line arguments.
+-   Calculates the sum of the two numbers.
+-   Prints the result to the standard output.
+-   Includes basic error handling for invalid or missing inputs.
 
 ## Requirements
 
--   Python 3
+-   Python 3.8+
 
 ## Installation
 
@@ -22,47 +21,69 @@ A command-line tool that accepts two numbers as input and outputs their sum.
     cd Number_Adder_CLI
     ```
 
-2.  **(Recommended) Create and activate a virtual environment:**
+2.  **Create and activate a virtual environment (recommended):**
     ```bash
+    # For Linux/macOS
     python3 -m venv venv
     source venv/bin/activate
-    # On Windows, use `venv\Scripts\activate`
+
+    # For Windows
+    python -m venv venv
+    .\venv\Scripts\activate
     ```
 
-3.  **Install dependencies:**
-    The project currently has no external dependencies, but if it did, you would install them using:
+3.  **Install development dependencies (for testing):**
+    The project has no external runtime dependencies, but `pytest` is used for testing.
     ```bash
     pip install -r requirements.txt
     ```
 
 ## Usage
 
-Run the main script from the project's root directory, providing two numbers as arguments.
+Run the tool from the root directory of the project, providing two numbers as arguments.
 
-### Syntax
 ```bash
-python -m src.number_adder_cli.main <number1> <number2>
+python -m number_adder_cli <number1> <number2>
 ```
 
 ### Example
+
 ```bash
-python -m src.number_adder_cli.main 15 30.5
+python -m number_adder_cli 10 5
 ```
 
-### Expected Output
+**Output:**
 ```
-The sum of 15.0 and 30.5 is: 45.5
+15
 ```
 
-## Project Structure
+### Error Handling
 
+If incorrect arguments are provided, the tool will display an error message.
+
+**Example (Invalid Input):**
+```bash
+python -m number_adder_cli 10 hello
 ```
-number_adder_cli/
-├── .gitignore
-├── README.md
-├── requirements.txt
-└── src/
-    └── number_adder_cli/
-        ├── __init__.py       # Initializes the Python package
-        ├── calculator.py     # Contains the core addition logic
-        └── main.py           # Entry point for the CLI
+
+**Output:**
+```
+Error: Both arguments must be valid numbers.
+```
+
+**Example (Incorrect number of arguments):**
+```bash
+python -m number_adder_cli 5
+```
+
+**Output:**
+```
+Usage: python -m number_adder_cli <number1> <number2>
+```
+
+## Testing
+
+This project uses `pytest`. To run the test suite, execute the following command from the root directory:
+
+```bash
+pytest

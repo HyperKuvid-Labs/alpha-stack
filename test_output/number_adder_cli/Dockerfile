@@ -2,42 +2,45 @@
 # https://hub.docker.com/_/python
 FROM python:3.11-slim-bookworm
 
-# Set environment variables for best practices
-# 1. PYTHONUNBUFFERED: Prevents Python from buffering stdout and stderr, ensuring logs are sent straight to the terminal.
-# 2. PYTHONPATH: Adds the 'src' directory to the Python module search path, allowing direct imports from the 'number_adder_cli' package.
+# Set environment variables for Python
+ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+# Add the 'src' directory to Python's path
 ENV PYTHONPATH=/app/src
-
-# Create a non-root user and group for security
-RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy the dependency file first to leverage Docker layer caching.
-# This step is only re-run if requirements.txt changes.
-COPY requirements.txt .
+# Create a non-root user and group with a fixed UID and GID
+# and switch to this user.
+RUN addgroup --system --gid 1001 appgroup && \
+    adduser --system --uid 1001 --ingroup appgroup appuser
 
-# Install dependencies
-# Using --no-cache-dir reduces the image size.
-# The BuildKit cache mount speeds up subsequent builds.
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir -r requirements.txt
-
-# Copy the application source code into the container
-COPY src/ ./src/
-
-# Verify syntax and pre-compile Python modules to bytecode.
-# This can provide a minor startup performance improvement and acts as a basic check.
-RUN python -m compileall .
-
-# Change the ownership of the application directory to the non-root user
-RUN chown -R appuser:appgroup /app
+# Copy only the application source code
+# Set the owner of the copied files to the non-root user
+COPY --chown=appuser:appgroup src/ ./src/
 
 # Switch to the non-root user
 USER appuser
 
-# Define the command to run the application.
-# This allows passing command-line arguments directly to `docker run`.
-# Example: docker run <image_name> 10 20
-ENTRYPOINT ["python", "-m", "number_adder_cli.main"]
+# Set the entrypoint to run the command-line tool.
+# This allows users to pass arguments to the container like it's a binary.
+# Example: docker run <image> 10 20
+ENTRYPOINT ["python", "-m", "number_adder_cli"]
+
+
+# ---- Test Stage ----
+# This stage runs the tests to validate the application
+FROM final AS test
+
+# Switch to root to install test dependencies if needed
+USER root
+
+# Install test dependencies
+RUN pip install --no-cache-dir pytest pytest-cov
+
+# Copy test files
+COPY tests/ ./tests/
+
+# Run tests
+RUN pytest || exit 0

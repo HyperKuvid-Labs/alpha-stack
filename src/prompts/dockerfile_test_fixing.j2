@@ -1,0 +1,70 @@
+You are an expert DevOps engineer. Fix this Dockerfile to support running tests.
+
+## Current Dockerfile:
+```dockerfile
+{{ dockerfile_content }}
+```
+
+## Project Information:
+- Language: {{ language }}
+- Test Framework: {{ test_framework }}
+- Test Directories: {{ test_dirs }}
+- Number of Test Files: {{ num_test_files }}
+
+## Software Blueprint:
+```json
+{{ software_blueprint }}
+```
+
+## Issues Found:
+- Copies test files: {{ copies_test_files }}
+- Has test dependencies: {{ has_test_dependencies }}
+- Has test command: {{ has_test_command }}
+
+## Requirements:
+1. **Install test dependencies**
+   {% if language == "python" %}
+   - Add: `RUN --mount=type=cache,target=/root/.cache/pip pip install pytest pytest-cov`
+   {% elif language == "node" %}
+   - Add: `RUN npm install --save-dev jest` or `RUN yarn add --dev jest`
+   {% elif language == "rust" %}
+   - Tests use cargo, no additional dependencies needed
+   {% elif language == "go" %}
+   - Tests use go test, no additional dependencies needed
+   {% endif %}
+
+2. **Copy test files**
+   - Add: `COPY tests/ ./tests/` (or appropriate test directory path)
+   - Place AFTER copying source code, BEFORE USER statement
+
+3. **Create test execution script**
+   {% if language == "python" %}
+   - Add: `RUN echo '#!/bin/bash\ncd /app\npython -m pytest tests/ -v --tb=short\nexit_code=$?\necho "Tests completed with exit code: $exit_code"\nexit $exit_code' > /app/run_tests.sh`
+   {% elif language == "node" %}
+   - Add: `RUN echo '#!/bin/bash\ncd /app\nnpm test\nexit_code=$?\necho "Tests completed with exit code: $exit_code"\nexit $exit_code' > /app/run_tests.sh`
+   {% elif language == "rust" %}
+   - Add: `RUN echo '#!/bin/bash\ncd /app\ncargo test\nexit_code=$?\necho "Tests completed with exit code: $exit_code"\nexit $exit_code' > /app/run_tests.sh`
+   {% elif language == "go" %}
+   - Add: `RUN echo '#!/bin/bash\ncd /app\ngo test ./...\nexit_code=$?\necho "Tests completed with exit code: $exit_code"\nexit $exit_code' > /app/run_tests.sh`
+   {% endif %}
+   - Add: `RUN chmod +x /app/run_tests.sh`
+
+4. **Maintain existing functionality**
+   - Keep ALL existing COPY, RUN, ENV, WORKDIR, USER, ENTRYPOINT, CMD statements
+   - Do NOT change base image
+   - Do NOT change working directory
+   - Do NOT remove any existing commands
+
+5. **Correct placement**
+   - Test dependencies: After main dependencies, before copying source
+   - Test files: After copying source files
+   - Test script: After copying test files, before changing ownership
+   - IMPORTANT: Everything MUST be BEFORE the `USER` statement (if present)
+
+## Output Format:
+Return ONLY the complete fixed Dockerfile content.
+- No explanations
+- No markdown code blocks (no ```)
+- No commentary
+- Just the raw Dockerfile content
+- Start with `# syntax=docker/dockerfile:1` if the original had it

@@ -20,7 +20,7 @@ def extract_file_summaries(metadata_dict: Dict) -> Dict[str, str]:
 
 def extract_external_dependencies(metadata_dict: Dict, dependency_analyzer) -> List[Dict[str, str]]:
     external_deps = set()
-    
+
     for file_path in metadata_dict.keys():
         if os.path.exists(file_path):
             deps = dependency_analyzer.get_dependency_details(file_path)
@@ -29,7 +29,7 @@ def extract_external_dependencies(metadata_dict: Dict, dependency_analyzer) -> L
                     raw_dep = dep.get("raw", "")
                     if raw_dep:
                         external_deps.add(raw_dep)
-    
+
     return [{"raw": dep, "kind": "external"} for dep in sorted(external_deps)]
 
 
@@ -139,11 +139,11 @@ class DockerTestFileGenerator:
         self.pm = pm or PromptManager(templates_dir="prompts")
         self.error_tracker = ErrorTracker(project_root)
         self.on_status = on_status
-    
+
     def _emit(self, event_type: str, message: str, **kwargs):
         if self.on_status:
             self.on_status(event_type, message, **kwargs)
-    
+
     def _extract_metadata_context(self) -> Dict:
         file_summaries = extract_file_summaries(self.metadata_dict)
         external_deps = extract_external_dependencies(self.metadata_dict, self.dependency_analyzer)
@@ -151,10 +151,10 @@ class DockerTestFileGenerator:
             "file_summaries": file_summaries,
             "external_dependencies": external_deps
         }
-    
+
     def generate_test_dockerfile_blueprint(self) -> List[Dict]:
         metadata_context = self._extract_metadata_context()
-        
+
         prompt = self.pm.render("test_dockerfile_blueprint.j2",
             software_blueprint=self.software_blueprint,
             folder_structure=self.folder_structure,
@@ -163,53 +163,53 @@ class DockerTestFileGenerator:
             external_dependencies=metadata_context["external_dependencies"],
             project_root=self.project_root
         )
-        
+
         client = get_client()
         response = retry_api_call(
             client.models.generate_content,
             model="models/gemini-2.5-pro",
             contents=prompt
         )
-        
+
         response_text = response.text.strip()
-        
+
         json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
         if json_match:
             blueprint = json.loads(json_match.group())
         else:
             blueprint = json.loads(response_text)
-        
+
         if isinstance(blueprint, dict):
             blueprint = [blueprint]
-        
+
         return blueprint
-    
+
     def generate_test_files(self, blueprint: List[Dict]) -> List[str]:
         generated_files = []
         metadata_context = self._extract_metadata_context()
-        
+
         for item in blueprint:
             if item.get("type") != "test_file":
                 continue
-            
+
             target_file = item.get("target_file", "")
             test_file_path = item.get("test_file_path", "")
-            
+
             if not target_file or not test_file_path:
                 continue
-            
+
             abs_test_path = os.path.join(self.project_root, test_file_path)
             os.makedirs(os.path.dirname(abs_test_path), exist_ok=True)
-            
+
             target_metadata = None
             abs_target_file = os.path.abspath(os.path.join(self.project_root, target_file)) if not os.path.isabs(target_file) else target_file
-            
+
             for file_path, entries in self.metadata_dict.items():
                 if os.path.abspath(file_path) == abs_target_file:
                     if entries and isinstance(entries, list):
                         target_metadata = entries[0] if entries else None
                     break
-            
+
             prompt = self.pm.render("test_file_generation.j2",
                 software_blueprint=self.software_blueprint,
                 folder_structure=self.folder_structure,
@@ -220,33 +220,61 @@ class DockerTestFileGenerator:
                 external_dependencies=metadata_context["external_dependencies"],
                 project_root=self.project_root
             )
-            
+
             client = get_client()
             response = retry_api_call(
                 client.models.generate_content,
                 model="models/gemini-2.5-pro",
                 contents=prompt
             )
-            
+
             test_content = clean_agent_output(response.text)
-            
+
             with open(abs_test_path, 'w', encoding='utf-8') as f:
                 f.write(test_content)
-            
+
             if abs_test_path not in self.metadata_dict:
                 self.metadata_dict[abs_test_path] = []
-            
+
             self.metadata_dict[abs_test_path].append({
                 "description": item.get("description", f"Test file for {target_file}")
             })
-            
+
             generated_files.append(abs_test_path)
-        
+
         return generated_files
-    
+
+    def _normalize_dockerfile_env_syntax(self, dockerfile_content: str) -> str:
+        """Convert legacy ENV syntax to modern format.
+
+        Converts: ENV KEY value
+        To: ENV KEY=value
+        """
+        lines = dockerfile_content.split('\n')
+        normalized_lines = []
+
+        for line in lines:
+            # Match ENV lines with legacy format (ENV KEY value, not ENV KEY=value)
+            if line.strip().startswith('ENV '):
+                # Extract the ENV part and everything after
+                env_part = line[line.find('ENV'):]
+                # Check if it's legacy format (space after KEY, not =)
+                if ' ' in env_part[4:] and '=' not in env_part[4:].split()[0]:
+                    # This is legacy format
+                    parts = env_part.split(None, 2)  # Split on whitespace, max 3 parts
+                    if len(parts) >= 3:  # ENV KEY value
+                        # Get the indentation
+                        indent = line[:line.find('ENV')]
+                        # Reconstruct as ENV KEY=value
+                        line = f"{indent}ENV {parts[1]}={parts[2]}"
+
+            normalized_lines.append(line)
+
+        return '\n'.join(normalized_lines)
+
     def generate_dockerfile(self) -> bool:
         metadata_context = self._extract_metadata_context()
-        
+
         prompt = self.pm.render("dockerfile_generation.j2",
             software_blueprint=self.software_blueprint,
             folder_structure=self.folder_structure,
@@ -255,45 +283,48 @@ class DockerTestFileGenerator:
             external_dependencies=metadata_context["external_dependencies"],
             project_root=self.project_root
         )
-        
+
         client = get_client()
         response = retry_api_call(
             client.models.generate_content,
             model="models/gemini-2.5-pro",
             contents=prompt
         )
-        
+
         dockerfile_content = response.text.strip()
-        
+
         if dockerfile_content.startswith('```'):
             lines = dockerfile_content.split('\n')
             if len(lines) > 1:
                 dockerfile_content = '\n'.join(lines[1:])
                 if dockerfile_content.endswith('```'):
                     dockerfile_content = dockerfile_content[:-3].rstrip()
-        
+
+        # Normalize ENV syntax to modern format (ENV KEY=value)
+        dockerfile_content = self._normalize_dockerfile_env_syntax(dockerfile_content)
+
         dockerfile_path = os.path.join(self.project_root, "Dockerfile")
         with open(dockerfile_path, 'w', encoding='utf-8') as f:
             f.write(dockerfile_content)
-        
+
         # Generate .dockerignore to speed up builds
         dockerignore_path = os.path.join(self.project_root, ".dockerignore")
         with open(dockerignore_path, 'w', encoding='utf-8') as f:
             f.write(generate_dockerignore_content())
-        
+
         self.error_tracker.log_change(
             file_path=dockerfile_path,
             change_description="Generated Dockerfile and .dockerignore from project metadata",
             error_context="Dockerfile generation phase",
             actions=["generate_dockerfile", "generate_dockerignore"]
         )
-        
+
         return True
-    
+
     def resolve_test_dependencies(self, test_files: List[str]) -> Dict:
         if not test_files:
             return {"success": True, "resolved": 0}
-        
+
         for test_file in test_files:
             if os.path.exists(test_file):
                 try:
@@ -302,17 +333,17 @@ class DockerTestFileGenerator:
                     self.dependency_analyzer.add_file(test_file, content, self.folder_structure)
                 except Exception:
                     pass
-        
+
         resolved_count = 0
         for test_file in test_files:
             deps = self.dependency_analyzer.get_dependency_details(test_file)
             internal_deps = [d for d in deps if d.get("kind") == "internal" and d.get("path")]
-            
+
             if internal_deps:
                 resolved_count += len(internal_deps)
-        
+
         return {"success": True, "resolved": resolved_count}
-    
+
     def generate_all(self) -> Dict:
         results = {
             "blueprint": None,
@@ -321,24 +352,24 @@ class DockerTestFileGenerator:
             "dependency_resolution": None,
             "success": False
         }
-        
+
         try:
             blueprint = self.generate_test_dockerfile_blueprint()
             results["blueprint"] = blueprint
-            
+
             test_files = self.generate_test_files(blueprint)
             results["test_files"] = test_files
-            
+
             dockerfile_success = self.generate_dockerfile()
             results["dockerfile"] = dockerfile_success
-            
+
             dep_results = self.resolve_test_dependencies(test_files)
             results["dependency_resolution"] = dep_results
-            
+
             results["success"] = dockerfile_success and len(test_files) > 0
-            
+
         except Exception:
             pass
-        
+
         return results
 
