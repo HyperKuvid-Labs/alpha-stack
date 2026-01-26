@@ -1,0 +1,39 @@
+Generate dependency files for this project based on the external dependencies found.
+
+Project Root: {{ project_root }}
+
+Software Blueprint:
+{{ software_blueprint | json_dumps }}
+
+Folder Structure:
+{{ folder_structure }}
+
+External Dependencies Found:
+{% for dep in external_dependencies %}
+- {{ dep }}
+{% endfor %}
+
+Task:
+1. Analyze the project structure and external dependencies
+2. Generate the appropriate dependency files (requirements.txt, package.json, go.mod, Cargo.toml, CMakeLists.txt, etc.)
+3. Determine which files are needed based on the project structure
+4. Generate each dependency file with proper format and syntax
+5. Include all external dependencies in the appropriate files
+Output Format:
+Generate each dependency file separated by a line with "===FILENAME===" marker.
+For example:
+===requirements.txt===
+flask==2.0.0
+requests>=2.25.0
+
+===package.json===
+{
+  "name": "project",
+  "version": "1.0.0",
+  "dependencies": {
+    "express": "^4.18.0"
+  }
+}
+
+Generate ONLY the dependency files needed for this project. Do not generate files for languages not used in the project.
+

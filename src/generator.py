@@ -3,11 +3,14 @@ import re
 import json
 import os
 import time
-from .utils.helpers import get_client, retry_api_call, get_system_info, clean_agent_output, GENERATABLE_FILES, GENERATABLE_FILENAMES, MODEL_NAME_FLASH
+from typing import Optional
+from .utils.helpers import get_system_info, clean_agent_output, GENERATABLE_FILES, GENERATABLE_FILENAMES
+from .utils.inference import InferenceManager
 from .utils.prompt_manager import PromptManager
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from threading import Lock
 from queue import Queue, Empty
+
 
 
 class TreeNode:
@@ -20,16 +23,33 @@ class TreeNode:
         self.children.append(child_node)
 
 
+# Dependency files that should be skipped during initial generation
+DEPENDENCY_FILES_TO_SKIP = {
+    'requirements.txt', 'requirements-dev.txt', 'requirements-test.txt',
+    'Pipfile', 'Pipfile.lock', 'pyproject.toml', 'poetry.lock', 'setup.py', 'setup.cfg',
+    'package.json', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lockb',
+    'go.mod', 'go.sum',
+    'Cargo.toml', 'Cargo.lock',
+    'pom.xml', 'build.gradle', 'build.gradle.kts', 'settings.gradle', 'gradle.properties',
+    'composer.json', 'composer.lock',
+    'Gemfile', 'Gemfile.lock',
+    'mix.exs', 'mix.lock',
+    'pubspec.yaml', 'pubspec.lock',
+    'CMakeLists.txt', 'conanfile.txt', 'vcpkg.json',
+    'rebar.config', 'rebar.lock',
+}
+
 def should_generate_content(filepath):
     ext = os.path.splitext(filepath)[1].lower()
     filename = os.path.basename(filepath)
     skip_names = {"Dockerfile", "docker-compose.yml", "docker-compose.yaml", "ci.yml", "di.yml"}
-    if filename in skip_names:
+    # Skip dependency files during initial generation
+    if filename in skip_names or filename in DEPENDENCY_FILES_TO_SKIP:
         return False
     return ext in GENERATABLE_FILES or filename in GENERATABLE_FILENAMES
 
 
-def generate_file_metadata(context, filepath, refined_prompt, tree, json_file_name, file_content, file_output_format, pm):
+def generate_file_metadata(context, filepath, refined_prompt, tree, json_file_name, file_content, file_output_format, pm, provider_name: Optional[str] = None):
     file_type = os.path.splitext(filepath)[1]
     filename = os.path.basename(filepath)
     prompt = pm.render_file_metadata(
@@ -42,17 +62,16 @@ def generate_file_metadata(context, filepath, refined_prompt, tree, json_file_na
         file_output_format=file_output_format
     )
     
-    client = get_client()
-    resp = retry_api_call(
-        client.models.generate_content,
-        model=MODEL_NAME_FLASH,
-        contents=prompt
-    )
+    provider_name = provider_name or InferenceManager.get_default_provider()
+    provider = InferenceManager.create_provider(provider_name)
     
-    return resp.text
+    messages = [{"role": "user", "content": prompt}]
+    response = provider.call_model(messages)
+    
+    return provider.extract_text(response)
 
 
-def generate_file_content(context, filepath, refined_prompt, tree, json_file_name, file_output_format, pm):
+def generate_file_content(context, filepath, refined_prompt, tree, json_file_name, file_output_format, pm, provider_name: Optional[str] = None):
     file_type = os.path.splitext(filepath)[1]
     filename = os.path.basename(filepath)
     prompt = pm.render_file_content(
@@ -63,20 +82,21 @@ def generate_file_content(context, filepath, refined_prompt, tree, json_file_nam
         tree=tree,
         file_output_format=file_output_format
     )
-    client = get_client()
-    response = retry_api_call(
-        client.models.generate_content,
-        model=MODEL_NAME_FLASH,
-        contents=prompt
-    )
-    cleaned_output = clean_agent_output(response.text)
+    
+    provider_name = provider_name or InferenceManager.get_default_provider()
+    provider = InferenceManager.create_provider(provider_name)
+    
+    messages = [{"role": "user", "content": prompt}]
+    response = provider.call_model(messages)
+    response_text = provider.extract_text(response)
+    cleaned_output = clean_agent_output(response_text)
     return cleaned_output
 
 
 def dfs_tree_and_gen(root, refined_prompt, tree_structure, project_name, current_path="",
                      parent_context="", json_file_name="", metadata_dict=None, 
                      dependency_analyzer=None, file_output_format="", max_workers=20,
-                     output_base_dir="", pm=None, on_status=None):
+                     output_base_dir="", pm=None, on_status=None, provider_name: Optional[str] = None):
     if metadata_dict is None:
         metadata_dict = {}
     
@@ -131,7 +151,7 @@ def dfs_tree_and_gen(root, refined_prompt, tree_structure, project_name, current
             return process_file(
                 node, full_path, context, refined_prompt, tree_structure,
                 json_file_name, file_output_format, metadata_dict,
-                dependency_analyzer, lock, pm, on_status
+                dependency_analyzer, lock, pm, on_status, provider_name
             )
         else:
             return process_directory(node, full_path, context, work_queue, work_output_base_dir, lock, root_val, on_status)
@@ -172,7 +192,7 @@ def dfs_tree_and_gen(root, refined_prompt, tree_structure, project_name, current
 
 def process_file(node, full_path, context, refined_prompt, tree_structure,
                 json_file_name, file_output_format, metadata_dict,
-                dependency_analyzer, lock, pm, on_status=None):
+                dependency_analyzer, lock, pm, on_status=None, provider_name: Optional[str] = None):
     try:
         parent_dir = os.path.dirname(full_path)
         if parent_dir:
@@ -188,7 +208,8 @@ def process_file(node, full_path, context, refined_prompt, tree_structure,
                 tree=tree_structure,
                 json_file_name=json_file_name,
                 file_output_format=file_output_format,
-                pm=pm
+                pm=pm,
+                provider_name=provider_name
             )
             
             metadata = generate_file_metadata(
@@ -199,7 +220,8 @@ def process_file(node, full_path, context, refined_prompt, tree_structure,
                 json_file_name=json_file_name,
                 file_content=content,
                 file_output_format=file_output_format,
-                pm=pm
+                pm=pm,
+                provider_name=provider_name
             )
             
             with lock:
@@ -250,23 +272,41 @@ def process_directory(node, full_path, context, work_queue, output_base_dir="", 
         return None
 
 
-def initial_software_blueprint(prompt, pm):
-    client = get_client()
+def initial_software_blueprint(prompt, pm, provider_name: Optional[str] = None):
+    provider_name = provider_name or InferenceManager.get_default_provider()
+    provider = InferenceManager.create_provider(provider_name)
     system_instruction = pm.render_software_blueprint(user_prompt=prompt)
     
-    chat = retry_api_call(
-        client.chats.create,
-        model='models/gemini-2.5-pro',
-        config=types.GenerateContentConfig(systemInstruction=system_instruction)
-    )
+    if provider_name == "google":
+        # Use Google's chat API for system instructions
+        from google.genai import types
+        from .utils.inference import retry_api_call
+        client = provider.get_client()
+        chat_obj = retry_api_call(
+            client.chats.create,
+            model=provider.model,
+            config=types.GenerateContentConfig(systemInstruction=system_instruction)
+        )
+        response = retry_api_call(chat_obj.send_message, prompt)
+        response_text = response.text
+    else:
+        # For OpenRouter/OpenAI, use system message
+        messages = [
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": prompt}
+        ]
+        response = provider.call_model(messages)
+        response_text = provider.extract_text(response)
     
-    response = retry_api_call(chat.send_message, prompt)
-    match = re.search(r'\{.*\}', response.text, re.DOTALL)
+    match = re.search(r'\{.*\}', response_text, re.DOTALL)
     
     if match:
         clean_json_str = match.group(0)
         try:
             data = json.loads(clean_json_str)
+            # Sanitize project name: replace spaces with underscores
+            if "projectDetails" in data and "projectName" in data["projectDetails"]:
+                data["projectDetails"]["projectName"] = data["projectDetails"]["projectName"].replace(' ', '_')
             system_info = get_system_info()
             data["systemInfo"] = system_info
             return data
@@ -275,42 +315,66 @@ def initial_software_blueprint(prompt, pm):
     return None
 
 
-def folder_structure(project_overview, pm):
-    client = get_client()
+def folder_structure(project_overview, pm, provider_name: Optional[str] = None):
+    provider_name = provider_name or InferenceManager.get_default_provider()
+    provider = InferenceManager.create_provider(provider_name)
     system_instruction = pm.render_folder_structure(project_overview=project_overview)
     
-    response = retry_api_call(
-        client.models.generate_content,
-        model="models/gemini-2.5-pro",
-        contents=types.Content(
-            role='user',
-            parts=[types.Part.from_text(text=json.dumps(project_overview))]
-        ),
-        config=types.GenerateContentConfig(systemInstruction=system_instruction)
-    )
-    return response.text
+    if provider_name == "google":
+        from google.genai import types
+        from .utils.inference import retry_api_call
+        client = provider.get_client()
+        response = retry_api_call(
+            client.models.generate_content,
+            model=provider.model,
+            contents=types.Content(
+                role='user',
+                parts=[types.Part.from_text(text=json.dumps(project_overview))]
+            ),
+            config=types.GenerateContentConfig(systemInstruction=system_instruction)
+        )
+        return response.text
+    else:
+        messages = [
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": json.dumps(project_overview)}
+        ]
+        response = provider.call_model(messages)
+        return provider.extract_text(response)
 
 
-def files_format(project_overview, folder_structure, pm):
-    client = get_client()
+def files_format(project_overview, folder_structure, pm, provider_name: Optional[str] = None):
+    provider_name = provider_name or InferenceManager.get_default_provider()
+    provider = InferenceManager.create_provider(provider_name)
     system_instruction = pm.render_file_format(
         project_overview=project_overview,
         folder_structure=folder_structure
     )
     
-    response = retry_api_call(
-        client.models.generate_content,
-        model="models/gemini-2.5-pro",
-        contents=types.Content(
-            role='user',
-            parts=[
-                types.Part.from_text(text=json.dumps(project_overview)),
-                types.Part.from_text(text=json.dumps(folder_structure))
-            ]
-        ),
-        config=types.GenerateContentConfig(systemInstruction=system_instruction)
-    )
-    return response.text
+    if provider_name == "google":
+        from google.genai import types
+        from .utils.inference import retry_api_call
+        client = provider.get_client()
+        response = retry_api_call(
+            client.models.generate_content,
+            model=provider.model,
+            contents=types.Content(
+                role='user',
+                parts=[
+                    types.Part.from_text(text=json.dumps(project_overview)),
+                    types.Part.from_text(text=json.dumps(folder_structure))
+                ]
+            ),
+            config=types.GenerateContentConfig(systemInstruction=system_instruction)
+        )
+        return response.text
+    else:
+        messages = [
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": json.dumps({"project_overview": project_overview, "folder_structure": folder_structure})}
+        ]
+        response = provider.call_model(messages)
+        return provider.extract_text(response)
 
 
 def generate_tree(resp, project_name="root"):
@@ -335,7 +399,9 @@ def generate_tree(resp, project_name="root"):
                 root_name = root_name.split('#')[0].strip()
             root_name = re.sub(r'[│├└─\s]+', '', root_name).strip().rstrip('/')
         
+        # Replace spaces with underscores in folder names
         if root_name:
+            root_name = root_name.replace(' ', '_')
             root = TreeNode(root_name)
             root_line_index = i
             break
@@ -367,6 +433,9 @@ def generate_tree(resp, project_name="root"):
         
         name = name.rstrip('/')
         
+        # Replace spaces with underscores in folder/file names
+        name = name.replace(' ', '_')
+        
         if not name:
             continue
 
@@ -396,7 +465,7 @@ def generate_tree(resp, project_name="root"):
     return root
 
 
-def generate_project(user_prompt, output_base_dir, on_status=None):
+def generate_project(user_prompt, output_base_dir, on_status=None, provider_name: Optional[str] = None):
     from .utils.dependencies import DependencyAnalyzer, DependencyFeedbackLoop
     from .docker.testing import run_docker_testing
     from .docker.generator import DockerTestFileGenerator
@@ -408,14 +477,16 @@ def generate_project(user_prompt, output_base_dir, on_status=None):
     
     pm = PromptManager()
     
+    provider_name = provider_name or InferenceManager.get_default_provider()
+    
     emit("step", "Creating software blueprint...")
-    software_blueprint = initial_software_blueprint(user_prompt, pm)
+    software_blueprint = initial_software_blueprint(user_prompt, pm, provider_name)
     
     emit("step", "Creating folder structure...")
-    folder_struc = folder_structure(software_blueprint, pm)
+    folder_struc = folder_structure(software_blueprint, pm, provider_name)
     
     emit("step", "Creating file format contracts...")
-    file_format = files_format(software_blueprint, folder_struc, pm)
+    file_format = files_format(software_blueprint, folder_struc, pm, provider_name)
     
     emit("step", "Building project tree and generating files...")
     folder_tree = generate_tree(folder_struc, project_name="")
@@ -438,16 +509,14 @@ def generate_project(user_prompt, output_base_dir, on_status=None):
         file_output_format=file_format,
         output_base_dir=output_base_dir,
         pm=pm,
-        on_status=on_status
+        on_status=on_status,
+        provider_name=provider_name
     )
     
     project_root_path = os.path.join(output_base_dir, folder_tree.value)
     
     if not os.path.exists(project_root_path):
         return None
-    
-    emit("step", "Starting dependency analysis...")
-    dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
     
     with open(json_file_name, 'w') as f:
         json.dump(metadata_dict, f, indent=4)
@@ -483,6 +552,38 @@ def generate_project(user_prompt, output_base_dir, on_status=None):
         test_gen_results = test_gen.generate_all()
     except Exception:
         pass
+    
+    emit("step", "Starting dependency analysis for entire project...")
+    dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
+    
+    emit("step", "Extracting external dependencies and generating dependency files...")
+    try:
+        from .utils.dependency_file_generator import (
+            extract_all_external_dependencies,
+            DependencyFileGenerator
+        )
+        
+        # Extract all external dependencies from all files in the project
+        external_dependencies = extract_all_external_dependencies(dependency_analyzer, project_root_path)
+        
+        # Generate dependency files using the coding agent
+        dep_file_gen = DependencyFileGenerator(
+            project_root=project_root_path,
+            software_blueprint=software_blueprint,
+            folder_structure=folder_struc,
+            file_output_format=file_output_format,
+            external_dependencies=external_dependencies,
+            pm=pm,
+            provider_name=provider_name,
+            on_status=on_status
+        )
+        
+        dep_file_results = dep_file_gen.generate_all()
+        
+        # Re-analyze project files to include the newly generated dependency files
+        dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
+    except Exception as e:
+        print(f"Error generating dependency files: {e}")
     
     emit("step", "Running dependency resolution...")
     

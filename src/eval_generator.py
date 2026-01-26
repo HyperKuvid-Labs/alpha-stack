@@ -3,7 +3,9 @@ import re
 import json
 import os
 import time
-from utils.helpers import get_openai_client, retry_api_call, get_system_info, clean_agent_output, GENERATABLE_FILES, GENERATABLE_FILENAMES
+from typing import Optional
+from utils.helpers import get_system_info, clean_agent_output, GENERATABLE_FILES, GENERATABLE_FILENAMES
+from utils.inference import InferenceManager
 from utils.prompt_manager import PromptManager
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from threading import Lock
@@ -21,16 +23,33 @@ class TreeNode:
         self.children.append(child_node)
 
 
+# Dependency files that should be skipped during initial generation
+DEPENDENCY_FILES_TO_SKIP = {
+    'requirements.txt', 'requirements-dev.txt', 'requirements-test.txt',
+    'Pipfile', 'Pipfile.lock', 'pyproject.toml', 'poetry.lock', 'setup.py', 'setup.cfg',
+    'package.json', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lockb',
+    'go.mod', 'go.sum',
+    'Cargo.toml', 'Cargo.lock',
+    'pom.xml', 'build.gradle', 'build.gradle.kts', 'settings.gradle', 'gradle.properties',
+    'composer.json', 'composer.lock',
+    'Gemfile', 'Gemfile.lock',
+    'mix.exs', 'mix.lock',
+    'pubspec.yaml', 'pubspec.lock',
+    'CMakeLists.txt', 'conanfile.txt', 'vcpkg.json',
+    'rebar.config', 'rebar.lock',
+}
+
 def should_generate_content(filepath):
     ext = os.path.splitext(filepath)[1].lower()
     filename = os.path.basename(filepath)
-    skip_names = {"Dockerfile", "docker-compose.yml", "docker-compose.yaml", "ci.yml", "di.yml"}
-    if filename in skip_names:
+    skip_names = {"Dockerfile", "docker-compose.yml", "docker-compose.yaml", "ci.yml", "di.yml", "README.md"}
+    # Skip dependency files during initial generation
+    if filename in skip_names or filename in DEPENDENCY_FILES_TO_SKIP:
         return False
     return ext in GENERATABLE_FILES or filename in GENERATABLE_FILENAMES
 
 
-def generate_file_metadata(context, filepath, refined_prompt, tree, json_file_name, file_content, file_output_format, pm, model_name):
+def generate_file_metadata(context, filepath, refined_prompt, tree, json_file_name, file_content, file_output_format, pm, model_name, provider_name: Optional[str] = None):
     file_type = os.path.splitext(filepath)[1]
     filename = os.path.basename(filepath)
     prompt = pm.render_file_metadata(
@@ -43,29 +62,22 @@ def generate_file_metadata(context, filepath, refined_prompt, tree, json_file_na
         file_output_format=file_output_format
     )
 
-    load_dotenv()
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    client = get_openai_client()
-
-    messages = [
-        {"role": "user", "content": prompt}
-    ]
-
-    completion = retry_api_call(
-        client.chat.completions.create,
-        model=model_name,
-        messages=messages,
-        extra_headers={
-            "HTTP-Referer": "https://pradheep.dev",
-            "X-Title": "Alphastack",
-        },
-    )
-
-    resp = completion.choices[0].message.content
-    return resp
+    # Determine provider from model_name or use provided provider_name
+    if provider_name is None:
+        if model_name.startswith("models/"):
+            provider_name = "google"
+        else:
+            provider_name = "openrouter"
+    
+    provider = InferenceManager.create_provider(provider_name)
+    
+    messages = [{"role": "user", "content": prompt}]
+    response = provider.call_model(messages, model=model_name)
+    
+    return provider.extract_text(response)
 
 
-def generate_file_content(context, filepath, refined_prompt, tree, json_file_name, file_output_format, pm, model_name):
+def generate_file_content(context, filepath, refined_prompt, tree, json_file_name, file_output_format, pm, model_name, provider_name: Optional[str] = None):
     file_type = os.path.splitext(filepath)[1]
     filename = os.path.basename(filepath)
     prompt = pm.render_file_content(
@@ -76,26 +88,20 @@ def generate_file_content(context, filepath, refined_prompt, tree, json_file_nam
         tree=tree,
         file_output_format=file_output_format
     )
-    load_dotenv()
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    client = get_openai_client(api_key=api_key)
-
-    messages = [
-        {"role": "user", "content": prompt}
-    ]
-
-    completion = retry_api_call(
-        client.chat.completions.create,
-        model=model_name,
-        messages=messages,
-        extra_headers={
-            "HTTP-Referer": "https://pradheep.dev",
-            "X-Title": "Alphastack",
-        },
-    )
-
-    resp = completion.choices[0].message.content
-    cleaned_output = clean_agent_output(resp)
+    
+    # Determine provider from model_name or use provided provider_name
+    if provider_name is None:
+        if model_name.startswith("models/"):
+            provider_name = "google"
+        else:
+            provider_name = "openrouter"
+    
+    provider = InferenceManager.create_provider(provider_name)
+    
+    messages = [{"role": "user", "content": prompt}]
+    response = provider.call_model(messages, model=model_name)
+    response_text = provider.extract_text(response)
+    cleaned_output = clean_agent_output(response_text)
     return cleaned_output
 
 
@@ -294,10 +300,15 @@ def process_directory(node, full_path, context, work_queue, output_base_dir="", 
         return None
 
 
-def initial_software_blueprint_eval(prompt, pm, model_name):
-    load_dotenv()
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    client = get_openai_client(api_key=api_key)
+def initial_software_blueprint_eval(prompt, pm, model_name, provider_name: Optional[str] = None):
+    # Determine provider from model_name or use provided provider_name
+    if provider_name is None:
+        if model_name.startswith("models/"):
+            provider_name = "google"
+        else:
+            provider_name = "openrouter"
+    
+    provider = InferenceManager.create_provider(provider_name)
     system_instruction = pm.render_software_blueprint(user_prompt=prompt)
 
     messages = [
@@ -305,23 +316,18 @@ def initial_software_blueprint_eval(prompt, pm, model_name):
         {"role": "user", "content": prompt}
     ]
 
-    completion = retry_api_call(
-        client.chat.completions.create,
-        model=model_name,
-        messages=messages,
-        extra_headers={
-            "HTTP-Referer": "https://pradheep.dev",
-            "X-Title": "Alphastack",
-        },
-    )
-
-    resp = completion.choices[0].message.content
+    response = provider.call_model(messages, model=model_name)
+    resp = provider.extract_text(response)
+    
     match = re.search(r'\{.*\}', resp, re.DOTALL)
 
     if match:
         clean_json_str = match.group(0)
         try:
             data = json.loads(clean_json_str)
+            # Sanitize project name: replace spaces with underscores
+            if "projectDetails" in data and "projectName" in data["projectDetails"]:
+                data["projectDetails"]["projectName"] = data["projectDetails"]["projectName"].replace(' ', '_')
             system_info = get_system_info()
             data["systemInfo"] = system_info
             return data
@@ -330,10 +336,15 @@ def initial_software_blueprint_eval(prompt, pm, model_name):
     return None
 
 
-def folder_structure(project_overview, pm, model_name):
-    load_dotenv()
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    client = get_openai_client(api_key=api_key)
+def folder_structure(project_overview, pm, model_name, provider_name: Optional[str] = None):
+    # Determine provider from model_name or use provided provider_name
+    if provider_name is None:
+        if model_name.startswith("models/"):
+            provider_name = "google"
+        else:
+            provider_name = "openrouter"
+    
+    provider = InferenceManager.create_provider(provider_name)
     system_instruction = pm.render_folder_structure(project_overview=project_overview)
 
     messages = [
@@ -341,24 +352,19 @@ def folder_structure(project_overview, pm, model_name):
         {"role": "user", "content": json.dumps(project_overview)}
     ]
 
-    completion = retry_api_call(
-        client.chat.completions.create,
-        model=model_name,
-        messages=messages,
-        extra_headers={
-            "HTTP-Referer": "https://pradheep.dev",
-            "X-Title": "Alphastack",
-        },
-    )
-
-    resp = completion.choices[0].message.content
-    return resp
+    response = provider.call_model(messages, model=model_name)
+    return provider.extract_text(response)
 
 
-def files_format(project_overview, folder_structure, pm, model_name):
-    load_dotenv()
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    client = get_openai_client(api_key=api_key)
+def files_format(project_overview, folder_structure, pm, model_name, provider_name: Optional[str] = None):
+    # Determine provider from model_name or use provided provider_name
+    if provider_name is None:
+        if model_name.startswith("models/"):
+            provider_name = "google"
+        else:
+            provider_name = "openrouter"
+    
+    provider = InferenceManager.create_provider(provider_name)
     system_instruction = pm.render_file_format(
         project_overview=project_overview,
         folder_structure=folder_structure
@@ -369,18 +375,8 @@ def files_format(project_overview, folder_structure, pm, model_name):
         {"role": "user", "content": json.dumps(project_overview)}
     ]
 
-    completion = retry_api_call(
-        client.chat.completions.create,
-        model=model_name,
-        messages=messages,
-        extra_headers={
-            "HTTP-Referer": "https://pradheep.dev",
-            "X-Title": "Alphastack",
-        },
-    )
-
-    resp = completion.choices[0].message.content
-    return resp
+    response = provider.call_model(messages, model=model_name)
+    return provider.extract_text(response)
 
 
 def generate_tree(resp, project_name="root"):
@@ -405,7 +401,9 @@ def generate_tree(resp, project_name="root"):
                 root_name = root_name.split('#')[0].strip()
             root_name = re.sub(r'[│├└─\s]+', '', root_name).strip().rstrip('/')
 
+        # Replace spaces with underscores in folder names
         if root_name:
+            root_name = root_name.replace(' ', '_')
             root = TreeNode(root_name)
             root_line_index = i
             break
@@ -436,6 +434,9 @@ def generate_tree(resp, project_name="root"):
             name = match.group(1).strip()
 
         name = name.rstrip('/')
+
+        # Replace spaces with underscores in folder/file names
+        name = name.replace(' ', '_')
 
         if not name:
             continue
@@ -540,12 +541,6 @@ def eval_generate_project(user_prompt, output_base_dir, model_name, on_status=No
     if not os.path.exists(project_root_path):
         return None
 
-    emit("step", "Starting dependency analysis...")
-    dep_analysis_start = time.time()
-    dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
-    dep_analysis_end = time.time()
-    metrics['dependency_analysis_time'] = dep_analysis_end - dep_analysis_start
-
     with open(json_file_name, 'w') as f:
         json.dump(metadata_dict, f, indent=4)
 
@@ -587,6 +582,49 @@ def eval_generate_project(user_prompt, output_base_dir, model_name, on_status=No
 
     docker_gen_end = time.time()
     metrics['dockerfile_generation_time'] = docker_gen_end - docker_gen_start
+
+    emit("step", "Starting dependency analysis for entire project...")
+    dep_analysis_start = time.time()
+    dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
+    dep_analysis_end = time.time()
+    metrics['dependency_analysis_time'] = dep_analysis_end - dep_analysis_start
+
+    emit("step", "Extracting external dependencies and generating dependency files...")
+    dep_file_gen_start = time.time()
+    try:
+        from utils.dependency_file_generator import (
+            extract_all_external_dependencies,
+            DependencyFileGenerator
+        )
+        
+        # Extract all external dependencies from all files in the project
+        external_dependencies = extract_all_external_dependencies(dependency_analyzer, project_root_path)
+        
+        # Generate dependency files using the coding agent
+        dep_file_gen = DependencyFileGenerator(
+            project_root=project_root_path,
+            software_blueprint=software_blueprint,
+            folder_structure=folder_struc,
+            file_output_format=file_output_format,
+            external_dependencies=external_dependencies,
+            pm=pm,
+            model_name=model_name,
+            on_status=on_status
+        )
+        
+        dep_file_results = dep_file_gen.generate_all()
+        metrics['dependency_file_generation_success'] = True
+        metrics['dependency_files_generated'] = dep_file_results.get('generated_files', [])
+        
+        # Re-analyze project files to include the newly generated dependency files
+        dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
+    except Exception as e:
+        metrics['dependency_file_generation_success'] = False
+        metrics['dependency_file_generation_error'] = str(e)
+        print(f"Error generating dependency files: {e}")
+    
+    dep_file_gen_end = time.time()
+    metrics['dependency_file_generation_time'] = dep_file_gen_end - dep_file_gen_start
 
     emit("step", "Running dependency resolution...")
 

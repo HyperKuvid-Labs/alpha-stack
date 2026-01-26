@@ -3,6 +3,8 @@ import os
 import sys
 import json
 import time
+import argparse
+import argparse
 
 # Add the project to path
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -13,6 +15,10 @@ sys.path.insert(0, os.path.join(project_root, "src_pi"))
 from src_pi.utils.prompt_manager import PromptManager
 from src_pi.utils.helpers import prime_intellect_client
 from src_pi.config import get_api_key_pi, set_api_key_pi
+# Import from src modules (since source code is in src/)
+from src.utils.prompt_manager import PromptManager
+from src.utils.inference import InferenceManager
+from src.config import get_api_key, set_api_key
 
 # ============================================================================
 # CONFIGURATION
@@ -29,6 +35,16 @@ API_KEY = None  # Set to your key like "your-api-key-here" or leave None to use 
 
 # Model configuration
 MODEL_NAME = "z-ai/glm-4.7"
+TEST_PROMPT = """ADD TWO NUMBERS"""
+
+# Output directory for generated projec"
+OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_output")
+
+# Set your API key here (or use environment variable)
+API_KEY = None  # Set to your key like "your-api-key-here" or leave None to use env/config
+
+# Set provider: "google" or "openrouter" (defaults to providers.json default if None)
+PROVIDER_NAME = None  # Set to "google" or "openrouter", or None to use default from providers.json
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -88,6 +104,30 @@ def run_test():
         print(" No Prime Intellect API key found!")
         print("   Set API_KEY in this script, or run: alphastack setup")
         print("   Or set environment variable: export PRIME_API_KEY='your-key'")
+def run_test(provider_name_arg=None):
+    print_header("ALPHASTACK TEST RUNNER")
+    
+    # Step 0: Check/Set API Key and Provider
+    print_header("PHASE 0: CONFIGURATION CHECK")
+    
+    # Get provider (priority: command-line arg > PROVIDER_NAME > default from config)
+    provider_name = provider_name_arg or PROVIDER_NAME or InferenceManager.get_default_provider()
+    print(f" Provider: {provider_name}")
+    
+    # Get model from provider config
+    provider_config = InferenceManager.get_provider_config(provider_name)
+    model_name = provider_config.get("model", "unknown")
+    print(f" Model: {model_name}")
+    
+    if API_KEY:
+        env_key = f"{provider_name.upper()}_API_KEY"
+        os.environ[env_key] = API_KEY
+        print(f" Using API key from script configuration ({env_key})")
+    elif get_api_key() or os.getenv(f"{provider_name.upper()}_API_KEY"):
+        print(f" API key found in config/environment")
+    else:
+        print(f" No API key found for {provider_name}!")
+        print(f"   Set API_KEY in this script, or set environment variable: export {provider_name.upper()}_API_KEY='your-key'")
         return
 
     print(f"\n Test Prompt: {TEST_PROMPT}")
@@ -107,7 +147,7 @@ def run_test():
     from src_pi.generator import initial_software_blueprint
 
     phase1_start = time.time()
-    software_blueprint = initial_software_blueprint(TEST_PROMPT, pm)
+    software_blueprint = initial_software_blueprint(TEST_PROMPT, pm, provider_name)
     phase1_time = time.time() - phase1_start
 
     print_json(software_blueprint, "Software Blueprint Output")
@@ -126,7 +166,7 @@ def run_test():
     from src_pi.generator import folder_structure
 
     phase2_start = time.time()
-    folder_struc = folder_structure(software_blueprint, pm)
+    folder_struc = folder_structure(software_blueprint, pm, provider_name)
     phase2_time = time.time() - phase2_start
 
     print_subheader("Folder Structure Output")
@@ -142,7 +182,7 @@ def run_test():
     from src_pi.generator import files_format
 
     phase3_start = time.time()
-    file_format = files_format(software_blueprint, folder_struc, pm)
+    file_format = files_format(software_blueprint, folder_struc, pm, provider_name)
     phase3_time = time.time() - phase3_start
 
     print_subheader("File Format Output")
@@ -182,7 +222,8 @@ def run_test():
         file_output_format=file_format,
         output_base_dir=OUTPUT_DIR,
         pm=pm,
-        on_status=status_handler
+        on_status=status_handler,
+        provider_name=provider_name
     )
     print(" Project files generated")
 
@@ -263,6 +304,59 @@ def run_test():
     phase6_time = time.time() - phase6_start
     print(f"\n Phase 6 completed in {phase6_time:.2f}s")
 
+    # ========================================================================
+    # PHASE 5: Dependency Analysis (after test generation)
+    # ========================================================================
+    print_header("PHASE 5: DEPENDENCY ANALYSIS")
+    print("Analyzing project dependencies...")
+    
+    phase5_start = time.time()
+    dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
+    phase5_time = time.time() - phase5_start
+    
+    # Save metadata
+    with open(json_file_name, 'w') as f:
+        json.dump(metadata_dict, f, indent=4)
+    
+    print(" Dependency analysis complete")
+    print(f"\nPhase 5 completed in {phase5_time:.2f}s")
+    
+    # ========================================================================
+    # PHASE 6.5: Dependency File Generation
+    # ========================================================================
+    print_header("PHASE 6.5: DEPENDENCY FILE GENERATION")
+    print("Generating dependency files from external dependencies...")
+    
+    from src.utils.dependency_file_generator import (
+        extract_all_external_dependencies,
+        DependencyFileGenerator
+    )
+    
+    phase65_start = time.time()
+    
+    try:
+        external_dependencies = extract_all_external_dependencies(dependency_analyzer, project_root_path)
+        
+        dep_file_gen = DependencyFileGenerator(
+            project_root=project_root_path,
+            software_blueprint=software_blueprint,
+            folder_structure=folder_struc,
+            file_output_format=file_output_format,
+            external_dependencies=external_dependencies,
+            pm=pm,
+            provider_name=provider_name,
+            on_status=status_handler
+        )
+        
+        dep_file_results = dep_file_gen.generate_all()
+        print_subheader("Dependency File Generation Results")
+        print_json(dep_file_results)
+    except Exception as e:
+        print(f"  Dependency file generation error: {e}")
+    
+    phase65_time = time.time() - phase65_start
+    print(f"\n Phase 6.5 completed in {phase65_time:.2f}s")
+    
     # ========================================================================
     # PHASE 7: Dependency Resolution (Feedback Loop)
     # ========================================================================
@@ -348,6 +442,7 @@ def run_test():
     print(f"   Phase 4 (File Generation):  {phase4_time:.2f}s")
     print(f"   Phase 5 (Dep Analysis):     {phase5_time:.2f}s")
     print(f"   Phase 6 (Docker Gen):       {phase6_time:.2f}s")
+    print(f"   Phase 6.5 (Dep Files):      {phase65_time:.2f}s")
     print(f"   Phase 7 (Dep Resolution):   {phase7_time:.2f}s")
     print(f"   Phase 8 (Docker Testing):   {phase8_time:.2f}s")
     print(f"   ─────────────────────────────────")
@@ -434,8 +529,29 @@ def run_test():
 # ============================================================================
 
 if __name__ == "__main__":
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(
+        description="AlphaStack Test Runner - Run the generator step-by-step",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python test_runner.py              # Uses default from providers.json
+  python test_runner.py google       # Uses Google provider
+  python test_runner.py openrouter  # Uses OpenRouter provider
+        """
+    )
+    parser.add_argument(
+        "provider",
+        nargs="?",
+        default=None,
+        choices=["google", "openrouter"],
+        help="Provider name: 'google' or 'openrouter' (defaults to providers.json default if not specified)"
+    )
+    
+    args = parser.parse_args()
+    
     try:
-        run_test()
+        run_test(provider_name_arg=args.provider)
     except KeyboardInterrupt:
         print("\n\n Test interrupted by user")
     except Exception as e:
