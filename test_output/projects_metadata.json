@@ -1,4 +1,32 @@
 {
+    "/home/pradheep/alpha-stack/test_output/RustCalc/.gitignore": [
+        {
+            "description": "Summary: This file instructs Git to exclude specific files and directories from version control, preventing build artifacts, editor backups, and operating system metadata from being committed. It ensures a clean repository state by ignoring Rust-specific compilation outputs and temporary files.\n\nCore Components: The target/ rule ignores the standard Rust directory for build artifacts and dependencies. The **/*.rs.bk pattern excludes Rust source file backups. The file also includes .DS_Store to ignore macOS folder settings and Thumbs.db to ignore Windows thumbnail caches.\n\nInternal Dependencies: None\n\nExternal Dependencies: None"
+        }
+    ],
+    "/home/pradheep/alpha-stack/test_output/RustCalc/Cargo.toml": [
+        {
+            "description": "Summary: The Cargo.toml file acts as the package manifest for the RustCalc project, defining essential metadata such as the project name, version, and Rust edition. It manages the build configuration and specifies the external dependencies required for the application to compile and run.\n\nCore Components: The [package] section establishes the project identity as rustcalc version 0.1.0 using the 2021 Rust edition and includes a project description. The [dependencies] section declares the clap library version 4.5 with the derive feature enabled to handle command-line argument parsing.\n\nInternal Dependencies: This file serves as the configuration root for the Rust project and implicitly links the binary crate structure including src/main.rs, src/cli.rs, and src/parser.rs.\n\nExternal Dependencies: clap 4.5"
+        }
+    ],
+    "/home/pradheep/alpha-stack/test_output/RustCalc/src/main.rs": [
+        {
+            "description": "Summary: The main.rs file serves as the application entry point for RustCalc, orchestrating the initialization and execution flow. It handles command-line argument parsing, invokes the core logic, and manages error reporting and process termination.\n\nCore Components: main function: This function parses command-line arguments using the Args struct, executes the application logic via the run function, and handles potential errors by printing to standard error and exiting with a non-zero status code.\n\nInternal Dependencies: cli: Imports the Args struct for parsing configuration and the run function to drive the application logic. parser: Declared as a module to support the underlying mathematical parsing functionality.\n\nExternal Dependencies: std::process: Provides the process::exit function used to terminate the application with a specific exit code upon failure."
+        }
+    ],
+    "/home/pradheep/alpha-stack/test_output/RustCalc/README.md": [
+        {
+            "description": "The README.md acts as the primary documentation hub for the RustCalc command-line calculator, outlining its capabilities and technical specifications. Core components include a project overview describing arithmetic and parsing features, detailed installation instructions for source builds and Docker environments, and usage guides for both single-line execution and interactive REPL modes. It also contains a structured JSON section defining the software contracts for the CLI controller and the parser evaluation logic. The file references internal project structure elements including src/main.rs, src/cli.rs, src/parser.rs, and Cargo.toml. External dependencies referenced are the Rust toolchain, Clap for argument parsing, and Docker for containerization."
+        }
+    ],
+    "/home/pradheep/alpha-stack/test_output/RustCalc/src/cli.rs": [
+        {
+            "description": "This file acts as the controller layer for RustCalc, managing command-line argument parsing via Clap and directing the execution flow. It handles both direct evaluation of mathematical expressions passed as arguments and an interactive Read-Eval-Print Loop (REPL) mode for multi-step calculations.\n\nKey components include the `Args` struct which utilizes Clap attributes to define configuration options such as an optional expression string and an interactive mode flag. The `run` function serves as the primary orchestrator, evaluating single expressions or managing the interactive loop which reads user input from standard input until a quit command is received.\n\nThe file depends internally on the `parser` module, specifically the `evaluate` function to compute results and the `ParseError` struct to handle and report calculation failures. Externally, it utilizes the `clap` crate's `Parser` trait for efficient argument parsing and the standard library's `std::io` module for handling standard input and output operations during the interactive session."
+        }
+    ],
+    "/home/pradheep/alpha-stack/test_output/RustCalc/src/parser.rs": [
+        {
+            "description": "Summary: This file implements the core mathematical parsing and evaluation logic for the RustCalc project using a recursive descent parser strategy. It handles tokenization of strings, operator precedence, and parentheses, exposing a public evaluate function to compute results or return specific syntax errors.\n\nCore Components: Backend/logic files include the evaluate function which accepts a string expression and returns a Result containing the f64 calculation or a ParseError. The ParseError struct provides detailed error information including kind and message. Internal components include the Token enum for lexical units and the Parser struct with methods parse_expression, parse_term, and parse_factor to manage operator precedence and parenthesis grouping.\n\nInternal Dependencies: Standard library modules std::iter::Peekable and std::str::Chars.\n\nExternal Dependencies: None."
     "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/test_output/cli_number_adder/src/calculator.py": [
         {
             "description": "This file provides the core business logic for the CLI_Number_Adder application. It contains a pure utility function to perform the arithmetic addition, separating the calculation logic from the command-line interface handling. The single core component is the `add(num1, num2)` function, which accepts two numeric arguments (integer or float) and returns their sum. This module has no internal project dependencies and does not import any external libraries."

@@ -1,0 +1,38 @@
+Create a form library where field paths like "user.address.city" are type-safe.
+API:
+
+typescript
+type User = {
+  name: string;
+  address: { city: string; zip: number };
+  tags: string[];
+};
+
+const form = useForm<User>();
+form.register('address.city'); // OK
+form.register('address.country'); // Type error
+form.setValue('address.zip', 12345); // OK
+form.setValue('address.zip', 'abc'); // Type error
+Requirements:
+
+Use template literal types and recursive conditional types for path parsing.
+
+Type helper: Path<T> generates all valid paths ("name" | "address.city" | "address.zip" | "tags" | "tags.0").
+
+Type helper: PathValue<T, P> extracts value type at path.
+
+Support nested objects and arrays.
+Implementation:
+
+Recursive type that traverses object structure.
+
+Handle array indices (tags.0, tags.1).
+
+Use infer to extract property types at each level.
+Tests:
+
+Path generation for complex nested types.
+
+Value type extraction correctness.
+
+Compiler errors for invalid paths.

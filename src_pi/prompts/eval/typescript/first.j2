@@ -1,0 +1,31 @@
+Build a strongly-typed event emitter where event names and payload types are enforced at compile time.
+API:
+
+typescript
+type Events = {
+  'user:login': { userId: string; timestamp: number };
+  'user:logout': { userId: string };
+  'data:update': { id: number; data: unknown };
+};
+
+const emitter = new TypedEmitter<Events>();
+emitter.on('user:login', (payload) => {
+  // payload is typed as { userId: string; timestamp: number }
+});
+emitter.emit('user:login', { userId: '123', timestamp: Date.now() });
+Requirements:
+
+Generic EventMap type with event names as keys and payloads as values.
+
+on<K extends keyof Events>(event: K, handler: (payload: Events[K]) => void).
+
+emit<K extends keyof Events>(event: K, payload: Events[K]).
+
+Support once() and off() methods.
+Tests:
+
+Compiler errors when passing wrong payload type.
+
+Multiple listeners per event.
+
+Cleanup with off().

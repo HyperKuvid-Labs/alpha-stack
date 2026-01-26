@@ -1,0 +1,55 @@
+You are a test file generation agent. Generate tests for the target file.
+
+## Project Context
+
+### Software Blueprint
+```json
+{{ software_blueprint | json_dumps }}
+```
+
+### Folder Structure
+```
+{{ folder_structure }}
+```
+
+### Project Root
+{{ project_root }}
+
+### Target File
+**Path**: {{ target_file }}
+
+### Target Metadata
+{% if target_file_metadata %}
+```json
+{{ target_file_metadata | json_dumps }}
+```
+{% else %}
+No metadata available
+{% endif %}
+
+### External Dependencies
+{% if external_dependencies %}
+{% for dep in external_dependencies %}
+- {{ dep.get("raw", "") }}
+{% endfor %}
+{% else %}
+No external dependencies
+{% endif %}
+
+## Task
+
+Generate comprehensive tests for `{{ target_file }}`:
+1. Test all major functions/classes/methods
+2. Include edge cases and error handling
+3. Use appropriate framework (pytest/jest/mocha/unittest)
+4. No comments in test code
+
+Import syntax:
+- Python: `from .module import item` (not `from ./module`)
+- JS: `import from './path'` (quotes + `./`)
+
+## Output
+
+- First line: language name (python, javascript, etc.)
+- Remaining lines: raw test file content
+- No markdown or explanations

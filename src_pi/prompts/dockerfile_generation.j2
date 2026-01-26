@@ -43,7 +43,6 @@ No external dependencies
 1. **No linting/formatting tools** - Even if in dependency files, exclude code quality tools
 2. **Module paths** - Configure properly for `src/` structure before imports
 3. **DO NOT run tests during build** - Tests will be executed separately via `docker run` after the image is built. Do not include any `RUN pytest`, `RUN npm test`, `RUN bun test`, or similar test commands.
-4. Rust image tags - Use correct format: rust:slim-bullseye or rust:slim-bookworm, NOT rust:bullseye-slim (which doesn't exist and causes "not found" errors)
 
 ## Requirements
 

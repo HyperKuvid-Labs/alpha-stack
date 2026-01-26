@@ -1,0 +1,28 @@
+Create a procedural derive macro #[derive(Validate)] that generates a validate(&self) -> Result<(), Vec<String>> method.
+
+Attributes:
+
+#[validate(range(min = 0, max = 100))] for numeric fields.
+
+#[validate(length(min = 5))] for strings.
+
+#[validate(email)] for email format (simple regex check).
+Implementation:
+
+Parse field attributes using syn.
+
+Generate code with quote!.
+
+Return all validation errors, not just first.
+Example:
+
+rust
+#[derive(Validate)]
+struct User {
+    #[validate(length(min = 3))]
+    name: String,
+    #[validate(range(min = 18, max = 120))]
+    age: u8,
+}
+
+Include tests showing macro expansion (use cargo expand) and runtime validation.

@@ -1,0 +1,24 @@
+Implement a tiny RPC framework over TCP with the following features:
+
+Custom binary framing: [length(uint32)][payload bytes].
+
+Requests: {id, method, payload} as JSON.
+
+Responses: {id, result, error} as JSON.
+Server:
+
+Register handlers by method name (e.g., "Add", "Echo").
+
+Each connection handled by a goroutine; use another goroutine for decoding frames and dispatching.
+Client:
+
+Supports concurrent calls; use a map of id -> response channel guarded by a mutex.
+
+Support context.Context for per-call timeout/cancel.
+Show example methods and unit tests for:
+
+Partial frame reception.
+
+Timeouts.
+
+Concurrent in-flight requests.

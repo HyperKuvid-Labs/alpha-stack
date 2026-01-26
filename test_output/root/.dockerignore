@@ -1,0 +1,99 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+
+# IDE and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.env
+.venv
+env/
+venv/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn
+
+
+# Rust
+target/
+Cargo.lock
+
+
+# Go
+vendor/
+
+
+# Build artifacts
+*.log
+*.tmp
+*.temp
+coverage/
+.coverage
+htmlcov/
+
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+
+
+# Tests (run separately via docker run)
+tests/
+test/
+__tests__/
+*.test.*
+*.spec.*
+pytest.ini
+jest.config.*
+.pytest_cache/
+
+
+# Docker files (avoid recursive copying)
+Dockerfile*
+docker-compose*
+.docker/
+
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+.circleci/
+
+
+# Misc
+*.bak
+*.orig
+.env.local
+.env.*.local
