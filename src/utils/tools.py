@@ -1,5 +1,7 @@
 import os
 import json
+import shlex
+import subprocess
 from typing import Dict, Any
 from google.genai import types
 
@@ -181,16 +183,23 @@ def get_all_tools() -> types.Tool:
 
 
 class ToolHandler:
-    def __init__(self, project_root: str, error_tracker=None, image_name: str = "project-test"):
+    def __init__(self, project_root: str, error_tracker=None, image_name: str = "project-test", dependency_analyzer=None):
         from .helpers import clean_agent_output
         self.project_root = project_root
         self.error_tracker = error_tracker
         self.image_name = image_name
+        self.dependency_analyzer = dependency_analyzer
     
     def handle_function_call(self, function_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
-        print("function_call")
+        print(f"[tool_call] {function_name} args={list(args.keys())}")
         if function_name == "get_file_code":
-            return self._get_file_code(args["file_path"])
+            result = self._get_file_code(
+                args.get("file_path"),
+                start_line=args.get("start_line"),
+                end_line=args.get("end_line")
+            )
+            self._print_tool_result(function_name, result)
+            return result
         elif function_name == "update_file_code":
             file_path = args.get("file_path", "")
             
@@ -210,39 +219,111 @@ class ToolHandler:
                     "error": "No content provided. Expected 'new_content', 'content', 'file_content', or 'code' parameter."
                 }
             
-            return self._update_file_code(file_path, new_content, change_description)
+            result = self._update_file_code(file_path, new_content, change_description)
+            self._print_tool_result(function_name, result)
+            return result
         elif function_name == "log_change":
-            return self._log_change(
+            result = self._log_change(
                 args["file_path"],
                 args["change_description"],
                 args["error_context"]
             )
+            self._print_tool_result(function_name, result)
+            return result
         elif function_name == "find_files":
-            return self._find_files(
+            result = self._find_files(
                 query=args.get("query", ""),
                 include_content=bool(args.get("include_content", False)),
                 max_results=int(args.get("max_results", 50))
             )
+            self._print_tool_result(function_name, result)
+            return result
         elif function_name == "regenerate_file":
-            return self._regenerate_file(
+            result = self._regenerate_file(
                 file_path=args.get("file_path", ""),
                 context=args.get("context", "")
             )
+            self._print_tool_result(function_name, result)
+            return result
         elif function_name == "check_file_exists":
-            return self._check_file_exists(args.get("file_path", ""))
+            result = self._check_file_exists(args.get("file_path", ""))
+            self._print_tool_result(function_name, result)
+            return result
         elif function_name == "list_directory":
-            return self._list_directory(args.get("directory_path", ""))
+            result = self._list_directory(args.get("directory_path", ""))
+            self._print_tool_result(function_name, result)
+            return result
         elif function_name == "create_directory":
-            return self._create_directory(
+            result = self._create_directory(
                 args.get("directory_path", ""),
                 args.get("create_parents", True)
             )
+            self._print_tool_result(function_name, result)
+            return result
         elif function_name == "delete_file":
-            return self._delete_file(args.get("file_path", ""))
+            result = self._delete_file(args.get("file_path", ""))
+            self._print_tool_result(function_name, result)
+            return result
+        elif function_name == "get_error_history":
+            result = self._get_error_history(
+                error_id=args.get("error_id"),
+                limit=int(args.get("limit", 20)) if args.get("limit") is not None else 20,
+                offset=int(args.get("offset", 0)) if args.get("offset") is not None else 0,
+                include_logs=bool(args.get("include_logs", False))
+            )
+            self._print_tool_result(function_name, result)
+            return result
+        elif function_name == "get_action_history":
+            result = self._get_action_history(
+                limit=int(args.get("limit", 20)) if args.get("limit") is not None else 20,
+                offset=int(args.get("offset", 0)) if args.get("offset") is not None else 0,
+                task_id=args.get("task_id")
+            )
+            self._print_tool_result(function_name, result)
+            return result
+        elif function_name == "log_action":
+            result = self._log_action(
+                task_id=args.get("task_id"),
+                action_type=args.get("action_type", ""),
+                message=args.get("message", "")
+            )
+            self._print_tool_result(function_name, result)
+            return result
+        elif function_name == "run_shell_command":
+            result = self._run_shell_command(
+                command=args.get("command", ""),
+                timeout_sec=int(args.get("timeout_sec", 5)) if args.get("timeout_sec") is not None else 5
+            )
+            self._print_tool_result(function_name, result)
+            return result
+        elif function_name == "get_file_dependencies":
+            result = self._get_file_dependencies(args.get("file_path", ""))
+            self._print_tool_result(function_name, result)
+            return result
+        elif function_name == "get_file_dependents":
+            result = self._get_file_dependents(args.get("file_path", ""))
+            self._print_tool_result(function_name, result)
+            return result
         else:
-            return {"error": f"Unknown function: {function_name}"}
+            result = {"error": f"Unknown function: {function_name}"}
+            self._print_tool_result(function_name, result)
+            return result
+
+    @staticmethod
+    def _print_tool_result(function_name: str, result: Dict[str, Any]) -> None:
+        try:
+            preview = dict(result)
+            if "content" in preview and isinstance(preview["content"], str):
+                preview["content"] = preview["content"][:300]
+            if "stdout" in preview and isinstance(preview["stdout"], str):
+                preview["stdout"] = preview["stdout"][:300]
+            if "stderr" in preview and isinstance(preview["stderr"], str):
+                preview["stderr"] = preview["stderr"][:300]
+            print(f"[tool_result] {function_name} -> {preview}")
+        except Exception:
+            print(f"[tool_result] {function_name} -> <unavailable>")
     
-    def _get_file_code(self, file_path: str) -> Dict[str, Any]:
+    def _get_file_code(self, file_path: str, start_line: int = None, end_line: int = None) -> Dict[str, Any]:
         if not file_path:
             return {"error": "file_path is required"}
         
@@ -252,11 +333,30 @@ class ToolHandler:
         
         try:
             with open(full_path, 'r', encoding='utf-8') as f:
-                content = f.read()
+                lines = f.readlines()
+            
+            total_lines = len(lines)
+            if start_line is not None or end_line is not None:
+                start = max(int(start_line or 1), 1)
+                end = min(int(end_line or total_lines), total_lines)
+                if start > end:
+                    return {"error": "start_line must be <= end_line"}
+                content = "".join(lines[start - 1:end])
+                return {
+                    "success": True,
+                    "file_path": file_path,
+                    "content": content,
+                    "start_line": start,
+                    "end_line": end,
+                    "total_lines": total_lines
+                }
+            
+            content = "".join(lines)
             return {
                 "success": True,
                 "file_path": file_path,
-                "content": content
+                "content": content,
+                "total_lines": total_lines
             }
         except Exception as e:
             return {"error": f"Error reading file: {str(e)}"}
@@ -273,6 +373,21 @@ class ToolHandler:
             return {"success": True, "message": "Change logged successfully"}
         else:
             return {"success": True, "message": "Change logged (no tracker available)"}
+
+    def _get_error_history(self, error_id: str = None, limit: int = 20, offset: int = 0, include_logs: bool = False) -> Dict[str, Any]:
+        if not self.error_tracker:
+            return {"error": "No error tracker available"}
+        return self.error_tracker.get_error_history(error_id=error_id, limit=limit, offset=offset, include_logs=include_logs)
+
+    def _get_action_history(self, limit: int = 20, offset: int = 0, task_id: str = None) -> Dict[str, Any]:
+        if not self.error_tracker:
+            return {"error": "No error tracker available"}
+        return self.error_tracker.get_action_history(limit=limit, offset=offset, task_id=task_id)
+
+    def _log_action(self, task_id: str, action_type: str, message: str) -> Dict[str, Any]:
+        if not self.error_tracker:
+            return {"success": False, "error": "No error tracker available"}
+        return self.error_tracker.log_action(task_id=task_id, action_type=action_type, message=message)
 
     def _find_files(self, query: str, include_content: bool = False, max_results: int = 50) -> Dict[str, Any]:
         print("find_files")
@@ -455,4 +570,72 @@ class ToolHandler:
             }
         except Exception as e:
             return {"error": f"Error deleting file: {str(e)}"}
+
+    def _run_shell_command(self, command: str, timeout_sec: int = 5) -> Dict[str, Any]:
+        if not command or not isinstance(command, str):
+            return {"error": "command is required"}
+        
+        blocked_tokens = {
+            "python", "pip", "npm", "yarn", "pnpm", "bun", "go", "cargo",
+            "docker", "podman", "pytest", "make", "gradle", "mvn", "node"
+        }
+        safe_prefixes = {
+            "ls", "cat", "head", "tail", "sed", "grep", "rg", "find",
+            "pwd", "wc", "stat", "du", "sort", "uniq", "cut"
+        }
+        
+        try:
+            parts = shlex.split(command)
+        except ValueError:
+            return {"error": "Invalid command string"}
+        
+        if not parts:
+            return {"error": "Empty command"}
+        
+        if parts[0] not in safe_prefixes:
+            return {"error": "Command not allowed"}
+        
+        if any(token in blocked_tokens for token in parts):
+            return {"error": "Command contains blocked tokens"}
+        
+        try:
+            completed = subprocess.run(
+                parts,
+                cwd=self.project_root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=timeout_sec,
+                text=True
+            )
+            return {
+                "success": True,
+                "command": command,
+                "exit_code": completed.returncode,
+                "stdout": completed.stdout,
+                "stderr": completed.stderr
+            }
+        except subprocess.TimeoutExpired:
+            return {"error": "Command timed out"}
+        except Exception as e:
+            return {"error": f"Command failed: {str(e)}"}
+
+    def _get_file_dependencies(self, file_path: str) -> Dict[str, Any]:
+        if not self.dependency_analyzer:
+            return {"error": "Dependency analyzer not available"}
+        if not file_path:
+            return {"error": "file_path is required"}
+        full_path = os.path.join(self.project_root, file_path)
+        deps = self.dependency_analyzer.get_dependencies(full_path)
+        rel_deps = [os.path.relpath(p, self.project_root) for p in deps]
+        return {"success": True, "file_path": file_path, "dependencies": rel_deps}
+
+    def _get_file_dependents(self, file_path: str) -> Dict[str, Any]:
+        if not self.dependency_analyzer:
+            return {"error": "Dependency analyzer not available"}
+        if not file_path:
+            return {"error": "file_path is required"}
+        full_path = os.path.join(self.project_root, file_path)
+        deps = self.dependency_analyzer.get_dependents(full_path)
+        rel_deps = [os.path.relpath(p, self.project_root) for p in deps]
+        return {"success": True, "file_path": file_path, "dependents": rel_deps}
 

@@ -24,3 +24,4 @@ alphastack.egg-info/
 /examples
 open_router.ipynb
 test.py
+/test_output

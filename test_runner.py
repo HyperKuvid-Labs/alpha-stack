@@ -358,9 +358,10 @@ def run_test(provider_name_arg=None):
     print(f"\n Phase 6.5 completed in {phase65_time:.2f}s")
     
     # ========================================================================
-    # PHASE 7: Dependency Resolution (Feedback Loop)
+    # PHASE 7: Dependency Resolution (Feedback Loop) - DISABLED
     # ========================================================================
     print_header("PHASE 7: DEPENDENCY RESOLUTION (FEEDBACK LOOP)")
+<<<<<<< HEAD
     print("Running dependency resolution feedback loop...")
 
     from src_pi.utils.dependencies import DependencyFeedbackLoop
@@ -389,6 +390,15 @@ def run_test(provider_name_arg=None):
 
     phase7_time = time.time() - phase7_start
 
+=======
+    print("Skipping dependency resolution (disabled for ablation).")
+    
+    from src.utils.error_tracker import ErrorTracker
+    error_tracker = ErrorTracker(project_root_path)
+    dep_results = {"success": True, "iterations": 0, "remaining_errors": [], "skipped": True}
+    phase7_time = 0.0
+    
+>>>>>>> 966c54a (new planner executer architecture with new tools)
     print_subheader("Dependency Resolution Results")
     print_json(dep_results)
     print(f"\n Phase 7 completed in {phase7_time:.2f}s")

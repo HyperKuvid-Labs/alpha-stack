@@ -9,6 +9,8 @@ class ErrorTracker:
         self.project_root = project_root
         self.change_log: List[Dict] = []
         self.error_history: List[Dict] = []
+        self.action_log: List[Dict] = []
+        self._error_counter = 0
         
     def log_change(self, file_path: str, change_description: str, 
                    error_context: Optional[str] = None, 
@@ -37,11 +39,17 @@ class ErrorTracker:
             
         self.change_log.append(change_entry)
     
-    def log_error(self, error_info: Dict) -> None:
-        self.error_history.append({
+    def log_error(self, error_info: Dict) -> str:
+        self._error_counter += 1
+        error_id = f"err_{self._error_counter}"
+        entry = {
+            "id": error_id,
             "timestamp": datetime.now().isoformat(),
+            "signature": self._error_signature(error_info),
             **error_info
-        })
+        }
+        self.error_history.append(entry)
+        return error_id
     
     def get_change_summary(self) -> str:
         if not self.change_log:
@@ -85,6 +93,64 @@ class ErrorTracker:
             summary_lines.append("")
         
         return "\n".join(summary_lines)
+
+    def log_action(self, task_id: Optional[str], action_type: str, message: str) -> Dict:
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "task_id": task_id,
+            "action_type": action_type,
+            "message": message
+        }
+        self.action_log.append(entry)
+        return {"success": True, "entry": entry}
+
+    def get_action_history(self, limit: int = 20, offset: int = 0, task_id: Optional[str] = None) -> Dict:
+        entries = self.action_log
+        if task_id:
+            entries = [e for e in entries if e.get("task_id") == task_id]
+        sliced = entries[offset:offset + limit]
+        return {
+            "success": True,
+            "total": len(entries),
+            "offset": offset,
+            "limit": limit,
+            "entries": sliced
+        }
+
+    def get_error_history(self, error_id: Optional[str] = None, limit: int = 20, offset: int = 0, include_logs: bool = False) -> Dict:
+        if error_id:
+            entry = next((e for e in self.error_history if e.get("id") == error_id), None)
+            if not entry:
+                return {"success": False, "error": "error_id not found"}
+            return {"success": True, "entry": self._strip_logs(entry, include_logs)}
+        entries = self.error_history[offset:offset + limit]
+        return {
+            "success": True,
+            "total": len(self.error_history),
+            "offset": offset,
+            "limit": limit,
+            "entries": [self._strip_logs(e, include_logs) for e in entries]
+        }
+
+    def is_repeat_error(self, error_info: Dict) -> bool:
+        signature = self._error_signature(error_info)
+        return any(e.get("signature") == signature for e in self.error_history)
+
+    @staticmethod
+    def _strip_logs(entry: Dict, include_logs: bool) -> Dict:
+        if include_logs:
+            return dict(entry)
+        filtered = dict(entry)
+        filtered.pop("logs", None)
+        return filtered
+
+    def _error_signature(self, error_info: Dict) -> str:
+        parts = [
+            str(error_info.get("error_type", "")),
+            str(error_info.get("file", "")),
+            str(error_info.get("error", ""))[:200]
+        ]
+        return "|".join(parts)
     
     def get_recent_changes(self, file_path: Optional[str] = None, limit: int = 10) -> List[Dict]:
         changes = self.change_log
@@ -98,8 +164,10 @@ class ErrorTracker:
             "project_root": self.project_root,
             "total_changes": len(self.change_log),
             "total_errors": len(self.error_history),
+            "total_actions": len(self.action_log),
             "change_log": self.change_log,
-            "error_history": self.error_history
+            "error_history": self.error_history,
+            "action_log": self.action_log
         }
     
     def save_to_file(self, file_path: str) -> None:
@@ -114,5 +182,7 @@ class ErrorTracker:
         tracker = cls(data['project_root'])
         tracker.change_log = data.get('change_log', [])
         tracker.error_history = data.get('error_history', [])
+        tracker.action_log = data.get('action_log', [])
+        tracker._error_counter = len(tracker.error_history)
         return tracker
 

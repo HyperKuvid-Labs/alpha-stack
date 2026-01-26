@@ -1,1 +1,1 @@
-from .addition_service import add_numbers
+from .math_service import add_numbers

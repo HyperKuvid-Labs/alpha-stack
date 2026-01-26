@@ -13,6 +13,14 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                     "file_path": {
                         "type": "string",
                         "description": "Relative path to the file from project root (e.g., 'src/main.py' or 'app/models.py')"
+                    },
+                    "start_line": {
+                        "type": "integer",
+                        "description": "Optional start line number (1-based). If provided with end_line, only return that slice."
+                    },
+                    "end_line": {
+                        "type": "integer",
+                        "description": "Optional end line number (1-based). If provided with start_line, only return that slice."
                     }
                 },
                 "required": ["file_path"]
@@ -138,6 +146,123 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                     }
                 },
                 "required": ["file_path", "context"]
+            }
+        }
+        ,
+        {
+            "name": "get_error_history",
+            "description": "Fetch error history with optional paging or a specific error ID.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "error_id": {
+                        "type": "string",
+                        "description": "Optional error ID to fetch a specific error entry"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max number of entries to return (default 20)"
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Offset into error history (default 0)"
+                    },
+                    "include_logs": {
+                        "type": "boolean",
+                        "description": "If true, include error logs/details in the response"
+                    }
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "get_action_history",
+            "description": "Fetch action history with optional paging.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max number of entries to return (default 20)"
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Offset into action history (default 0)"
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "description": "Optional task id to filter action history"
+                    }
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "log_action",
+            "description": "Log an action taken by the executor or planner.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {
+                        "type": "string",
+                        "description": "Task ID associated with the action"
+                    },
+                    "action_type": {
+                        "type": "string",
+                        "description": "Type of action (e.g., edit, analysis, command)"
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "Short description of the action"
+                    }
+                },
+                "required": ["action_type", "message"]
+            }
+        },
+        {
+            "name": "run_shell_command",
+            "description": "Run a read-only shell command for context. No project execution.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "Command to run (read-only)."
+                    },
+                    "timeout_sec": {
+                        "type": "integer",
+                        "description": "Timeout in seconds (default 5)"
+                    }
+                },
+                "required": ["command"]
+            }
+        },
+        {
+            "name": "get_file_dependencies",
+            "description": "Get internal dependencies for a file (paths it depends on).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Relative path to the file"
+                    }
+                },
+                "required": ["file_path"]
+            }
+        },
+        {
+            "name": "get_file_dependents",
+            "description": "Get dependents of a file (files that import it).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Relative path to the file"
+                    }
+                },
+                "required": ["file_path"]
             }
         }
     ]

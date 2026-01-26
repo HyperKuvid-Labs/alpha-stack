@@ -1,4 +1,4 @@
 from .planner import PlanningAgent
-from .corrector import CorrectionAgent
+from .corrector import ExecutorAgent, CorrectionAgent
 
-__all__ = ["PlanningAgent", "CorrectionAgent"]
+__all__ = ["PlanningAgent", "ExecutorAgent", "CorrectionAgent"]

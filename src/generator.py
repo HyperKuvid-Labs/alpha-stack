@@ -585,19 +585,10 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
     except Exception as e:
         print(f"Error generating dependency files: {e}")
     
-    emit("step", "Running dependency resolution...")
-    
+    # Dependency resolution disabled for ablation study
+    emit("step", "Skipping dependency resolution (disabled)...")
     error_tracker = ErrorTracker(project_root_path)
-    feedback_loop = DependencyFeedbackLoop(
-        dependency_analyzer=dependency_analyzer,
-        project_root=project_root_path,
-        software_blueprint=software_blueprint,
-        folder_structure=folder_struc,
-        file_output_format=file_output_format,
-        pm=pm,
-        error_tracker=error_tracker
-    )
-    dep_results = feedback_loop.run_feedback_loop()
+    dep_results = {"success": True, "iterations": 0, "remaining_errors": [], "skipped": True}
     
     emit("step", "Running Docker testing pipeline...")
     

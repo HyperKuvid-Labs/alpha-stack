@@ -509,7 +509,7 @@ class DependencyFeedbackLoop:
                  pm=None, error_tracker=None):
         from .tools import ToolHandler
         from ..agents.planner import PlanningAgent
-        from ..agents.corrector import CorrectionAgent
+        from ..agents.corrector import ExecutorAgent
         from .prompt_manager import PromptManager
         from .error_tracker import ErrorTracker
         
@@ -519,9 +519,9 @@ class DependencyFeedbackLoop:
         self.folder_structure = folder_structure or ""
         self.file_output_format = file_output_format or {}
         self.pm = pm or PromptManager(templates_dir="prompts")
-        self.max_iterations = 20
+        self.max_iterations = 25
         self.error_tracker = error_tracker or ErrorTracker(project_root)
-        self.tool_handler = ToolHandler(project_root, self.error_tracker)
+        self.tool_handler = ToolHandler(project_root, self.error_tracker, dependency_analyzer=self.dependency_analyzer)
         
         self.planning_agent = PlanningAgent(
             project_root=project_root,
@@ -533,7 +533,7 @@ class DependencyFeedbackLoop:
             tool_handler=self.tool_handler
         )
         
-        self.correction_agent = CorrectionAgent(
+        self.executor_agent = ExecutorAgent(
             project_root=project_root,
             software_blueprint=self.software_blueprint,
             folder_structure=self.folder_structure,
@@ -750,6 +750,7 @@ Set has_error false if no issues."""
         files_to_check = None
         
         for iteration in range(1, self.max_iterations + 1):
+            print(f"[dep_resolution] iteration={iteration}")
             changes_before = len(self.error_tracker.change_log)
             
             if files_to_check is None:
@@ -762,12 +763,14 @@ Set has_error false if no issues."""
                 all_errors.extend(errors)
             
             if not all_errors:
+                print("[dep_resolution] no errors found")
                 return {
                     "success": True,
                     "iterations": iteration,
                     "remaining_errors": []
                 }
             
+            print(f"[dep_resolution] errors_found={len(all_errors)}")
             current_error_signatures = {
                 (e.file_path, e.error_type, e.message[:100]) for e in all_errors
             }
@@ -776,6 +779,7 @@ Set has_error false if no issues."""
                 stuck_iterations += 1
                 
                 if stuck_iterations >= max_stuck_iterations:
+                    print("[dep_resolution] stuck errors detected, stopping")
                     return {
                         "success": False,
                         "iterations": iteration,
@@ -789,6 +793,7 @@ Set has_error false if no issues."""
             fixable_errors = list(all_errors)
             
             if not fixable_errors:
+                print("[dep_resolution] no fixable errors")
                 return {
                     "success": False,
                     "iterations": iteration,
@@ -797,40 +802,42 @@ Set has_error false if no issues."""
                 }
             
             errors_dict = [e.to_dict(self.project_root) for e in fixable_errors]
-            fix_plan = self.planning_agent.plan_fixes(errors=errors_dict, error_type="dependency")
-            if fix_plan:
-                fixes_applied = 0
-                for error_info in fix_plan:
-                    if self.correction_agent.fix_error(error_info):
-                        fixes_applied += 1
-                        self.planning_agent.invalidate_cache()
-                        self.correction_agent.invalidate_cache()
+            error_info = {
+                "error_type": "dependency",
+                "error": "Dependency resolution errors",
+                "errors": errors_dict
+            }
+            is_repeat = self.error_tracker.is_repeat_error(error_info)
+            if is_repeat:
+                error_info["repeat"] = True
+                print("[dep_resolution] repeat_error=true")
+            error_id = self.error_tracker.log_error(error_info)
+            
+            tasks = self.planning_agent.plan_tasks(errors=errors_dict, error_type="dependency", error_ids=[error_id])
+            if tasks:
+                print(f"[dep_resolution] tasks_planned={len(tasks)}")
+                changed_files = set()
+                for task in tasks:
+                    result = self.executor_agent.execute_task(task)
+                    if result.get("changed_files"):
+                        changed_files.update(result["changed_files"])
+                    self.planning_agent.invalidate_cache()
+                    self.executor_agent.invalidate_cache()
                 
-                changes_after = len(self.error_tracker.change_log)
-                if changes_after > changes_before:
-                    recent_changes = self.error_tracker.change_log[changes_before:]
-                    changed_files = set()
-                    for change_entry in recent_changes:
-                        file_path = change_entry.get("file", "")
-                        if file_path:
-                            if not os.path.isabs(file_path):
-                                abs_path = os.path.join(self.project_root, file_path)
-                            else:
-                                abs_path = file_path
-                            changed_files.add(os.path.abspath(abs_path))
-                    
-                    if changed_files:
-                        self._reanalyze_changed_files(changed_files)
-                        files_to_check = self._get_files_to_recheck(changed_files)
-                        error_files = {os.path.abspath(e.file_path) for e in all_errors if e.file_path}
-                        files_to_check.update(error_files)
-                    else:
-                        files_to_check = set(all_files)
+                if changed_files:
+                    print(f"[dep_resolution] changed_files={len(changed_files)}")
+                    self._reanalyze_changed_files(changed_files)
+                    files_to_check = self._get_files_to_recheck(changed_files)
+                    error_files = {os.path.abspath(e.file_path) for e in all_errors if e.file_path}
+                    files_to_check.update(error_files)
                 else:
+                    print("[dep_resolution] no file changes applied")
                     files_to_check = set(all_files)
             else:
+                print("[dep_resolution] no tasks returned from planner")
                 files_to_check = set(all_files)
         
+        print("[dep_resolution] max_iterations reached")
         return {
             "success": False,
             "iterations": self.max_iterations,

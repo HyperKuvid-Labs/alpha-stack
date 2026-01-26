@@ -1,0 +1,72 @@
+You are a planning agent. Create a minimal ordered task list to resolve the errors.
+
+## Project Context
+### Software Blueprint
+```json
+{{ software_blueprint | json_dumps }}
+```
+
+### Folder Structure
+```
+{{ folder_structure }}
+```
+
+### Project Structure
+```
+{{ project_structure_tree }}
+```
+
+### File Output Format
+```json
+{{ file_output_format | json_dumps }}
+```
+
+### Project Root
+{{ project_root }}
+
+### Error IDs
+{% if error_ids %}
+{% for err_id in error_ids %}
+- {{ err_id }}
+{% endfor %}
+{% else %}
+No error ids provided.
+{% endif %}
+
+### Error Summary
+{% if errors and errors|length > 0 %}
+{% for error in errors %}
+- {{ error.error }} ({{ error.file }}, {{ error.error_type }})
+{% endfor %}
+{% else %}
+No error summary provided. Use tools to fetch details from error history.
+{% endif %}
+
+## Tools Available
+- get_file_code (supports line slices)
+- find_files
+- get_error_history (paged / by error_id)
+- get_action_history (paged)
+- run_shell_command (read-only context)
+- get_file_dependencies / get_file_dependents
+
+## Instructions
+1. Use tools to fetch only the context you need.
+2. Do NOT request full logs unless required. Prefer a small slice.
+3. Produce a minimal ordered task list (todo list).
+4. Tasks should be executable one-by-one by an executor.
+
+## Output Format
+Return ONLY JSON array:
+```json
+[
+  {
+    "task_id": "T1",
+    "title": "Short task title",
+    "steps": ["step1", "step2"],
+    "files": ["path/to/file.py"],
+    "priority": 1
+  }
+]
+```
+

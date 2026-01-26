@@ -626,40 +626,14 @@ def eval_generate_project(user_prompt, output_base_dir, model_name, on_status=No
     dep_file_gen_end = time.time()
     metrics['dependency_file_generation_time'] = dep_file_gen_end - dep_file_gen_start
 
-    emit("step", "Running dependency resolution...")
-
-    dep_resolution_start = time.time()
+    # Dependency resolution disabled for ablation study
+    emit("step", "Skipping dependency resolution (disabled)...")
     error_tracker = ErrorTracker(project_root_path)
-    feedback_loop = DependencyFeedbackLoop(
-        dependency_analyzer=dependency_analyzer,
-        project_root=project_root_path,
-        software_blueprint=software_blueprint,
-        folder_structure=folder_struc,
-        file_output_format=file_output_format,
-        pm=pm,
-        error_tracker=error_tracker
-    )
-    dep_results = feedback_loop.run_feedback_loop()
-    dep_resolution_end = time.time()
-
-    metrics['dependency_resolution_time'] = dep_resolution_end - dep_resolution_start
-    metrics['dependency_resolution_success'] = dep_results.get('success', False)
-    metrics['dependency_resolution_iterations'] = dep_results.get('iterations', 0)
-
-    remaining_errors = dep_results.get("remaining_errors", [])
-    metrics['dependency_remaining_errors_count'] = len(remaining_errors)
-
-    if remaining_errors:
-        metrics['dependency_errors_by_iteration'] = {}
-        for i, error in enumerate(remaining_errors):
-            iteration = error.get('iteration', i)
-            if iteration not in metrics['dependency_errors_by_iteration']:
-                metrics['dependency_errors_by_iteration'][iteration] = []
-            metrics['dependency_errors_by_iteration'][iteration].append({
-                'file': error.get('file', 'unknown'),
-                'error_type': error.get('error_type', 'unknown'),
-                'message': error.get('message', '')
-            })
+    dep_results = {"success": True, "iterations": 0, "remaining_errors": [], "skipped": True}
+    metrics['dependency_resolution_time'] = 0.0
+    metrics['dependency_resolution_success'] = True
+    metrics['dependency_resolution_iterations'] = 0
+    metrics['dependency_remaining_errors_count'] = 0
 
     emit("step", "Running Docker testing pipeline...")
 

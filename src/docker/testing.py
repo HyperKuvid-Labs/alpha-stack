@@ -12,9 +12,9 @@ from ..utils.error_tracker import ErrorTracker
 from ..utils.tools import ToolHandler
 from ..utils.command_log import CommandLogManager
 from ..agents.planner import PlanningAgent
-from ..agents.corrector import CorrectionAgent
+from ..agents.corrector import ExecutorAgent
 from .generator import generate_dockerignore_content
-
+import time
 
 class CommandExecutor:
     def __init__(self, project_root: str, error_tracker: Optional[ErrorTracker] = None,
@@ -386,7 +386,7 @@ class DockerTestingPipeline:
         self.folder_structure = folder_structure
         self.file_output_format = file_output_format
         self.pm = pm or PromptManager(templates_dir="prompts")
-        self.max_iterations = 10
+        self.max_iterations = 25
         self.dockerfile_path = os.path.join(project_root, "Dockerfile")
         self.dependency_analyzer = dependency_analyzer
         self.on_status = on_status
@@ -398,7 +398,7 @@ class DockerTestingPipeline:
         self.image_name = re.sub(r'[^a-z0-9-]', '-', project_name.lower())
 
         self.error_tracker = error_tracker or ErrorTracker(project_root)
-        self.tool_handler = ToolHandler(project_root, self.error_tracker, image_name=self.image_name)
+        self.tool_handler = ToolHandler(project_root, self.error_tracker, image_name=self.image_name, dependency_analyzer=self.dependency_analyzer)
 
         self.command_log_manager = CommandLogManager(project_root)
         self.log_summarizer = LogSummarizerAgent()
@@ -414,7 +414,7 @@ class DockerTestingPipeline:
             command_log_manager=self.command_log_manager
         )
 
-        self.correction_agent = CorrectionAgent(
+        self.executor_agent = ExecutorAgent(
             project_root=project_root,
             software_blueprint=self.software_blueprint,
             folder_structure=self.folder_structure,
@@ -437,6 +437,7 @@ class DockerTestingPipeline:
         self.dependency_feedback_loop = None
 
     def _emit(self, event_type: str, message: str, **kwargs):
+        print(f"[{event_type}] {message}")
         if self.on_status:
             self.on_status(event_type, message, **kwargs)
 
@@ -452,9 +453,15 @@ class DockerTestingPipeline:
 
     def _fix_plan_requires_rebuild(self, fix_plan: List[Dict]) -> bool:
         for fix in fix_plan:
+            files = []
             filepath = fix.get('filepath', '') or fix.get('file', '')
-            if self._is_dependency_file(filepath):
-                return True
+            if filepath:
+                files = [filepath]
+            if fix.get("files"):
+                files.extend(fix.get("files", []))
+            for fp in files:
+                if self._is_dependency_file(fp):
+                    return True
         return False
 
     def _reanalyze_changed_files(self, fix_plan: List[Dict]) -> None:
@@ -463,12 +470,17 @@ class DockerTestingPipeline:
 
         changed_files = set()
         for fix in fix_plan:
+            files = []
             filepath = fix.get('filepath', '') or fix.get('file', '')
             if filepath:
-                if not os.path.isabs(filepath):
-                    filepath = os.path.join(self.project_root, filepath)
-                if os.path.exists(filepath):
-                    changed_files.add(filepath)
+                files = [filepath]
+            if fix.get("files"):
+                files.extend(fix.get("files", []))
+            for fp in files:
+                if not os.path.isabs(fp):
+                    fp = os.path.join(self.project_root, fp)
+                if os.path.exists(fp):
+                    changed_files.add(fp)
 
         if not changed_files:
             return
@@ -487,12 +499,17 @@ class DockerTestingPipeline:
 
         changed_files = set()
         for fix in fix_plan:
+            files = []
             filepath = fix.get('filepath', '') or fix.get('file', '')
             if filepath:
-                if not os.path.isabs(filepath):
-                    filepath = os.path.join(self.project_root, filepath)
-                if os.path.exists(filepath):
-                    changed_files.add(filepath)
+                files = [filepath]
+            if fix.get("files"):
+                files.extend(fix.get("files", []))
+            for fp in files:
+                if not os.path.isabs(fp):
+                    fp = os.path.join(self.project_root, fp)
+                if os.path.exists(fp):
+                    changed_files.add(fp)
 
         if not changed_files:
             return []
@@ -538,16 +555,16 @@ class DockerTestingPipeline:
             )
             
             output_lines = []
+            last_output_time = time.time()
+            stall_seconds = 150
             try:
-                # Stream output line by line with timeout handling
                 while True:
-                    # Check if process has finished
                     if process.poll() is not None:
-                        # Read any remaining output
                         remaining = process.stdout.read()
                         if remaining:
                             output_lines.append(remaining)
                             self._emit("docker_build", remaining.strip())
+                            last_output_time = time.time()
                         break
                     
                     # Read available output (non-blocking on Unix)
@@ -558,14 +575,32 @@ class DockerTestingPipeline:
                             if line:
                                 output_lines.append(line)
                                 self._emit("docker_build", line.strip())
+                                last_output_time = time.time()
+                        else:
+                            if time.time() - last_output_time > stall_seconds:
+                                stall_msg = f"Docker build stalled for > {stall_seconds}s"
+                                output_lines.append(stall_msg + "\n")
+                                self._emit("docker_build", stall_msg)
+                                process.kill()
+                                process.wait()
+                                return False, "".join(output_lines)
                     else:
                         # Fallback for Windows
                         line = process.stdout.readline()
                         if line:
                             output_lines.append(line)
                             self._emit("docker_build", line.strip())
+                            last_output_time = time.time()
                         elif process.poll() is not None:
                             break
+                        else:
+                            if time.time() - last_output_time > stall_seconds:
+                                stall_msg = f"Docker build stalled for > {stall_seconds}s"
+                                output_lines.append(stall_msg + "\n")
+                                self._emit("docker_build", stall_msg)
+                                process.kill()
+                                process.wait()
+                                return False, "".join(output_lines)
                 
                 # Wait for process to complete with timeout
                 process.wait(timeout=600)
@@ -821,15 +856,23 @@ class DockerTestingPipeline:
                 results["build_iterations"] = build_iteration
                 break
 
-            fix_plan = self.planning_agent.plan_fixes(logs=build_logs, error_type="build")
+            error_info = {
+                "error_type": "build",
+                "error": "Docker build failed",
+                "logs": build_logs
+            }
+            if self.error_tracker.is_repeat_error(error_info):
+                error_info["repeat"] = True
+            error_id = self.error_tracker.log_error(error_info)
+            tasks = self.planning_agent.plan_tasks(errors=[], error_type="build", error_ids=[error_id])
 
             self._check_and_summarize_logs()
 
-            if not fix_plan:
+            if not tasks:
                 continue
 
             current_fix_signatures = {
-                (f.get("filepath", ""), f.get("error", "")[:100]) for f in fix_plan
+                (f.get("task_id", ""), f.get("title", "")[:100]) for f in tasks
             }
 
             if current_fix_signatures == previous_build_errors:
@@ -841,36 +884,34 @@ class DockerTestingPipeline:
                 stuck_build_iterations = 0
                 previous_build_errors = current_fix_signatures
 
-            fixes_applied = 0
-            for i, error_info in enumerate(fix_plan, 1):
-                commands = error_info.get("commands", [])
-                if commands:
-                    for cmd in commands:
-                        if isinstance(cmd, list) and cmd:
-                            success, cmd_logs = self.command_executor.execute_command(
-                                cmd,
-                                description=f"Command suggested by planner: {' '.join(cmd)}"
-                            )
-                            if not success:
-                                error_info["command_logs"] = cmd_logs
+            changed_files = set()
+            for task in tasks:
+                result = self.executor_agent.execute_task(task)
+                if result.get("changed_files"):
+                    changed_files.update(result["changed_files"])
+                self.planning_agent.invalidate_cache()
+                self.executor_agent.invalidate_cache()
 
-                if self.correction_agent.fix_error(error_info):
-                    fixes_applied += 1
-                    self.planning_agent.invalidate_cache()
-                    self.correction_agent.invalidate_cache()
-
-            if fixes_applied == 0:
+            if not changed_files:
                 continue
 
-            self._reanalyze_changed_files(fix_plan)
+            change_plan = [{"files": [os.path.relpath(p, self.project_root)]} for p in changed_files]
+            self._reanalyze_changed_files(change_plan)
 
-            coupling_errors = self._check_coupling_for_changed_files(fix_plan)
+            coupling_errors = self._check_coupling_for_changed_files(change_plan)
             if coupling_errors:
-                for coupling_error in coupling_errors:
-                    if self.correction_agent.fix_error(coupling_error):
-                        self.planning_agent.invalidate_cache()
-                        self.correction_agent.invalidate_cache()
-                self._reanalyze_changed_files(fix_plan)
+                coupling_error_info = {
+                    "error_type": "dependency",
+                    "error": "Coupling errors after build fixes",
+                    "errors": coupling_errors
+                }
+                error_id = self.error_tracker.log_error(coupling_error_info)
+                coupling_tasks = self.planning_agent.plan_tasks(errors=coupling_errors, error_type="dependency", error_ids=[error_id])
+                for task in coupling_tasks:
+                    self.executor_agent.execute_task(task)
+                    self.planning_agent.invalidate_cache()
+                    self.executor_agent.invalidate_cache()
+                self._reanalyze_changed_files(coupling_tasks)
 
         if not results["build_success"]:
             return {
@@ -896,15 +937,23 @@ class DockerTestingPipeline:
                 results["test_iterations"] = test_iteration
                 break
 
-            fix_plan = self.planning_agent.plan_fixes(logs=test_logs, error_type="test")
+            error_info = {
+                "error_type": "test",
+                "error": "Docker tests failed",
+                "logs": test_logs
+            }
+            if self.error_tracker.is_repeat_error(error_info):
+                error_info["repeat"] = True
+            error_id = self.error_tracker.log_error(error_info)
+            tasks = self.planning_agent.plan_tasks(errors=[], error_type="test", error_ids=[error_id])
 
             self._check_and_summarize_logs()
 
-            if not fix_plan:
+            if not tasks:
                 continue
 
             current_fix_signatures = {
-                (f.get("filepath", ""), f.get("error", "")[:100]) for f in fix_plan
+                (f.get("task_id", ""), f.get("title", "")[:100]) for f in tasks
             }
 
             if current_fix_signatures == previous_test_errors:
@@ -916,38 +965,36 @@ class DockerTestingPipeline:
                 stuck_test_iterations = 0
                 previous_test_errors = current_fix_signatures
 
-            fixes_applied = 0
-            for i, error_info in enumerate(fix_plan, 1):
-                commands = error_info.get("commands", [])
-                if commands:
-                    for cmd in commands:
-                        if isinstance(cmd, list) and cmd:
-                            success, cmd_logs = self.command_executor.execute_command(
-                                cmd,
-                                description=f"Command suggested by planner: {' '.join(cmd)}"
-                            )
-                            if not success:
-                                error_info["command_logs"] = cmd_logs
+            changed_files = set()
+            for task in tasks:
+                result = self.executor_agent.execute_task(task)
+                if result.get("changed_files"):
+                    changed_files.update(result["changed_files"])
+                self.planning_agent.invalidate_cache()
+                self.executor_agent.invalidate_cache()
 
-                if self.correction_agent.fix_error(error_info):
-                    fixes_applied += 1
-                    self.planning_agent.invalidate_cache()
-                    self.correction_agent.invalidate_cache()
-
-            if fixes_applied == 0:
+            if not changed_files:
                 continue
 
-            self._reanalyze_changed_files(fix_plan)
+            change_plan = [{"files": [os.path.relpath(p, self.project_root)]} for p in changed_files]
+            self._reanalyze_changed_files(change_plan)
 
-            coupling_errors = self._check_coupling_for_changed_files(fix_plan)
+            coupling_errors = self._check_coupling_for_changed_files(change_plan)
             if coupling_errors:
-                for coupling_error in coupling_errors:
-                    if self.correction_agent.fix_error(coupling_error):
-                        self.planning_agent.invalidate_cache()
-                        self.correction_agent.invalidate_cache()
-                self._reanalyze_changed_files(fix_plan)
+                coupling_error_info = {
+                    "error_type": "dependency",
+                    "error": "Coupling errors after test fixes",
+                    "errors": coupling_errors
+                }
+                error_id = self.error_tracker.log_error(coupling_error_info)
+                coupling_tasks = self.planning_agent.plan_tasks(errors=coupling_errors, error_type="dependency", error_ids=[error_id])
+                for task in coupling_tasks:
+                    self.executor_agent.execute_task(task)
+                    self.planning_agent.invalidate_cache()
+                    self.executor_agent.invalidate_cache()
+                self._reanalyze_changed_files(coupling_tasks)
 
-            if self._fix_plan_requires_rebuild(fix_plan):
+            if self._fix_plan_requires_rebuild(tasks):
                 rebuild_success, rebuild_logs = self.build_docker_image()
                 if not rebuild_success:
                     continue

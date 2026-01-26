@@ -1,10 +1,12 @@
-from flask import Flask
-from .config.settings import Config
-from .api.routes import api_bp
+from .app import app
 
-app = Flask(__name__)
-app.config.from_object(Config)
-app.register_blueprint(api_bp)
+def run_server():
+    return app
 
-def run():
-    app.run()
+def main():
+    with open('../configs/settings.yaml', 'r') as f:
+        settings = yaml.safe_load(f)
+    app.run(host=settings['host'], port=settings['port'], debug=settings['debug'])
+
+if __name__ == '__main__':
+    main()

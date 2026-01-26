@@ -1,2 +1,0 @@
-# This file is intentionally left empty.
-# The project uses only the Python standard library and has no external dependencies.

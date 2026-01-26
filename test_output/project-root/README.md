@@ -1,110 +1,72 @@
-# Number Addition API
+# Number_Adder_API
 
-A simple RESTful API that accepts two numbers via a POST request, validates the input, and returns the sum in a JSON response.
+A simple backend API that adds two numbers together and returns their sum.
 
 ## Features
 
-- **Addition Endpoint**: Validates numeric input and returns the sum of two numbers.
-- **Input Validation**: Ensures provided inputs are valid numeric values.
-- **JSON Response**: Returns structured response with sum and status.
-- **Documentation**: OpenAPI/Swagger documentation available at `/apidocs` when running.
+- **Number Addition Endpoint**
+  - Accepts two numbers as input parameters
+  - Validates that both inputs are numeric values
+  - Computes the sum of the two numbers
+  - Returns the result as a JSON response
 
-## API Documentation
+## Tech Stack
 
-### Endpoint: `POST /add`
+- **Backend**: Python / Flask
+- **API Design**: RESTful
+- **API Documentation**: Swagger UI
+- **Testing Framework**: Pytest
 
-**Request Body**
-```json
-{
-  "num1": 5,
-  "num2": 3
-}
-```
+## Installation
 
-**Success Response (200 OK)**
-```json
-{
-  "sum": 8,
-  "status": "success"
-}
-```
-
-**Error Response (400 Bad Request)**
-```json
-{
-  "error": "Invalid input: Both num1 and num2 must be valid numbers",
-  "status": "error"
-}
-```
-
-## Quick Start
-
-### Prerequisites
-- Python 3.8+
-- Docker (optional)
-
-### Without Docker
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-repo/number-addition-api
-   cd number-addition-api
+   git clone <repository-url>
+   cd Number_Adder_API
    ```
-2. Create virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-3. Install dependencies:
+
+2. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-4. Run the application:
-   ```bash
-   python src/main.py
-   ```
-5. Access the API at `http://localhost:5000` and documentation at `http://localhost:5000/apidocs`.
 
-### With Docker
-1. Build the image:
-   ```bash
-   docker build -t number-addition-api .
-   ```
-2. Run the container:
-   ```bash
-   docker run -p 5000:5000 number-addition-api
-   ```
+## Running the Application
+
+Run the Flask application:
+
+```bash
+python src/main.py
+```
+
+The API will be available at `http://127.0.0.1:5000` (or as configured in `configs/settings.yaml`).
+
+## API Documentation
+
+Swagger UI documentation is available at `http://127.0.0.1:5000/swagger` after starting the application.
+
+## Testing
+
+Run the tests:
+
+```bash
+pytest
+```
 
 ## Project Structure
+
 ```
 project-root/
 ├── README.md
 ├── requirements.txt
-├── .env.example
+├── .gitignore
 ├── src/
-│   ├── main.py          # Flask app initialization
-│   ├── api/
-│   │   ├── routes.py    # API route definitions
-│   │   └── models.py    # Request/response models
+│   ├── __init__.py
+│   ├── main.py
+│   ├── app.py
 │   ├── services/
-│   │   └── addition_service.py  # Business logic
-│   ├── utils/
-│   │   └── validators.py  # Input validation
-│   └── config/
-│       └── settings.py  # Configuration settings
-```
-
-## Testing
-Run tests with pytest:
-```bash
-pytest src/tests/
-```
-
-## Contributing
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
-## License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+│   │   ├── __init__.py
+│   │   └── math_service.py
+│   └── utils/
+│       └── helpers.py
+└── configs/
+    └── settings.yaml

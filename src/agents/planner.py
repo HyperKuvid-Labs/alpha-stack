@@ -4,7 +4,6 @@ import re
 from typing import Dict, List, Optional
 from ..utils.helpers import build_project_structure_tree
 from ..utils.inference import InferenceManager
-from ..utils.tools import extract_function_args
 
 
 class PlanningAgent:
@@ -35,7 +34,7 @@ class PlanningAgent:
     def invalidate_cache(self):
         self._cached_project_structure_tree = None
     
-    def plan_fixes(self, errors: List[Dict] = None, logs: str = None, 
+    def plan_tasks(self, errors: List[Dict] = None, error_ids: List[str] = None,
                    error_type: str = "dependency") -> List[Dict[str, str]]:
         try:
             project_structure_tree = self._get_project_structure_tree()
@@ -59,7 +58,7 @@ class PlanningAgent:
             if self.command_log_manager:
                 command_execution_history = self.command_log_manager.get_formatted_history_for_planning(max_tokens=10000)
             
-            prompt = self.pm.render("common_error_planning.j2",
+            prompt = self.pm.render("planner_task_planning.j2",
                 software_blueprint=self.software_blueprint,
                 folder_structure=self.folder_structure,
                 file_output_format=self.file_output_format,
@@ -67,7 +66,7 @@ class PlanningAgent:
                 project_root=self.project_root,
                 errors=errors_list,
                 error_type=error_type,
-                logs=logs[-5000:] if logs else "",
+                error_ids=error_ids or [],
                 change_log=change_log,
                 command_execution_history=command_execution_history
             )
@@ -112,15 +111,15 @@ class PlanningAgent:
                 
                 json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
                 if json_match:
-                    fix_plan = json.loads(json_match.group())
+                    tasks = json.loads(json_match.group())
                 else:
-                    fix_plan = json.loads(response_text)
+                    tasks = json.loads(response_text)
                 
-                if isinstance(fix_plan, dict):
-                    fix_plan = [fix_plan]
+                if isinstance(tasks, dict):
+                    tasks = [tasks]
                 
-                fix_plan = sorted(fix_plan, key=lambda x: x.get('priority', 999))
-                return fix_plan
+                tasks = sorted(tasks, key=lambda x: x.get('priority', 999))
+                return tasks
                 
             except Exception:
                 # Fallback: try without tools
@@ -129,25 +128,31 @@ class PlanningAgent:
                 
                 json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
                 if json_match:
-                    fix_plan = json.loads(json_match.group())
+                    tasks = json.loads(json_match.group())
                 else:
-                    fix_plan = json.loads(response_text)
+                    tasks = json.loads(response_text)
                 
-                if isinstance(fix_plan, dict):
-                    fix_plan = [fix_plan]
+                if isinstance(tasks, dict):
+                    tasks = [tasks]
                 
-                fix_plan = sorted(fix_plan, key=lambda x: x.get('priority', 999))
-                return fix_plan
+                tasks = sorted(tasks, key=lambda x: x.get('priority', 999))
+                return tasks
                 
         except Exception:
-            fix_plan = []
+            tasks = []
             for e in (errors or []):
                 if isinstance(e, dict):
-                    fix_plan.append({
+                    tasks.append({
                         "error": e.get("error", ""),
-                        "action": ["Fix error"],
-                        "filepath": e.get("file", ""),
+                        "title": "Fix error",
+                        "steps": ["Investigate error and apply minimal fix"],
+                        "files": [e.get("file", "")] if e.get("file") else [],
                         "priority": 1
                     })
-            return fix_plan
+            return tasks
+
+    # Backwards compatibility
+    def plan_fixes(self, errors: List[Dict] = None, logs: str = None,
+                   error_type: str = "dependency") -> List[Dict[str, str]]:
+        return self.plan_tasks(errors=errors, error_ids=None, error_type=error_type)
 
