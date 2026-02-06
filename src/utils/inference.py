@@ -76,6 +76,26 @@ class InferenceProvider(ABC):
     def extract_text(self, response: Any) -> str:
         """Extract text content from response"""
         pass
+
+    @abstractmethod
+    def create_initial_message(self, prompt: str) -> List:
+        """Create initial message list with the given prompt in provider-specific format"""
+        pass
+
+    @abstractmethod
+    def accumulate_messages(self, messages: List, response: Any, function_responses: List) -> None:
+        """
+        Accumulate tool call response and function results into message history.
+        Modifies messages list in place.
+
+        Args:
+            messages: The message history list to append to
+            response: The model's response containing tool calls
+            function_responses: List of function response objects from create_function_response
+        """
+        pass
+
+
 @register_provider("google")
 class GoogleProvider(InferenceProvider):
     """Google Gemini provider using python-genai"""
@@ -127,37 +147,47 @@ class GoogleProvider(InferenceProvider):
             required=schema.get("required", [])
         )
     
-    def call_model(self, messages: List[Dict], tools: Any = None, **kwargs) -> Any:
+    def call_model(self, messages: List, tools: Any = None, **kwargs) -> Any:
         from google.genai import types
-        
+
         contents = []
         for msg in messages:
-            contents.append(
-                types.Content(
-                    role=msg.get("role", "user"),
-                    parts=[types.Part.from_text(text=msg.get("content", ""))]
+            # If already a Content object (from agentic loop), use directly
+            if isinstance(msg, types.Content):
+                contents.append(msg)
+            # If it's a GenerateContentResponse (model response), extract its content
+            elif hasattr(msg, 'candidates') and msg.candidates:
+                # This is a response object - extract the content from first candidate
+                if msg.candidates[0].content:
+                    contents.append(msg.candidates[0].content)
+            else:
+                # Convert dict to Content
+                contents.append(
+                    types.Content(
+                        role=msg.get("role", "user"),
+                        parts=[types.Part.from_text(text=msg.get("content", ""))]
+                    )
                 )
-            )
-        
+
         config_kwargs = {}
         if tools:
             config_kwargs["tools"] = [tools]
             config_kwargs["automatic_function_calling"] = types.AutomaticFunctionCallingConfig(disable=True)
-        
+
         config = types.GenerateContentConfig(**config_kwargs) if config_kwargs else None
-        
+
         call_kwargs = {
             "model": self.model,
             "contents": contents,
         }
         if config:
             call_kwargs["config"] = config
-        
+
         # Add optional params
         for param in ["temperature", "max_output_tokens", "top_p", "top_k"]:
             if param in kwargs:
                 call_kwargs[param] = kwargs[param]
-        
+
         return retry_api_call(
             self.get_client().models.generate_content,
             **call_kwargs
@@ -184,6 +214,19 @@ class GoogleProvider(InferenceProvider):
     
     def extract_text(self, response: Any) -> str:
         return response.text.strip() if hasattr(response, 'text') else ""
+
+    def create_initial_message(self, prompt: str) -> List:
+        from google.genai import types
+        return [
+            types.Content(role='user', parts=[types.Part.from_text(text=prompt)])
+        ]
+
+    def accumulate_messages(self, messages: List, response: Any, function_responses: List) -> None:
+        from google.genai import types
+        # Append model response (contains function calls) and tool results
+        tool_content = types.Content(role='function', parts=function_responses)
+        messages.append(response)  # Model's response with tool calls
+        messages.append(tool_content)  # Tool results
 
 
 @register_provider("openrouter")
@@ -274,8 +317,30 @@ class OpenRouterProvider(InferenceProvider):
     
     def extract_text(self, response: Any) -> str:
         if hasattr(response, 'choices') and response.choices:
-            return response.choices[0].message.content.strip()
+            content = response.choices[0].message.content
+            return content.strip() if content else ""
         return ""
+
+    def create_initial_message(self, prompt: str) -> List:
+        return [{"role": "user", "content": prompt}]
+
+    def accumulate_messages(self, messages: List, response: Any, function_responses: List) -> None:
+        # For OpenRouter, need to include assistant message with tool calls
+        if hasattr(response, 'choices') and response.choices:
+            assistant_msg = response.choices[0].message
+            messages.append({
+                "role": "assistant",
+                "content": assistant_msg.content or "",
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {"name": tc.function.name, "arguments": tc.function.arguments}
+                    }
+                    for tc in (assistant_msg.tool_calls or [])
+                ]
+            })
+        messages.extend(function_responses)
 
 
 class InferenceManager:

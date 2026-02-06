@@ -2,7 +2,7 @@ import os
 import json
 import shlex
 import subprocess
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from google.genai import types
 
 
@@ -183,131 +183,146 @@ def get_all_tools() -> types.Tool:
 
 
 class ToolHandler:
-    def __init__(self, project_root: str, error_tracker=None, image_name: str = "project-test", dependency_analyzer=None):
+    def __init__(self, project_root: str, error_tracker=None, image_name: str = "project-test",
+                 dependency_analyzer=None, tool_log_path: Optional[str] = None,
+                 agent_name: Optional[str] = None, thread_memory=None):
         from .helpers import clean_agent_output
+        from .tool_call_log import ToolCallLogger
         self.project_root = project_root
         self.error_tracker = error_tracker
         self.image_name = image_name
         self.dependency_analyzer = dependency_analyzer
-    
+        self.agent_name = agent_name
+        self.thread_memory = thread_memory  # Thread memory for tracking tool calls
+        self.tool_call_logger = ToolCallLogger(tool_log_path) if tool_log_path else None
+
+    def set_thread_memory(self, thread_memory) -> None:
+        """Set or update thread memory reference"""
+        self.thread_memory = thread_memory
+
     def handle_function_call(self, function_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+        self._log_tool_call(function_name, args)
         print(f"[tool_call] {function_name} args={list(args.keys())}")
+
+        # Execute the tool and get result
+        result = self._execute_tool(function_name, args)
+
+        # Log to thread memory if available
+        self._log_to_thread_memory(function_name, args, result)
+
+        self._print_tool_result(function_name, result)
+        return result
+
+    def _execute_tool(self, function_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute a tool and return the result"""
         if function_name == "get_file_code":
-            result = self._get_file_code(
+            return self._get_file_code(
                 args.get("file_path"),
                 start_line=args.get("start_line"),
                 end_line=args.get("end_line")
             )
-            self._print_tool_result(function_name, result)
-            return result
         elif function_name == "update_file_code":
             file_path = args.get("file_path", "")
-            
             new_content = (
-                args.get("new_content") or 
-                args.get("content") or 
-                args.get("file_content") or 
-                args.get("code") or 
+                args.get("new_content") or
+                args.get("content") or
+                args.get("file_content") or
+                args.get("code") or
                 ""
             )
-            
             change_description = args.get("change_description", args.get("description", ""))
-            
             if not new_content:
                 return {
                     "success": False,
                     "error": "No content provided. Expected 'new_content', 'content', 'file_content', or 'code' parameter."
                 }
-            
-            result = self._update_file_code(file_path, new_content, change_description)
-            self._print_tool_result(function_name, result)
-            return result
+            return self._update_file_code(file_path, new_content, change_description)
         elif function_name == "log_change":
-            result = self._log_change(
+            return self._log_change(
                 args["file_path"],
                 args["change_description"],
                 args["error_context"]
             )
-            self._print_tool_result(function_name, result)
-            return result
         elif function_name == "find_files":
-            result = self._find_files(
+            return self._find_files(
                 query=args.get("query", ""),
                 include_content=bool(args.get("include_content", False)),
                 max_results=int(args.get("max_results", 50))
             )
-            self._print_tool_result(function_name, result)
-            return result
         elif function_name == "regenerate_file":
-            result = self._regenerate_file(
+            return self._regenerate_file(
                 file_path=args.get("file_path", ""),
                 context=args.get("context", "")
             )
-            self._print_tool_result(function_name, result)
-            return result
         elif function_name == "check_file_exists":
-            result = self._check_file_exists(args.get("file_path", ""))
-            self._print_tool_result(function_name, result)
-            return result
+            return self._check_file_exists(args.get("file_path", ""))
         elif function_name == "list_directory":
-            result = self._list_directory(args.get("directory_path", ""))
-            self._print_tool_result(function_name, result)
-            return result
+            return self._list_directory(args.get("directory_path", ""))
         elif function_name == "create_directory":
-            result = self._create_directory(
+            return self._create_directory(
                 args.get("directory_path", ""),
                 args.get("create_parents", True)
             )
-            self._print_tool_result(function_name, result)
-            return result
         elif function_name == "delete_file":
-            result = self._delete_file(args.get("file_path", ""))
-            self._print_tool_result(function_name, result)
-            return result
+            return self._delete_file(args.get("file_path", ""))
         elif function_name == "get_error_history":
-            result = self._get_error_history(
+            return self._get_error_history(
                 error_id=args.get("error_id"),
                 limit=int(args.get("limit", 20)) if args.get("limit") is not None else 20,
                 offset=int(args.get("offset", 0)) if args.get("offset") is not None else 0,
                 include_logs=bool(args.get("include_logs", False))
             )
-            self._print_tool_result(function_name, result)
-            return result
         elif function_name == "get_action_history":
-            result = self._get_action_history(
+            return self._get_action_history(
                 limit=int(args.get("limit", 20)) if args.get("limit") is not None else 20,
                 offset=int(args.get("offset", 0)) if args.get("offset") is not None else 0,
                 task_id=args.get("task_id")
             )
-            self._print_tool_result(function_name, result)
-            return result
         elif function_name == "log_action":
-            result = self._log_action(
+            return self._log_action(
                 task_id=args.get("task_id"),
                 action_type=args.get("action_type", ""),
                 message=args.get("message", "")
             )
-            self._print_tool_result(function_name, result)
-            return result
         elif function_name == "run_shell_command":
-            result = self._run_shell_command(
+            return self._run_shell_command(
                 command=args.get("command", ""),
                 timeout_sec=int(args.get("timeout_sec", 5)) if args.get("timeout_sec") is not None else 5
             )
-            self._print_tool_result(function_name, result)
-            return result
         elif function_name == "get_file_dependencies":
-            result = self._get_file_dependencies(args.get("file_path", ""))
-            self._print_tool_result(function_name, result)
-            return result
+            return self._get_file_dependencies(args.get("file_path", ""))
         elif function_name == "get_file_dependents":
-            result = self._get_file_dependents(args.get("file_path", ""))
-            self._print_tool_result(function_name, result)
-            return result
+            return self._get_file_dependents(args.get("file_path", ""))
         else:
-            result = {"error": f"Unknown function: {function_name}"}
-            self._print_tool_result(function_name, result)
-            return result
+            return {"error": f"Unknown function: {function_name}"}
+
+    def _log_tool_call(self, function_name: str, args: Dict[str, Any]) -> None:
+        if not self.tool_call_logger:
+            return
+        try:
+            self.tool_call_logger.log(self.agent_name, function_name, args)
+        except Exception:
+            pass
+
+    def _log_to_thread_memory(self, function_name: str, args: Dict[str, Any], result: Dict[str, Any]) -> None:
+        """Log tool call to thread memory for iteration context"""
+        if not self.thread_memory:
+            return
+        try:
+            # Determine success based on result
+            success = result.get("success", True) if isinstance(result, dict) else True
+            if isinstance(result, dict) and "error" in result:
+                success = False
+
+            self.thread_memory.add_tool_call(
+                agent=self.agent_name or "unknown",
+                tool_name=function_name,
+                arguments=args,
+                result=result,
+                success=success
+            )
+        except Exception:
+            pass  # Don't let logging failures affect tool execution
 
     @staticmethod
     def _print_tool_result(function_name: str, result: Dict[str, Any]) -> None:

@@ -47,24 +47,32 @@ class ExecutorAgent:
                 change_log=change_log
             )
             
-            messages = [{"role": "user", "content": prompt}]
-            response = self.provider.call_model(messages, tools=self.tools)
-            
-            function_calls = self.provider.extract_function_calls(response)
-            if function_calls:
+            # Initialize message history using provider abstraction
+            messages = self.provider.create_initial_message(prompt)
+            max_tool_rounds = 5
+
+            response = None
+            for round_num in range(max_tool_rounds):
+                response = self.provider.call_model(messages, tools=self.tools)
+                function_calls = self.provider.extract_function_calls(response)
+
+                if not function_calls:
+                    break
+
                 function_responses = []
                 for fc in function_calls:
                     func_name = fc["name"]
                     func_args = fc.get("args", {})
+                    self.tool_handler.agent_name = "executor"
                     result = self.tool_handler.handle_function_call(func_name, func_args)
-                    
+
                     if func_name == "update_file_code" and result.get("success"):
                         updated_file_path = result.get("file_path") or func_args.get("file_path", "")
                         if updated_file_path and not os.path.isabs(updated_file_path):
                             full_file_path = os.path.join(self.project_root, updated_file_path)
                         else:
                             full_file_path = updated_file_path
-                        
+
                         changed_files.append(full_file_path)
                         self.error_tracker.log_change(
                             file_path=full_file_path,
@@ -79,25 +87,14 @@ class ExecutorAgent:
                             message=f"Updated {updated_file_path}"
                         )
                         self.invalidate_cache()
-                    
+
                     func_response = self.provider.create_function_response(
                         func_name, result, fc.get("id")
                     )
                     function_responses.append(func_response)
-                
-                if function_responses:
-                    if self.provider_name == "google":
-                        from google.genai import types
-                        tool_content = types.Content(role='tool', parts=function_responses)
-                        final_messages = [
-                            types.Content(role='user', parts=[types.Part.from_text(text=prompt)]),
-                            tool_content
-                        ]
-                    else:
-                        final_messages = messages + function_responses
-                    
-                    final_response = self.provider.call_model(final_messages, tools=self.tools)
-                    response = final_response
+
+                # CRITICAL: Accumulate messages using provider abstraction
+                self.provider.accumulate_messages(messages, response, function_responses)
             
             response_text = self.provider.extract_text(response)
             if response_text and changed_files:

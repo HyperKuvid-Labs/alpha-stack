@@ -4,13 +4,13 @@ import re
 import select
 import subprocess
 from typing import Dict, List, Optional, Tuple
-from ..utils.helpers import (
-    get_client, retry_api_call, build_project_structure_tree, MODEL_NAME
-)
+from ..utils.helpers import build_project_structure_tree
+from ..utils.inference import InferenceManager
 from ..utils.prompt_manager import PromptManager
 from ..utils.error_tracker import ErrorTracker
 from ..utils.tools import ToolHandler
 from ..utils.command_log import CommandLogManager
+from ..utils.thread_memory import ThreadMemory
 from ..agents.planner import PlanningAgent
 from ..agents.corrector import ExecutorAgent
 from .generator import generate_dockerignore_content
@@ -270,8 +270,9 @@ class CommandExecutor:
 
 
 class LogSummarizerAgent:
-    def __init__(self):
-        self.client = get_client()
+    def __init__(self, provider_name: Optional[str] = None):
+        self.provider_name = provider_name or InferenceManager.get_default_provider()
+        self.provider = InferenceManager.create_provider(self.provider_name)
 
     def summarize_commands(self, commands: List[Dict]) -> str:
         if not commands:
@@ -280,13 +281,9 @@ class LogSummarizerAgent:
         prompt = self._build_summarization_prompt(commands)
 
         try:
-            response = retry_api_call(
-                self.client.models.generate_content,
-                model="models/gemini-2.5-flash",
-                contents=prompt
-            )
-
-            summary = response.text.strip()
+            messages = [{"role": "user", "content": prompt}]
+            response = self.provider.call_model(messages)
+            summary = self.provider.extract_text(response)
 
             if summary.startswith('```'):
                 lines = summary.split('\n')
@@ -377,10 +374,11 @@ class DockerTestingPipeline:
     def __init__(self, project_root: str, software_blueprint: Dict,
                  folder_structure: str, file_output_format: Dict, pm: Optional[PromptManager] = None,
                  error_tracker: Optional[ErrorTracker] = None,
-                 dependency_analyzer=None, on_status=None,
+                 dependency_analyzer=None, on_status=None, tool_log_path: Optional[str] = None,
                  docker_network: str = "bridge",
                  docker_memory_pct: float = 0.25,
-                 docker_cpu_pct: float = 0.5):
+                 docker_cpu_pct: float = 0.5,
+                 provider_name: Optional[str] = None):
         self.project_root = project_root
         self.software_blueprint = software_blueprint
         self.folder_structure = folder_structure
@@ -394,14 +392,29 @@ class DockerTestingPipeline:
         self.docker_memory_pct = docker_memory_pct
         self.docker_cpu_pct = docker_cpu_pct
 
+        # Initialize provider using the abstraction
+        self.provider_name = provider_name or InferenceManager.get_default_provider()
+        self.provider = InferenceManager.create_provider(self.provider_name)
+
         project_name = os.path.basename(os.path.normpath(project_root))
         self.image_name = re.sub(r'[^a-z0-9-]', '-', project_name.lower())
 
         self.error_tracker = error_tracker or ErrorTracker(project_root)
-        self.tool_handler = ToolHandler(project_root, self.error_tracker, image_name=self.image_name, dependency_analyzer=self.dependency_analyzer)
+
+        # Initialize thread memory for iteration context (must be before ToolHandler)
+        self.thread_memory = ThreadMemory(token_threshold=8000)
+
+        self.tool_handler = ToolHandler(
+            project_root,
+            self.error_tracker,
+            image_name=self.image_name,
+            dependency_analyzer=self.dependency_analyzer,
+            tool_log_path=tool_log_path,
+            thread_memory=self.thread_memory
+        )
 
         self.command_log_manager = CommandLogManager(project_root)
-        self.log_summarizer = LogSummarizerAgent()
+        self.log_summarizer = LogSummarizerAgent(provider_name=self.provider_name)
 
         self.planning_agent = PlanningAgent(
             project_root=project_root,
@@ -411,7 +424,9 @@ class DockerTestingPipeline:
             pm=self.pm,
             error_tracker=self.error_tracker,
             tool_handler=self.tool_handler,
-            command_log_manager=self.command_log_manager
+            command_log_manager=self.command_log_manager,
+            provider_name=self.provider_name,
+            thread_memory=self.thread_memory
         )
 
         self.executor_agent = ExecutorAgent(
@@ -421,7 +436,8 @@ class DockerTestingPipeline:
             file_output_format=self.file_output_format,
             pm=self.pm,
             error_tracker=self.error_tracker,
-            tool_handler=self.tool_handler
+            tool_handler=self.tool_handler,
+            provider_name=self.provider_name
         )
 
         self.command_executor = CommandExecutor(
@@ -634,14 +650,10 @@ class DockerTestingPipeline:
                 project_structure_tree=project_structure_tree
             )
 
-            client = get_client()
-            response = retry_api_call(
-                client.models.generate_content,
-                model=MODEL_NAME,
-                contents=prompt
-            )
-
-            dockerfile_content = response.text.strip()
+            # Use provider abstraction instead of hardcoded Gemini
+            messages = [{"role": "user", "content": prompt}]
+            response = self.provider.call_model(messages)
+            dockerfile_content = self.provider.extract_text(response)
 
             if dockerfile_content.startswith('```'):
                 lines = dockerfile_content.split('\n')
@@ -760,14 +772,10 @@ class DockerTestingPipeline:
                 project_root=self.project_root
             )
 
-            client = get_client()
-            response = retry_api_call(
-                client.models.generate_content,
-                model=MODEL_NAME,
-                contents=prompt
-            )
-
-            response_text = response.text.strip()
+            # Use provider abstraction instead of hardcoded Gemini
+            messages = [{"role": "user", "content": prompt}]
+            response = self.provider.call_model(messages)
+            response_text = self.provider.extract_text(response)
 
             json_match = re.search(r'\{[^}]+\}', response_text, re.DOTALL)
             if json_match:
@@ -864,7 +872,15 @@ class DockerTestingPipeline:
             if self.error_tracker.is_repeat_error(error_info):
                 error_info["repeat"] = True
             error_id = self.error_tracker.log_error(error_info)
-            tasks = self.planning_agent.plan_tasks(errors=[], error_type="build", error_ids=[error_id])
+
+            self._emit("planner", f"Build failed (iteration {build_iteration}). Calling planner agent to analyze and create fix tasks...")
+            # Pass actual build logs to planner so it has error context in the prompt
+            tasks = self.planning_agent.plan_tasks(
+                errors=[{"error": "Docker build failed", "logs": build_logs[:4000]}],
+                error_type="build",
+                error_ids=[error_id]
+            )
+            self._emit("planner", f"Planner returned {len(tasks) if tasks else 0} tasks")
 
             self._check_and_summarize_logs()
 
@@ -945,7 +961,15 @@ class DockerTestingPipeline:
             if self.error_tracker.is_repeat_error(error_info):
                 error_info["repeat"] = True
             error_id = self.error_tracker.log_error(error_info)
-            tasks = self.planning_agent.plan_tasks(errors=[], error_type="test", error_ids=[error_id])
+
+            self._emit("planner", f"Tests failed (iteration {test_iteration}). Calling planner agent to analyze and create fix tasks...")
+            # Pass actual test logs to planner so it has error context in the prompt
+            tasks = self.planning_agent.plan_tasks(
+                errors=[{"error": "Test failure", "logs": test_logs[:4000]}],
+                error_type="test",
+                error_ids=[error_id]
+            )
+            self._emit("planner", f"Planner returned {len(tasks) if tasks else 0} tasks")
 
             self._check_and_summarize_logs()
 
@@ -1014,9 +1038,11 @@ class DockerTestingPipeline:
 def run_docker_testing(project_root: str, software_blueprint: Dict,
                       folder_structure: str, file_output_format: Dict,
                       pm=None, error_tracker=None, dependency_analyzer=None,
-                      on_status=None, docker_network: str = "bridge",
+                      on_status=None, tool_log_path: Optional[str] = None,
+                      docker_network: str = "bridge",
                       docker_memory_pct: float = 0.25,
-                      docker_cpu_pct: float = 0.5) -> Dict:
+                      docker_cpu_pct: float = 0.5,
+                      provider_name: Optional[str] = None) -> Dict:
     pipeline = DockerTestingPipeline(
         project_root=project_root,
         software_blueprint=software_blueprint,
@@ -1026,9 +1052,11 @@ def run_docker_testing(project_root: str, software_blueprint: Dict,
         error_tracker=error_tracker,
         dependency_analyzer=dependency_analyzer,
         on_status=on_status,
+        tool_log_path=tool_log_path,
         docker_network=docker_network,
         docker_memory_pct=docker_memory_pct,
-        docker_cpu_pct=docker_cpu_pct
+        docker_cpu_pct=docker_cpu_pct,
+        provider_name=provider_name
     )
     return pipeline.run_testing_pipeline()
 
