@@ -3,7 +3,8 @@ import re
 from typing import Dict, List, Optional
 from ..utils.helpers import build_project_structure_tree
 from ..utils.inference import InferenceManager
-
+from ..utils.dependencies import TreeNode
+import os
 
 class PlanningAgent:
     def __init__(self, project_root: str, software_blueprint: Dict,
@@ -138,3 +139,37 @@ class PlanningAgent:
     def plan_fixes(self, errors: List[Dict] = None, logs: str = None,
                    error_type: str = "dependency") -> List[Dict[str, str]]:
         return self.plan_tasks(errors=errors, error_ids=None, error_type=error_type)
+
+    def build_context_for_planner(self, errors, folder_tree):
+        # get file-specific error history from tree
+        error_context = []
+
+        for error in errors:
+            file_path = error.get('file', '')
+            if file_path and folder_tree:
+                node = self._find_node_by_path(file_path, folder_tree)
+                if node and node.error_traces:
+                    # add previous attempts to context
+                    error_context.append(f"\n### Previous fixes attempted for {file_path}:")
+                    for trace in node.error_traces[-3:]:  # last 3 attempts
+                        error_context.append(f"- {trace['timestamp']}: {trace['actions']}")
+                        error_context.append(f"  Description: {trace['change_description']}")
+
+        return "\n".join(error_context)
+
+    def _find_node_by_path(self, rel_path: str, tree: TreeNode) -> Optional[TreeNode]:
+        # same logic as ErrorTracker.find_node_by_path
+        parts = rel_path.split(os.sep)
+        current = tree
+        start_idx = 1 if parts and parts[0] == tree.value else 0
+
+        for part in parts[start_idx:]:
+            found = False
+            for child in current.children:
+                if child.value == part:
+                    current = child
+                    found = True
+                    break
+            if not found:
+                return None
+        return current

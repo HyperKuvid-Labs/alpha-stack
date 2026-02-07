@@ -63,6 +63,19 @@ Before suggesting fixes: Check if this error/file was already fixed. If so, use 
 Parse errors from logs above. Identify: error message, file path, line number, error type.
 {% endif %}
 
+{% if error_traces %}
+## Previous Fix Attempts
+**CRITICAL**: These fixes were already tried and FAILED. You MUST try something different!
+
+{% for file, traces in error_traces.items() %}
+### {{ file }}
+{% for trace in traces %}
+- **{{ trace.timestamp }}**: {{ trace.actions|join(', ') }}
+  - Result: {{ trace.change_description }}
+{% endfor %}
+{% endfor %}
+{% endif %}
+
 ## Tools
 
 1. **get_file_code**: Read files to understand dependencies
