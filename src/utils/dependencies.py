@@ -18,21 +18,6 @@ class TreeNode:
     def add_child(self, child_node):
         self.children.append(child_node)
 
-    def get_child(self, value):
-        # this is just the naive implementation as of now, coz the values are just the name of the files, we need to properly follow tha path to get the child, will try to optimize this later
-        for child in self.children:
-            if child.value == value:
-                return child
-        return None
-
-    def update_error_trace(self, value, trace):
-        self.x = self.get_child(value)
-        # I'm damn sure the path is the
-        if self.x:
-            self.x.error_traces.append(trace)
-            return True
-        return False
-
 class DependencyError:
     def __init__(self, file_path: str, error_type: str, message: str,
                  dependency: Optional[str] = None, affected_files: Optional[List[str]] = None,
