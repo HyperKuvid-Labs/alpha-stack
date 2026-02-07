@@ -520,7 +520,8 @@ class DependencyFeedbackLoop:
         self.file_output_format = file_output_format or {}
         self.pm = pm or PromptManager(templates_dir="prompts")
         self.max_iterations = 25
-        self.error_tracker = error_tracker or ErrorTracker(project_root)
+        folder_tree = getattr(self.dependency_analyzer, "folder_tree", None)
+        self.error_tracker = error_tracker or ErrorTracker(project_root, folder_tree)
         self.tool_handler = ToolHandler(project_root, self.error_tracker, dependency_analyzer=self.dependency_analyzer)
 
         self.planning_agent = PlanningAgent(
