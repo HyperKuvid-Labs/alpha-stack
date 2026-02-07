@@ -5,7 +5,7 @@ from datetime import datetime
 from dependencies import TreeNode
 
 class ErrorTracker:
-    def __init__(self, project_root: str, folder_tree: TreeNode):
+    def __init__(self, project_root: str, folder_tree: Optional[TreeNode] = None):
         self.project_root = project_root
         self.folder_tree = folder_tree
         self.change_log: List[Dict] = []
