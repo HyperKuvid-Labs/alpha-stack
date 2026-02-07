@@ -2,7 +2,7 @@ import os
 import json
 from typing import List, Dict, Optional
 from datetime import datetime
-from dependencies import TreeNode
+from .dependencies import TreeNode
 
 class ErrorTracker:
     def __init__(self, project_root: str, folder_tree: Optional[TreeNode] = None):
