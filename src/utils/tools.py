@@ -5,7 +5,6 @@ import subprocess
 from typing import Dict, Any, Optional
 from google.genai import types
 
-
 def _get_skip_dirs():
     from .helpers import SKIP_DIRS
     return SKIP_DIRS
@@ -13,7 +12,7 @@ def _get_skip_dirs():
 
 def extract_function_args(function_call) -> Dict[str, Any]:
     func_args = {}
-    
+
     if hasattr(function_call, 'args'):
         if isinstance(function_call.args, dict):
             func_args = function_call.args
@@ -24,7 +23,7 @@ def extract_function_args(function_call) -> Dict[str, Any]:
                 func_args = dict(function_call.args)
             except (TypeError, ValueError):
                 func_args = {}
-    
+
     elif hasattr(function_call, 'function_call') and hasattr(function_call.function_call, 'args'):
         if isinstance(function_call.function_call.args, dict):
             func_args = function_call.function_call.args
@@ -35,7 +34,7 @@ def extract_function_args(function_call) -> Dict[str, Any]:
                 func_args = dict(function_call.function_call.args)
             except (TypeError, ValueError):
                 func_args = {}
-    
+
     return func_args
 
 
@@ -337,19 +336,19 @@ class ToolHandler:
             print(f"[tool_result] {function_name} -> {preview}")
         except Exception:
             print(f"[tool_result] {function_name} -> <unavailable>")
-    
+
     def _get_file_code(self, file_path: str, start_line: int = None, end_line: int = None) -> Dict[str, Any]:
         if not file_path:
             return {"error": "file_path is required"}
-        
+
         full_path = os.path.join(self.project_root, file_path)
         if not os.path.exists(full_path):
             return {"error": f"File not found: {file_path}"}
-        
+
         try:
             with open(full_path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
-            
+
             total_lines = len(lines)
             if start_line is not None or end_line is not None:
                 start = max(int(start_line or 1), 1)
@@ -365,7 +364,7 @@ class ToolHandler:
                     "end_line": end,
                     "total_lines": total_lines
                 }
-            
+
             content = "".join(lines)
             return {
                 "success": True,
@@ -375,7 +374,7 @@ class ToolHandler:
             }
         except Exception as e:
             return {"error": f"Error reading file: {str(e)}"}
-    
+
     def _log_change(self, file_path: str, change_description: str, error_context: str) -> Dict[str, Any]:
         print("log_change")
         if self.error_tracker:
@@ -432,7 +431,7 @@ class ToolHandler:
             return {"success": True, "query": query, "results": matches}
         except Exception as e:
             return {"error": f"Error searching files: {str(e)}"}
-    
+
     def _regenerate_file(self, file_path: str, context: str) -> Dict[str, Any]:
         print("regenerate_file")
         return {
@@ -441,17 +440,17 @@ class ToolHandler:
             "file_path": file_path,
             "context": context
         }
-    
+
     def _update_file_code(self, file_path: str, new_content: str, change_description: str) -> Dict[str, Any]:
         from .helpers import clean_agent_output
-        
+
         if not file_path:
             return {"error": "file_path is required"}
-        
+
         new_content = clean_agent_output(new_content)
-        
+
         full_path = os.path.join(self.project_root, file_path)
-        
+
         old_content = None
         if os.path.exists(full_path):
             try:
@@ -459,15 +458,15 @@ class ToolHandler:
                     old_content = f.read()
             except Exception:
                 pass
-        
+
         try:
             dir_path = os.path.dirname(full_path)
             if dir_path and not os.path.exists(dir_path):
                 os.makedirs(dir_path, exist_ok=True)
-            
+
             with open(full_path, 'w', encoding='utf-8') as f:
                 f.write(new_content)
-            
+
             return {
                 "success": True,
                 "file_path": file_path,
@@ -477,51 +476,51 @@ class ToolHandler:
             }
         except Exception as e:
             return {"error": f"Error updating file: {str(e)}"}
-    
+
     def _check_file_exists(self, file_path: str) -> Dict[str, Any]:
         print("check_file_exists")
         if not file_path:
             return {"error": "file_path is required"}
-        
+
         full_path = os.path.join(self.project_root, file_path)
         exists = os.path.exists(full_path) and os.path.isfile(full_path)
-        
+
         return {
             "success": True,
             "exists": exists,
             "file_path": file_path
         }
-    
+
     def _list_directory(self, directory_path: str = "") -> Dict[str, Any]:
         print("list_directory")
         if directory_path:
             full_path = os.path.join(self.project_root, directory_path)
         else:
             full_path = self.project_root
-        
+
         if not os.path.exists(full_path):
             return {"error": f"Directory not found: {directory_path or 'project root'}"}
-        
+
         if not os.path.isdir(full_path):
             return {"error": f"Path is not a directory: {directory_path or 'project root'}"}
-        
+
         try:
             entries = os.listdir(full_path)
             files = []
             directories = []
-            
+
             for entry in entries:
                 if entry.startswith('.') and entry not in {'.', '..'}:
                     continue
-                
+
                 entry_path = os.path.join(full_path, entry)
                 rel_path = os.path.relpath(entry_path, self.project_root)
-                
+
                 if os.path.isdir(entry_path):
                     directories.append(rel_path)
                 else:
                     files.append(rel_path)
-            
+
             return {
                 "success": True,
                 "directory_path": directory_path or ".",
@@ -530,14 +529,14 @@ class ToolHandler:
             }
         except Exception as e:
             return {"error": f"Error listing directory: {str(e)}"}
-    
+
     def _create_directory(self, directory_path: str, create_parents: bool = True) -> Dict[str, Any]:
         print("create_directory")
         if not directory_path:
             return {"error": "directory_path is required"}
-        
+
         full_path = os.path.join(self.project_root, directory_path)
-        
+
         if os.path.exists(full_path):
             if os.path.isdir(full_path):
                 return {
@@ -547,7 +546,7 @@ class ToolHandler:
                 }
             else:
                 return {"error": f"Path exists but is not a directory: {directory_path}"}
-        
+
         try:
             if create_parents:
                 os.makedirs(full_path, exist_ok=True)
@@ -556,27 +555,27 @@ class ToolHandler:
                 if not os.path.exists(parent):
                     return {"error": f"Parent directory does not exist: {os.path.dirname(directory_path)}"}
                 os.mkdir(full_path)
-            
+
             return {
                 "success": True,
                 "directory_path": directory_path
             }
         except Exception as e:
             return {"error": f"Error creating directory: {str(e)}"}
-    
+
     def _delete_file(self, file_path: str) -> Dict[str, Any]:
         print("delete_file")
         if not file_path:
             return {"error": "file_path is required"}
-        
+
         full_path = os.path.join(self.project_root, file_path)
-        
+
         if not os.path.exists(full_path):
             return {"error": f"File not found: {file_path}"}
-        
+
         if os.path.isdir(full_path):
             return {"error": f"Path is a directory, not a file: {file_path}"}
-        
+
         try:
             os.remove(full_path)
             return {
@@ -589,7 +588,7 @@ class ToolHandler:
     def _run_shell_command(self, command: str, timeout_sec: int = 5) -> Dict[str, Any]:
         if not command or not isinstance(command, str):
             return {"error": "command is required"}
-        
+
         blocked_tokens = {
             "python", "pip", "npm", "yarn", "pnpm", "bun", "go", "cargo",
             "docker", "podman", "pytest", "make", "gradle", "mvn", "node"
@@ -598,21 +597,21 @@ class ToolHandler:
             "ls", "cat", "head", "tail", "sed", "grep", "rg", "find",
             "pwd", "wc", "stat", "du", "sort", "uniq", "cut"
         }
-        
+
         try:
             parts = shlex.split(command)
         except ValueError:
             return {"error": "Invalid command string"}
-        
+
         if not parts:
             return {"error": "Empty command"}
-        
+
         if parts[0] not in safe_prefixes:
             return {"error": "Command not allowed"}
-        
+
         if any(token in blocked_tokens for token in parts):
             return {"error": "Command contains blocked tokens"}
-        
+
         try:
             completed = subprocess.run(
                 parts,

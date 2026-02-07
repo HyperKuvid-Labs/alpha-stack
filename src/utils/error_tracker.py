@@ -2,26 +2,52 @@ import os
 import json
 from typing import List, Dict, Optional
 from datetime import datetime
-
+from .dependencies import TreeNode
 
 class ErrorTracker:
-    def __init__(self, project_root: str):
+    def __init__(self, project_root: str, folder_tree: Optional[TreeNode] = None):
         self.project_root = project_root
+        self.folder_tree = folder_tree
         self.change_log: List[Dict] = []
         self.error_history: List[Dict] = []
         self.action_log: List[Dict] = []
         self._error_counter = 0
-        
-    def log_change(self, file_path: str, change_description: str, 
-                   error_context: Optional[str] = None, 
+
+    def find_node_by_path(self, rel_path: str) -> Optional[TreeNode]:
+        if not self.folder_tree:
+            return None
+
+        parts = rel_path.split(os.sep)
+        current_node = self.folder_tree
+
+        # skip root if first part matches root name
+        start_idx = 0
+        if parts and parts[0] == current_node.value:
+            start_idx = 1
+
+        # traverse tree to find node
+        for part in parts[start_idx:]:
+            found = False
+            for child in current_node.children:
+                if child.value == part:
+                    current_node = child
+                    found = True
+                    break
+            if not found:
+                return None
+
+        return current_node
+
+    def log_change(self, file_path: str, change_description: str,
+                   error_context: Optional[str] = None,
                    before_content: Optional[str] = None,
                    after_content: Optional[str] = None,
                    error: Optional[str] = None,
                    actions: Optional[List[str]] = None) -> None:
         rel_path = os.path.relpath(file_path, self.project_root) if os.path.isabs(file_path) else file_path
-        
+
         error_msg = error or error_context
-        
+
         change_entry = {
             "timestamp": datetime.now().isoformat(),
             "file": rel_path,
@@ -31,14 +57,27 @@ class ErrorTracker:
             "error_context": error_context,
             "has_content_snapshot": before_content is not None or after_content is not None
         }
-        
+
+        # here as we have the change over here, like the actions, we can use that ot update the error traces for the tree node's error trace in the treenode, to basically keep track of what changes were made for which errors, and when giving for the future changes, the planner can see what changes were made for which errors previously
+        if self.folder_tree and actions:
+            node = self.find_node_by_path(rel_path)
+            if node:
+                node.error_traces.append({
+                    "timestamp": change_entry["timestamp"], # timestamp coz, the context now also contains the info which error was fixed first
+                    "error": error_msg,
+                    "actions": actions,
+                    "change_description": change_description
+                })
+                print(f"[DEBUG] Added error trace to {rel_path}, total: {len(node.error_traces)}")  # DEBUG
+
+
         if before_content:
             change_entry["before_length"] = len(before_content)
         if after_content:
             change_entry["after_length"] = len(after_content)
-            
+
         self.change_log.append(change_entry)
-    
+
     def log_error(self, error_info: Dict) -> str:
         self._error_counter += 1
         error_id = f"err_{self._error_counter}"
@@ -50,37 +89,37 @@ class ErrorTracker:
         }
         self.error_history.append(entry)
         return error_id
-    
+
     def get_change_summary(self) -> str:
         if not self.change_log:
             return "No changes have been made yet."
-        
+
         summary_lines = ["## Change Log Summary\n"]
         summary_lines.append("**IMPORTANT**: Review this list carefully. If you see the same error/file combination with the same fix attempted multiple times, that fix did NOT work and you MUST try a different approach.\n")
-        
+
         attempts_by_key = {}
         for idx, entry in enumerate(self.change_log):
             error_key = f"{entry['file']}|{entry.get('error', entry.get('error_context', ''))[:100]}"
             action_key = '|'.join(entry.get('actions', []))
             full_key = f"{error_key}|{action_key}"
-            
+
             if full_key not in attempts_by_key:
                 attempts_by_key[full_key] = []
             attempts_by_key[full_key].append(idx)
-        
+
         for idx, entry in enumerate(self.change_log):
             error_key = f"{entry['file']}|{entry.get('error', entry.get('error_context', ''))[:100]}"
             action_key = '|'.join(entry.get('actions', []))
             full_key = f"{error_key}|{action_key}"
-            
+
             attempt_count = len(attempts_by_key[full_key])
             is_repeat = attempt_count > 1 and idx in attempts_by_key[full_key][:-1]
-            
+
             if is_repeat:
                 summary_lines.append(f"⚠️ **ATTEMPT {attempts_by_key[full_key].index(idx) + 1} of {attempt_count}** (THIS FIX DID NOT WORK - DO NOT REPEAT)")
             elif attempt_count > 1 and idx == attempts_by_key[full_key][-1]:
                 summary_lines.append(f"⚠️ **ATTEMPT {attempt_count} of {attempt_count}** (Same fix attempted {attempt_count} times - FAILED)")
-            
+
             summary_lines.append(
                 f"- **{entry['file']}**: {entry['change_description']}"
             )
@@ -91,7 +130,7 @@ class ErrorTracker:
             if entry.get('actions'):
                 summary_lines.append(f"  - Actions: {', '.join(entry['actions'])}")
             summary_lines.append("")
-        
+
         return "\n".join(summary_lines)
 
     def log_action(self, task_id: Optional[str], action_type: str, message: str) -> Dict:
@@ -151,14 +190,14 @@ class ErrorTracker:
             str(error_info.get("error", ""))[:200]
         ]
         return "|".join(parts)
-    
+
     def get_recent_changes(self, file_path: Optional[str] = None, limit: int = 10) -> List[Dict]:
         changes = self.change_log
         if file_path:
             rel_path = os.path.relpath(file_path, self.project_root) if os.path.isabs(file_path) else file_path
             changes = [c for c in changes if c['file'] == rel_path]
         return changes[-limit:]
-    
+
     def to_dict(self) -> Dict:
         return {
             "project_root": self.project_root,
@@ -169,16 +208,16 @@ class ErrorTracker:
             "error_history": self.error_history,
             "action_log": self.action_log
         }
-    
+
     def save_to_file(self, file_path: str) -> None:
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(self.to_dict(), f, indent=2)
-    
+
     @classmethod
     def load_from_file(cls, file_path: str) -> 'ErrorTracker':
         with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        
+
         tracker = cls(data['project_root'])
         tracker.change_log = data.get('change_log', [])
         tracker.error_history = data.get('error_history', [])
