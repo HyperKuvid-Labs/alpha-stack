@@ -6,12 +6,8 @@ You are a planning agent. Create a minimal ordered task list with CONCRETE FIXES
 {{ software_blueprint | json_dumps }}
 ```
 
-### Folder Structure
-```
-{{ folder_structure }}
-```
-
-### Project Structure
+### Project Structure (with dependency graph)
+Each file lists its `deps` (files it imports) and `used-by` (files that import it).
 ```
 {{ project_structure_tree }}
 ```
@@ -29,7 +25,7 @@ You are a planning agent. Create a minimal ordered task list with CONCRETE FIXES
 {% endif %}
 
 {% if errors and errors|length > 0 %}
-## CURRENT ERROR ({{ error_type | default('unknown') }} error)
+## CURRENT ERROR
 {% for err in errors %}
 ### Error {{ loop.index }}:
 {% if err.error %}**Error**: {{ err.error }}{% endif %}
@@ -45,10 +41,9 @@ You are a planning agent. Create a minimal ordered task list with CONCRETE FIXES
 ## Tools Available
 - get_file_code (supports line slices) - READ file content
 - update_file_code - WRITE/MODIFY file content (REQUIRED to make changes!)
-- find_files
 - get_error_history (paged / by error_id, use include_logs=true for details)
 - get_action_history (paged)
-- run_shell_command (read-only context)
+- run_shell_command (shell commands for context — ls, grep, find, etc.)
 - get_file_dependencies / get_file_dependents
 
 ## Instructions

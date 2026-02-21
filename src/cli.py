@@ -9,11 +9,11 @@ def status_handler(event_type, message, **kwargs):
     elif event_type == "progress":
         print(f"   {message}")
     elif event_type == "success":
-        print(f"✅ {message}")
+        print(f"{message}")
     elif event_type == "error":
-        print(f"❌ {message}")
+        print(f"{message}")
     elif event_type == "warning":
-        print(f"⚠️  {message}")
+        print(f" {message}")
     else:
         print(f"   {message}")
 
@@ -22,7 +22,7 @@ def cmd_generate(args):
     from .generator import generate_project
 
     print("=" * 80)
-    print("🚀 ALPHASTACK - Project Generator")
+    print("ALPHASTACK - Project Generator")
     print("=" * 80)
     print()
 
@@ -33,54 +33,54 @@ def cmd_generate(args):
         user_prompt = input("Enter your project description: ").strip()
 
     if not user_prompt:
-        print("❌ Project description is required!")
+        print("Project description is required!")
         return 1
 
-    print(f"\n📝 Project: {user_prompt[:50]}...")
-    print(f"📁 Output: {output_dir}")
+    print(f"\nProject: {user_prompt[:50]}...")
+    print(f"Output: {output_dir}")
     print()
 
-    result = generate_project(user_prompt, output_dir, on_status=status_handler)
+    provider_name = getattr(args, "provider", None)
+    result = generate_project(user_prompt, output_dir, on_status=status_handler, provider_name=provider_name)
 
     if not result:
-        print("\n❌ Project generation failed")
+        print("\nProject generation failed")
         return 1
 
     print("\n" + "=" * 80)
-    print("📊 FINAL RESULTS")
+    print("FINAL RESULTS")
     print("=" * 80)
 
     dep_result = result.get("dependency_resolution", {})
     docker_result = result.get("docker_testing", {})
     success = result.get("success", False)
 
-    print(f"\n🔗 Dependency Resolution: {'✅ SUCCESS' if dep_result.get('success') else '❌ FAILED'}")
+    print(f"\nDependency Resolution: {'SUCCESS' if dep_result.get('success') else 'FAILED'}")
     if not dep_result.get('success'):
         remaining = dep_result.get("remaining_errors", [])
         if remaining:
             print(f"   {len(remaining)} remaining issues")
 
-    print(f"\n🐳 Docker Build: {'✅ SUCCESS' if docker_result.get('build_success') else '❌ FAILED'}")
+    print(f"\n🐳 Docker Build: {' SUCCESS' if docker_result.get('build_success') else ' FAILED'}")
     if docker_result.get('build_success'):
         print(f"   Iterations: {docker_result.get('build_iterations', 0)}")
 
-    print(f"\n🧪 Docker Tests: {'✅ SUCCESS' if docker_result.get('tests_success') else '❌ FAILED'}")
+    print(f"\n Docker Tests: {' SUCCESS' if docker_result.get('tests_success') else ' FAILED'}")
     if docker_result.get('tests_success'):
         print(f"   Iterations: {docker_result.get('test_iterations', 0)}")
 
     print(f"\n{'=' * 80}")
     if success:
-        print("🎉 PROJECT GENERATION: COMPLETE SUCCESS")
-        print("\n   ✅ All dependencies resolved")
-        print("   ✅ Docker build successful")
-        print("   ✅ All tests passed")
+        print(" PROJECT GENERATION: COMPLETE SUCCESS")
+        print("\n   All dependencies resolved")
+        print("    Docker build successful")
+        print("    All tests passed")
         print("\n   The project is ready to use!")
     else:
-        print("⚠️  PROJECT GENERATION: INCOMPLETE")
+        print("  PROJECT GENERATION: INCOMPLETE")
         print("\n   Some steps may require manual fixes")
-
-    print(f"\n⏱️  Time: {result.get('elapsed_time', 0):.2f}s")
-    print(f"📁 Location: {result.get('project_path', 'unknown')}")
+    print(f"\nTime: {result.get('elapsed_time', 0):.2f}s")
+    print(f" Location: {result.get('project_path', 'unknown')}")
     print("=" * 80)
 
     return 0 if success else 1
@@ -90,10 +90,10 @@ def cmd_list(args):
     output_dir = args.output or "./created_projects"
 
     if not os.path.exists(output_dir):
-        print(f"📁 No projects found in {output_dir}")
+        print(f" No projects found in {output_dir}")
         return 0
 
-    print(f"📁 Projects in {output_dir}:")
+    print(f" Projects in {output_dir}:")
     print("-" * 40)
 
     projects = []
@@ -146,9 +146,9 @@ def cmd_clean(args):
                 print(f"   🗑️  Deleted {item}")
                 deleted += 1
             except Exception as e:
-                print(f"   ❌ Failed to delete {item}: {e}")
+                print(f"   Failed to delete {item}: {e}")
 
-    print(f"\n✅ Deleted {deleted} project(s)")
+    print(f"\nDeleted {deleted} project(s)")
     return 0
 
 
@@ -169,7 +169,7 @@ def interactive_mode():
         from .tui import display_logo, get_user_input, StatusDisplay, print_success, print_error
     except ImportError:
         # Fallback if dependencies are missing
-        print("⚠️  TUI dependencies missing. Run 'pip install alphastack[tui]' or install rich, pyfiglet, prompt_toolkit.")
+        print("  TUI dependencies missing. Run 'pip install alphastack[tui]' or install rich, pyfiglet, prompt_toolkit.")
         # Create dummy args for generic flow
         dummy_args = argparse.Namespace(prompt=None, output=None)
         return cmd_generate(dummy_args)
@@ -179,7 +179,7 @@ def interactive_mode():
     try:
         user_prompt, output_dir = get_user_input()
     except KeyboardInterrupt:
-        print("\n👋 Exiting...")
+        print("\n Exiting...")
         return 0
 
     from .generator import generate_project
@@ -240,7 +240,7 @@ def cmd_eval(args):
         print(f"{'=' * 80}")
 
         if not result:
-            print(f"❌ {language} evaluation failed")
+            print(f" {language} evaluation failed")
             all_success = False
             continue
 
@@ -278,11 +278,11 @@ def cmd_eval(args):
                     print(f"         ... and {len(errors) - 3} more")
 
         print(f"\n🐳 DOCKER BUILD")
-        print(f"   Status: {'✅ SUCCESS' if metrics.get('docker_build_success') else '❌ FAILED'}")
+        print(f"   Status: {'SUCCESS' if metrics.get('docker_build_success') else ' FAILED'}")
         print(f"   Iterations: {metrics.get('docker_build_iterations', 0)}")
 
         print(f"\n🧪 DOCKER TESTS")
-        print(f"   Status: {'✅ SUCCESS' if metrics.get('docker_tests_success') else '❌ FAILED'}")
+        print(f"   Status: {' SUCCESS' if metrics.get('docker_tests_success') else ' FAILED'}")
         print(f"   Iterations: {metrics.get('docker_test_iterations', 0)}")
 
         print(f"\n{'=' * 80}")
@@ -321,6 +321,8 @@ def main():
     gen_parser = subparsers.add_parser("generate", help="Generate a new project")
     gen_parser.add_argument("prompt", nargs="?", help="Project description")
     gen_parser.add_argument("-o", "--output", help="Output directory (default: ./created_projects)")
+    gen_parser.add_argument("-p", "--provider", choices=["google", "openai", "openrouter", "prime_intellect"],
+                            help="Inference provider (default: from providers.json)")
     gen_parser.set_defaults(func=cmd_generate)
 
     list_parser = subparsers.add_parser("list", help="List generated projects")
@@ -349,7 +351,7 @@ def main():
         required=True,
         choices=[
             "gemini-2.5-pro",
-            "gpt-5.1-coex-max",
+            "gpt-5.1-codex-max",
             "claude-sonnet-4.5",
             "grok-code-fast-1",
             "deepseek-v3.2",

@@ -5,11 +5,10 @@ from .helpers import (
     MODEL_NAME, SKIP_DIRS, LANGUAGE_MAP,
     GENERATABLE_FILES, GENERATABLE_FILENAMES
 )
-from .tools import ToolHandler, get_all_tools, extract_function_args
+from .tools import ToolHandler
 from .dependencies import DependencyAnalyzer, DependencyFeedbackLoop, DependencyError, TreeNode
 from .prompt_manager import PromptManager
 from .error_tracker import ErrorTracker
-from .command_log import CommandLogManager
 
 __all__ = [
     "get_client", "retry_api_call", "clean_agent_output", "extract_json_from_response",
@@ -17,7 +16,7 @@ __all__ = [
     "extract_code_from_response",
     "MODEL_NAME", "SKIP_DIRS", "LANGUAGE_MAP",
     "GENERATABLE_FILES", "GENERATABLE_FILENAMES",
-    "ToolHandler", "get_all_tools", "extract_function_args",
+    "ToolHandler",
     "DependencyAnalyzer", "DependencyFeedbackLoop", "DependencyError", "TreeNode",
-    "PromptManager", "ErrorTracker", "CommandLogManager"
+    "PromptManager", "ErrorTracker"
 ]

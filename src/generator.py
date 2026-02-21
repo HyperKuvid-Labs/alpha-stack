@@ -16,8 +16,7 @@ class TreeNode:
         self.value = value
         self.children = []
         self.is_file = False
-        self.error_traces = [] # this is to keep track of the errors, and the actions taken for it, so that when we are in the future generating the files, if there were errors previously for that file, the planner can see what actions were taken for those errors, and can plan accordingly, like maybe not take the same actions if they didn't work, or take different actions, etc. It's basically to keep a history of what happened with that file in terms of errors and fixes, which can be really useful for the planner to make informed decisions in future iterations.
-
+        self.error_traces = []
     def add_child(self, child_node):
         self.children.append(child_node)
 
@@ -599,7 +598,8 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
         pm=pm,
         error_tracker=error_tracker,
         dependency_analyzer=dependency_analyzer,
-        on_status=on_status
+        on_status=on_status,
+        provider_name=provider_name,
     )
 
     for file_path, entries in metadata_dict.items():

@@ -1,5 +1,7 @@
 """Tool definitions in JSON Schema format (provider-agnostic)"""
+
 from typing import List, Dict, Any
+
 
 def get_tool_definitions() -> List[Dict[str, Any]]:
     """Get all tool definitions in JSON Schema format"""
@@ -12,19 +14,19 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Relative path to the file from project root (e.g., 'src/main.py' or 'app/models.py')"
+                        "description": "Relative path to the file from project root (e.g., 'src/main.py' or 'app/models.py')",
                     },
                     "start_line": {
                         "type": "integer",
-                        "description": "Optional start line number (1-based). If provided with end_line, only return that slice."
+                        "description": "Optional start line number (1-based). If provided with end_line, only return that slice.",
                     },
                     "end_line": {
                         "type": "integer",
-                        "description": "Optional end line number (1-based). If provided with start_line, only return that slice."
-                    }
+                        "description": "Optional end line number (1-based). If provided with start_line, only return that slice.",
+                    },
                 },
-                "required": ["file_path"]
-            }
+                "required": ["file_path"],
+            },
         },
         {
             "name": "update_file_code",
@@ -34,69 +36,19 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Relative path to the file to update (e.g., 'src/main.py')"
+                        "description": "Relative path to the file to update (e.g., 'src/main.py')",
                     },
                     "new_content": {
                         "type": "string",
-                        "description": "The complete new code content for the file"
+                        "description": "The complete new code content for the file",
                     },
                     "change_description": {
                         "type": "string",
-                        "description": "Brief description of what was changed"
-                    }
-                },
-                "required": ["file_path", "new_content", "change_description"]
-            }
-        },
-        {
-            "name": "find_files",
-            "description": "Search for files in the project by name or pattern and return matches with paths and optional content previews.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "Filename or substring to search for (e.g., 'config.py', 'ci.yml')."
+                        "description": "Brief description of what was changed",
                     },
-                    "include_content": {
-                        "type": "boolean",
-                        "description": "If true, include a short preview of file content for each match (first 2000 chars)."
-                    },
-                    "max_results": {
-                        "type": "integer",
-                        "description": "Maximum number of results to return (default 50)."
-                    }
                 },
-                "required": ["query"]
-            }
-        },
-        {
-            "name": "check_file_exists",
-            "description": "Check if a file exists in the project.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "file_path": {
-                        "type": "string",
-                        "description": "Relative path to the file from project root (e.g., 'src/main.py')"
-                    }
-                },
-                "required": ["file_path"]
-            }
-        },
-        {
-            "name": "list_directory",
-            "description": "List directory contents (files and subdirectories).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "directory_path": {
-                        "type": "string",
-                        "description": "Relative path to the directory (optional, defaults to project root)"
-                    }
-                },
-                "required": []
-            }
+                "required": ["file_path", "new_content", "change_description"],
+            },
         },
         {
             "name": "create_directory",
@@ -106,15 +58,15 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "properties": {
                     "directory_path": {
                         "type": "string",
-                        "description": "Relative path to the directory to create (e.g., 'src/utils')"
+                        "description": "Relative path to the directory to create (e.g., 'src/utils')",
                     },
                     "create_parents": {
                         "type": "boolean",
-                        "description": "If true, create parent directories if they don't exist (default: true)"
-                    }
+                        "description": "If true, create parent directories if they don't exist (default: true)",
+                    },
                 },
-                "required": ["directory_path"]
-            }
+                "required": ["directory_path"],
+            },
         },
         {
             "name": "delete_file",
@@ -124,11 +76,11 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Relative path to the file to delete (e.g., 'src/old_file.py')"
+                        "description": "Relative path to the file to delete (e.g., 'src/old_file.py')",
                     }
                 },
-                "required": ["file_path"]
-            }
+                "required": ["file_path"],
+            },
         },
         {
             "name": "regenerate_file",
@@ -138,17 +90,16 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Relative path to the file to regenerate (e.g., 'src/main.py', 'config/settings.py')"
+                        "description": "Relative path to the file to regenerate (e.g., 'src/main.py', 'config/settings.py')",
                     },
                     "context": {
                         "type": "string",
-                        "description": "Additional context about why this file needs to be regenerated or what it should contain"
-                    }
+                        "description": "Additional context about why this file needs to be regenerated or what it should contain",
+                    },
                 },
-                "required": ["file_path", "context"]
-            }
-        }
-        ,
+                "required": ["file_path", "context"],
+            },
+        },
         {
             "name": "get_error_history",
             "description": "Fetch error history with optional paging or a specific error ID.",
@@ -157,23 +108,23 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "properties": {
                     "error_id": {
                         "type": "string",
-                        "description": "Optional error ID to fetch a specific error entry"
+                        "description": "Optional error ID to fetch a specific error entry",
                     },
                     "limit": {
                         "type": "integer",
-                        "description": "Max number of entries to return (default 20)"
+                        "description": "Max number of entries to return (default 20)",
                     },
                     "offset": {
                         "type": "integer",
-                        "description": "Offset into error history (default 0)"
+                        "description": "Offset into error history (default 0)",
                     },
                     "include_logs": {
                         "type": "boolean",
-                        "description": "If true, include error logs/details in the response"
-                    }
+                        "description": "If true, include error logs/details in the response",
+                    },
                 },
-                "required": []
-            }
+                "required": [],
+            },
         },
         {
             "name": "get_action_history",
@@ -183,19 +134,19 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "properties": {
                     "limit": {
                         "type": "integer",
-                        "description": "Max number of entries to return (default 20)"
+                        "description": "Max number of entries to return (default 20)",
                     },
                     "offset": {
                         "type": "integer",
-                        "description": "Offset into action history (default 0)"
+                        "description": "Offset into action history (default 0)",
                     },
                     "task_id": {
                         "type": "string",
-                        "description": "Optional task id to filter action history"
-                    }
+                        "description": "Optional task id to filter action history",
+                    },
                 },
-                "required": []
-            }
+                "required": [],
+            },
         },
         {
             "name": "log_action",
@@ -205,19 +156,19 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "properties": {
                     "task_id": {
                         "type": "string",
-                        "description": "Task ID associated with the action"
+                        "description": "Task ID associated with the action",
                     },
                     "action_type": {
                         "type": "string",
-                        "description": "Type of action (e.g., edit, analysis, command)"
+                        "description": "Type of action (e.g., edit, analysis, command)",
                     },
                     "message": {
                         "type": "string",
-                        "description": "Short description of the action"
-                    }
+                        "description": "Short description of the action",
+                    },
                 },
-                "required": ["action_type", "message"]
-            }
+                "required": ["action_type", "message"],
+            },
         },
         {
             "name": "run_shell_command",
@@ -227,15 +178,49 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "properties": {
                     "command": {
                         "type": "string",
-                        "description": "Command to run (read-only)."
+                        "description": "Command to run (read-only).",
                     },
                     "timeout_sec": {
                         "type": "integer",
-                        "description": "Timeout in seconds (default 5)"
-                    }
+                        "description": "Timeout in seconds (default 5)",
+                    },
                 },
-                "required": ["command"]
-            }
+                "required": ["command"],
+            },
+        },
+        {
+            "name": "patch_file",
+            "description": "Apply a surgical patch to a file without rewriting the whole thing. Supports full_rewrite, delete_lines, replace_lines, and insert_after_line.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Relative path to the file to patch (e.g., 'src/main.py')",
+                    },
+                    "fix_type": {
+                        "type": "string",
+                        "description": "Patch mode: 'full_rewrite' replaces entire file, 'delete_lines' removes a line range, 'replace_lines' swaps a line range with new_content, 'insert_after_line' inserts new_content after the given line.",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Brief description of why this patch is being applied",
+                    },
+                    "line_start": {
+                        "type": "integer",
+                        "description": "1-based start line for delete_lines, replace_lines, or insert_after_line",
+                    },
+                    "line_end": {
+                        "type": "integer",
+                        "description": "1-based end line (inclusive) for delete_lines or replace_lines. Defaults to line_start if omitted.",
+                    },
+                    "new_content": {
+                        "type": "string",
+                        "description": "Replacement or insertion content. Required for full_rewrite, replace_lines, and insert_after_line.",
+                    },
+                },
+                "required": ["file_path", "fix_type", "description"],
+            },
         },
         {
             "name": "get_file_dependencies",
@@ -245,11 +230,11 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Relative path to the file"
+                        "description": "Relative path to the file",
                     }
                 },
-                "required": ["file_path"]
-            }
+                "required": ["file_path"],
+            },
         },
         {
             "name": "get_file_dependents",
@@ -259,11 +244,73 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Relative path to the file"
+                        "description": "Relative path to the file",
                     }
                 },
-                "required": ["file_path"]
-            }
-        }
+                "required": ["file_path"],
+            },
+        },
+        {
+            "name": "docker_build",
+            "description": "Build the Docker image. You provide the full docker build command. If omitted, defaults to 'docker build --progress=plain -t <image_name> .'",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "Full docker build command (e.g., 'docker build --progress=plain -t myapp .'). Leave empty to use the default.",
+                    }
+                },
+                "required": [],
+            },
+        },
+        {
+            "name": "docker_run",
+            "description": "Run a command in a Docker container. You provide the FULL 'docker run ...' command including all flags, volume mounts, image name, and the command to execute. Only commands containing test runners (pytest, npm test, etc.) update the pipeline's test_success state.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "Full docker run command (e.g., 'docker run --rm -v /app:/app myimage pytest -v').",
+                    }
+                },
+                "required": ["command"],
+            },
+        },
     ]
 
+
+# Tools the planner is allowed to use (read + write + docker)
+PLANNER_TOOL_NAMES = {
+    "get_file_code",
+    "update_file_code",
+    "patch_file",
+    "run_shell_command",
+    "get_error_history",
+    "get_action_history",
+    "get_file_dependencies",
+    "get_file_dependents",
+    "docker_build",
+    "docker_run",
+}
+
+# Tools the executor is allowed to use (file read/write only — no docker, no recursion)
+EXECUTOR_TOOL_NAMES = {
+    "get_file_code",
+    "update_file_code",
+    "patch_file",
+    "run_shell_command",
+    "get_file_dependencies",
+    "get_file_dependents",
+}
+
+
+def get_planner_tool_definitions() -> List[Dict[str, Any]]:
+    """Get tool definitions filtered for the planner agent."""
+    return [t for t in get_tool_definitions() if t["name"] in PLANNER_TOOL_NAMES]
+
+
+def get_executor_tool_definitions() -> List[Dict[str, Any]]:
+    """Get tool definitions filtered for the executor agent (file read/write only)."""
+    return [t for t in get_tool_definitions() if t["name"] in EXECUTOR_TOOL_NAMES]

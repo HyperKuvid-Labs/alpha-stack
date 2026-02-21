@@ -79,12 +79,12 @@ Parse errors from logs above. Identify: error message, file path, line number, e
 ## Tools
 
 1. **get_file_code**: Read files to understand dependencies
-2. **find_files**: Search for missing files/modules
+2. **run_shell_command**: Search for files with `find` or `ls`, gather context
 3. **log_change**: Log planning decisions
 
 Guidelines:
 - For EOFError: Fix input piping using printf/echo
-- For FILE_NOT_FOUND: Use `find_files`, then regenerate if needed
+- For FILE_NOT_FOUND: Use `run_shell_command("find . -name 'filename'")`, then regenerate if needed
 - Verify file state before suggesting fixes if change log shows prior attempts
 
 ## Task

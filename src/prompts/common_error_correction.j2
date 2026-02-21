@@ -59,7 +59,7 @@ You are an error correction agent. Fix code errors using tool calls only.
 ## Tools
 
 1. **get_file_code**: Read files to understand dependencies
-2. **find_files**: Search for files by name/pattern (use for FILE_NOT_FOUND)
+2. **run_shell_command**: Search for files with `find` or `ls`, gather context
 3. **update_file_code**: Update file with corrected code
    - Parameter: `new_content` (complete file content)
    - Auto-cleans markdown formatting
@@ -69,7 +69,7 @@ You are an error correction agent. Fix code errors using tool calls only.
 
 1. Analyze error and identify the issue
 2. For EOFError: Fix input piping using printf/echo with proper escaping
-3. For FILE_NOT_FOUND: Use `find_files` first, then update imports or create file
+3. For FILE_NOT_FOUND: Use `run_shell_command("find . -name 'filename'")` first, then update imports or create file
 4. Use `update_file_code` with:
    - First line: language name (python, javascript, etc.)
    - Remaining lines: raw file content (no markdown)

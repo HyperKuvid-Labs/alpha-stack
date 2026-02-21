@@ -11,8 +11,9 @@ from typing import Dict, Any, Optional
 class ToolCallLogger:
     """Logs tool calls to a file for debugging and analysis."""
 
-    def __init__(self, log_path: Optional[str] = None):
+    def __init__(self, log_path: Optional[str] = None, verbose: bool = False):
         self.log_path = log_path
+        self.verbose = verbose
         self._ensure_log_file()
 
     def _ensure_log_file(self) -> None:
@@ -25,27 +26,35 @@ class ToolCallLogger:
         except Exception:
             pass
 
-    def log(self, agent_name: Optional[str], function_name: str, args: Dict[str, Any]) -> None:
+    def log(self, agent_name: Optional[str], function_name: str, args: Dict[str, Any], output: Any = None) -> None:
         """Log a tool call to the log file."""
+        # Sanitize args to avoid logging large content
+        sanitized_args = {}
+        for k, v in args.items():
+            if k in ('new_content', 'content', 'file_content', 'code'):
+                sanitized_args[k] = f"<{len(str(v))} chars>"
+            elif isinstance(v, str) and len(v) > 500:
+                sanitized_args[k] = v[:500] + "..."
+            else:
+                sanitized_args[k] = v
+
+        if self.verbose:
+            out_str = str(output)[:300] if output is not None else "None"
+            print(f"\n>> {agent_name}.{function_name}")
+            for k, v in sanitized_args.items():
+                print(f"   input  {k}: {v}")
+            print(f"   output: {out_str}")
+
         if not self.log_path:
             return
 
         try:
-            # Sanitize args to avoid logging large content
-            sanitized_args = {}
-            for k, v in args.items():
-                if k in ('new_content', 'content', 'file_content', 'code'):
-                    sanitized_args[k] = f"<{len(str(v))} chars>"
-                elif isinstance(v, str) and len(v) > 500:
-                    sanitized_args[k] = v[:500] + "..."
-                else:
-                    sanitized_args[k] = v
-
             entry = {
                 "timestamp": datetime.now().isoformat(),
                 "agent": agent_name or "unknown",
                 "function": function_name,
-                "args": sanitized_args
+                "args": sanitized_args,
+                "output": str(output)[:500] if output is not None else None,
             }
 
             with open(self.log_path, 'a', encoding='utf-8') as f:

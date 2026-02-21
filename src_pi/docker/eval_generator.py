@@ -21,8 +21,6 @@ def extract_file_summaries(metadata_dict: Dict) -> Dict[str, str]:
 
 def extract_external_dependencies(metadata_dict: Dict, dependency_analyzer) -> List[Dict[str, str]]:
     external_deps = set()
-
-
     for file_path in metadata_dict.keys():
         if os.path.exists(file_path):
             deps = dependency_analyzer.get_dependency_details(file_path)

@@ -187,7 +187,7 @@ class ErrorTracker:
         parts = [
             str(error_info.get("error_type", "")),
             str(error_info.get("file", "")),
-            str(error_info.get("error", ""))[:200]
+            str(error_info.get("error", ""))
         ]
         return "|".join(parts)
 

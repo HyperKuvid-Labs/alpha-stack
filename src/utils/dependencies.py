@@ -501,6 +501,70 @@ class DependencyAnalyzer:
         return best_match
 
 
+def build_dependency_graph_tree(project_root: str, dependency_analyzer: 'DependencyAnalyzer') -> str:
+    skip_dirs = SKIP_DIRS
+    lines = []
+
+    def _walk_tree(dir_path: str, prefix: str = "", is_last: bool = True):
+        rel_dir = os.path.relpath(dir_path, project_root)
+        dir_name = os.path.basename(dir_path) if rel_dir != "." else os.path.basename(project_root)
+
+        if dir_name.startswith(".") and dir_name != ".":
+            return
+
+        connector = "└── " if is_last else "├── "
+        lines.append(f"{prefix}{connector}{dir_name}/")
+
+        child_prefix = prefix + ("    " if is_last else "│   ")
+
+        try:
+            entries = sorted(os.listdir(dir_path))
+        except PermissionError:
+            return
+
+        dirs = [e for e in entries if os.path.isdir(os.path.join(dir_path, e))
+                and not e.startswith(".") and e not in skip_dirs]
+        files = [e for e in entries if os.path.isfile(os.path.join(dir_path, e))
+                 and not e.startswith(".")]
+
+        all_entries = dirs + files
+
+        for i, entry in enumerate(all_entries):
+            entry_path = os.path.join(dir_path, entry)
+            entry_is_last = (i == len(all_entries) - 1)
+
+            if os.path.isdir(entry_path):
+                _walk_tree(entry_path, child_prefix, entry_is_last)
+            else:
+                file_connector = "└── " if entry_is_last else "├── "
+                lines.append(f"{child_prefix}{file_connector}{entry}")
+
+                # Get dependencies and dependents for this file
+                abs_file = os.path.abspath(entry_path)
+                dep_details = dependency_analyzer.dependency_details.get(abs_file, [])
+                internal_deps = [
+                    os.path.relpath(d["path"], project_root)
+                    for d in dep_details
+                    if d.get("kind") == "internal" and d.get("path")
+                ]
+
+                dependents_abs = dependency_analyzer.get_dependents(abs_file)
+                dependents_rel = [
+                    os.path.relpath(p, project_root) for p in dependents_abs
+                ]
+                annot_prefix = child_prefix + ("    " if entry_is_last else "│   ")
+                if internal_deps:
+                    lines.append(f"{annot_prefix}  deps: {', '.join(internal_deps)}")
+                if dependents_rel:
+                    lines.append(f"{annot_prefix}  used-by: {', '.join(dependents_rel)}")
+    try:
+        _walk_tree(project_root)
+    except Exception:
+        pass
+
+    return "\n".join(lines)
+
+
 class DependencyFeedbackLoop:
     def __init__(self, dependency_analyzer: DependencyAnalyzer, project_root: str,
                  software_blueprint: Optional[Dict] = None,
@@ -508,7 +572,6 @@ class DependencyFeedbackLoop:
                  file_output_format: Optional[Dict] = None,
                  pm=None, error_tracker=None):
         from .tools import ToolHandler
-        from ..agents.planner import PlanningAgent
         from ..agents.corrector import ExecutorAgent
         from .prompt_manager import PromptManager
         from .error_tracker import ErrorTracker
@@ -523,16 +586,6 @@ class DependencyFeedbackLoop:
         folder_tree = getattr(self.dependency_analyzer, "folder_tree", None)
         self.error_tracker = error_tracker or ErrorTracker(project_root, folder_tree)
         self.tool_handler = ToolHandler(project_root, self.error_tracker, dependency_analyzer=self.dependency_analyzer)
-
-        self.planning_agent = PlanningAgent(
-            project_root=project_root,
-            software_blueprint=self.software_blueprint,
-            folder_structure=self.folder_structure,
-            file_output_format=self.file_output_format,
-            pm=self.pm,
-            error_tracker=self.error_tracker,
-            tool_handler=self.tool_handler
-        )
 
         self.executor_agent = ExecutorAgent(
             project_root=project_root,
@@ -814,7 +867,16 @@ Set has_error false if no issues."""
                 print("[dep_resolution] repeat_error=true")
             error_id = self.error_tracker.log_error(error_info)
 
-            tasks = self.planning_agent.plan_tasks(errors=errors_dict, error_type="dependency", error_ids=[error_id])
+            tasks = [
+                {
+                    "title": f"Fix dependency error in {e.get('file', 'unknown')}",
+                    "description": e.get("error", "Fix dependency error"),
+                    "files": e.get("file", ""),
+                    "steps": [e.get("error", "")],
+                    "priority": 1,
+                }
+                for e in errors_dict if e.get("file")
+            ]
             if tasks:
                 print(f"[dep_resolution] tasks_planned={len(tasks)}")
                 changed_files = set()
@@ -822,7 +884,6 @@ Set has_error false if no issues."""
                     result = self.executor_agent.execute_task(task)
                     if result.get("changed_files"):
                         changed_files.update(result["changed_files"])
-                    self.planning_agent.invalidate_cache()
                     self.executor_agent.invalidate_cache()
 
                 if changed_files:

@@ -160,7 +160,7 @@ class ThreadMemory:
         context = memory.get_context_for_prompt()
     """
 
-    def __init__(self, token_threshold: int = 8000, summarizer=None):
+    def __init__(self, token_threshold: int = 25000, summarizer=None):
         self.episodes: List[Episode] = []
         self.current_episode: Optional[Dict] = None
         self.summary_of_old_episodes: str = ""

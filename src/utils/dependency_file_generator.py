@@ -32,37 +32,44 @@ DEPENDENCY_FILENAMES = {
 }
 
 
-def extract_all_external_dependencies(dependency_analyzer, project_root: str) -> List[str]:
+def extract_all_external_dependencies(
+    dependency_analyzer, project_root: str
+) -> List[str]:
     """Extract all external dependencies from all files in the project."""
     external_deps = set()
-    
+
     # Get all project files
     for file_path in dependency_analyzer.project_files:
         if not os.path.exists(file_path):
             continue
-        
+
         # Get dependency details for this file
         dep_details = dependency_analyzer.get_dependency_details(file_path)
-        
+
         # Extract external dependencies
         for dep in dep_details:
             if isinstance(dep, dict) and dep.get("kind") == "external":
                 raw_dep = dep.get("raw", "").strip()
                 if raw_dep:
                     external_deps.add(raw_dep)
-    
+
     # Return sorted list
     return sorted(list(external_deps))
 
 
 class DependencyFileGenerator:
-    def __init__(self, project_root: str, software_blueprint: Dict,
-                 folder_structure: str, file_output_format: Dict,
-                 external_dependencies: List[str],
-                 pm: Optional[PromptManager] = None,
-                 model_name: Optional[str] = None,
-                 provider_name: Optional[str] = None,
-                 on_status=None):
+    def __init__(
+        self,
+        project_root: str,
+        software_blueprint: Dict,
+        folder_structure: str,
+        file_output_format: Dict,
+        external_dependencies: List[str],
+        pm: Optional[PromptManager] = None,
+        model_name: Optional[str] = None,
+        provider_name: Optional[str] = None,
+        on_status=None,
+    ):
         self.project_root = project_root
         self.software_blueprint = software_blueprint
         self.folder_structure = folder_structure
@@ -72,50 +79,47 @@ class DependencyFileGenerator:
         self.model_name = model_name or MODEL_NAME
         self.provider_name = provider_name
         self.on_status = on_status
-    
+
     def _emit(self, event_type: str, message: str, **kwargs):
         if self.on_status:
             self.on_status(event_type, message, **kwargs)
-    
+
     def generate_all(self) -> Dict:
-        results = {
-            "generated_files": [],
-            "success": True
-        }
+        results = {"generated_files": [], "success": True}
         if self.provider_name is None:
-            if self.model_name.startswith("models/"):
+            if self.model_name and self.model_name.startswith("models/"):
                 provider_name = "google"
             else:
-                provider_name = "openrouter"
+                provider_name = InferenceManager.get_default_provider()
         else:
             provider_name = self.provider_name
-        
+
         provider = InferenceManager.create_provider(provider_name)
-        
+
         # Create prompt for dependency file generation
         prompt = self.pm.render(
             "dependency_file_generation.j2",
             project_root=self.project_root,
             software_blueprint=self.software_blueprint,
             folder_structure=self.folder_structure,
-            external_dependencies=self.external_dependencies
+            external_dependencies=self.external_dependencies,
         )
-        
+
         messages = [{"role": "user", "content": prompt}]
         response = provider.call_model(messages, model=self.model_name)
         content = provider.extract_text(response)
-        
+
         content = clean_agent_output(content)
         generated_files = self._save_dependency_files(content)
-        
+
         results["generated_files"] = generated_files
         return results
-    
+
     def _save_dependency_files(self, content: str) -> List[str]:
         generated_files = []
         parts = content.split("===")
         allowed_files = self._get_allowed_dependency_files()
-        
+
         i = 0
         while i < len(parts):
             part = parts[i].strip()
@@ -125,29 +129,29 @@ class DependencyFileGenerator:
             if i + 1 < len(parts):
                 filename = os.path.basename(part.strip())
                 file_content = parts[i + 1].strip() if i + 1 < len(parts) else ""
-                
+
                 # Only write known dependency files that exist in folder structure
                 if filename and file_content and filename in allowed_files:
                     # Save the file
                     file_path = os.path.join(self.project_root, filename)
-                    with open(file_path, 'w', encoding='utf-8') as f:
+                    with open(file_path, "w", encoding="utf-8") as f:
                         f.write(file_content)
                     generated_files.append(filename)
                     self._emit("step", f"Generated dependency file: {filename}")
                     i += 2
                     continue
-            
+
             i += 1
         if not generated_files and content.strip():
             # If there is exactly one allowed dependency file, write content to it.
             if len(allowed_files) == 1:
                 filename = next(iter(allowed_files))
                 file_path = os.path.join(self.project_root, filename)
-                with open(file_path, 'w', encoding='utf-8') as f:
+                with open(file_path, "w", encoding="utf-8") as f:
                     f.write(content.strip())
                 generated_files.append(filename)
                 self._emit("step", f"Generated dependency file: {filename}")
-        
+
         return generated_files
 
     def _get_allowed_dependency_files(self) -> Set[str]:

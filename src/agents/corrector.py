@@ -7,7 +7,8 @@ from ..utils.inference import InferenceManager
 class ExecutorAgent:
     def __init__(self, project_root: str, software_blueprint: Dict,
                  folder_structure: str, file_output_format: Dict,
-                 pm, error_tracker, tool_handler, provider_name: Optional[str] = None):
+                 pm, error_tracker, tool_handler, provider_name: Optional[str] = None,
+                 thread_memory=None):
         self.project_root = project_root
         self.software_blueprint = software_blueprint
         self.folder_structure = folder_structure
@@ -16,10 +17,11 @@ class ExecutorAgent:
         self.error_tracker = error_tracker
         self.tool_handler = tool_handler
         self._cached_project_structure_tree = None
+        self.thread_memory = thread_memory
         # Initialize provider
         self.provider_name = provider_name or InferenceManager.get_default_provider()
         self.provider = InferenceManager.create_provider(self.provider_name)
-        self.tool_definitions = InferenceManager.get_tool_definitions()
+        self.tool_definitions = InferenceManager.get_executor_tool_definitions()
         self.tools = self.provider.format_tools(self.tool_definitions)
     
     def _get_project_structure_tree(self) -> str:
@@ -66,7 +68,7 @@ class ExecutorAgent:
                     self.tool_handler.agent_name = "executor"
                     result = self.tool_handler.handle_function_call(func_name, func_args)
 
-                    if func_name == "update_file_code" and result.get("success"):
+                    if func_name in ("update_file_code", "patch_file") and result.get("success"):
                         updated_file_path = result.get("file_path") or func_args.get("file_path", "")
                         if updated_file_path and not os.path.isabs(updated_file_path):
                             full_file_path = os.path.join(self.project_root, updated_file_path)
@@ -96,6 +98,9 @@ class ExecutorAgent:
                 # CRITICAL: Accumulate messages using provider abstraction
                 self.provider.accumulate_messages(messages, response, function_responses)
             
+            if response is None:
+                return {"success": False, "changed_files": changed_files,
+                        "error": "No response from model after all tool rounds"}
             response_text = self.provider.extract_text(response)
             if response_text and changed_files:
                 self.error_tracker.log_action(
@@ -113,8 +118,4 @@ class ExecutorAgent:
             )
             return {"success": False, "changed_files": changed_files, "error": str(e)}
 
-
-# Backwards compatibility alias
-class CorrectionAgent(ExecutorAgent):
-    pass
 
