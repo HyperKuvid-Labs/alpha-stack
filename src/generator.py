@@ -3,7 +3,9 @@ import re
 import json
 import os
 import time
-from typing import Optional
+from typing import Optional, Dict, Any
+from pydantic import BaseModel, Field
+
 from .utils.helpers import get_system_info, clean_agent_output, GENERATABLE_FILES, GENERATABLE_FILENAMES
 from .utils.inference import InferenceManager
 from .utils.prompt_manager import PromptManager
@@ -47,48 +49,99 @@ def should_generate_content(filepath):
     return ext in GENERATABLE_FILES or filename in GENERATABLE_FILENAMES
 
 
-def generate_file_metadata(context, filepath, refined_prompt, tree, json_file_name, file_content, file_output_format, pm, provider_name: Optional[str] = None):
-    file_type = os.path.splitext(filepath)[1]
-    filename = os.path.basename(filepath)
-    prompt = pm.render_file_metadata(
-        filename=filename,
-        file_type=file_type,
-        context=context,
-        refined_prompt=refined_prompt,
-        tree=tree,
-        file_content=file_content,
-        file_output_format=file_output_format
-    )
+class FileGenerationResult(BaseModel):
+    file_content: str = Field(description="The exact content to be written to the file")
+    metadata_description: str = Field(description="A 1-2 sentence description of what the file does")
 
+
+def generate_file(context, filepath, refined_prompt, tree, file_output_format, pm, provider_name: Optional[str] = None) -> Optional[FileGenerationResult]:
     provider_name = provider_name or InferenceManager.get_default_provider()
     provider = InferenceManager.create_provider(provider_name)
-
-    messages = [{"role": "user", "content": prompt}]
-    response = provider.call_model(messages)
-
-    return provider.extract_text(response)
-
-
-def generate_file_content(context, filepath, refined_prompt, tree, json_file_name, file_output_format, pm, provider_name: Optional[str] = None):
-    file_type = os.path.splitext(filepath)[1]
-    filename = os.path.basename(filepath)
-    prompt = pm.render_file_content(
-        filename=filename,
-        file_type=file_type,
+    system_instruction = pm.render_file_generation(
+        filepath=filepath,
         context=context,
         refined_prompt=refined_prompt,
         tree=tree,
         file_output_format=file_output_format
     )
 
-    provider_name = provider_name or InferenceManager.get_default_provider()
-    provider = InferenceManager.create_provider(provider_name)
+    result = None
 
-    messages = [{"role": "user", "content": prompt}]
-    response = provider.call_model(messages)
-    response_text = provider.extract_text(response)
-    cleaned_output = clean_agent_output(response_text)
-    return cleaned_output
+    if provider_name == "google":
+        from google.genai import types
+        from .utils.inference import retry_api_call
+        client = provider.get_client()
+        response = retry_api_call(
+            client.models.generate_content,
+            model=provider.model,
+            contents="Generate the file content and metadata description.",
+            config=types.GenerateContentConfig(
+                systemInstruction=system_instruction,
+                response_mime_type="application/json",
+                response_schema=FileGenerationResult,
+            )
+        )
+        if response and response.text:
+            try:
+                data = json.loads(response.text)
+                result = FileGenerationResult(**data)
+            except (json.JSONDecodeError, ValueError):
+                pass
+            
+    else:
+        # OpenRouter/OpenAI via structured outputs
+        messages = [
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": "Generate the file content and metadata description."}
+        ]
+        
+        try:
+            client = provider.get_client()
+            completion = client.beta.chat.completions.parse(
+                model=provider.model,
+                messages=messages,
+                response_format=FileGenerationResult,
+            )
+            result = completion.choices[0].message.parsed
+        except Exception as e:
+            # Fallback for providers that don't fully support structured outputs
+            try:
+                # Need standard chat completion to get the raw string
+                completion = client.chat.completions.create(
+                    model=provider.model,
+                    messages=messages,
+                )
+                raw_content = completion.choices[0].message.content
+                json_str = None
+                
+                # Strip markdown blocks
+                import re
+                match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_content, re.DOTALL)
+                if match:
+                    json_str = match.group(1)
+                else:
+                    # Generic scraping
+                    start_idx = raw_content.find('{')
+                    if start_idx != -1:
+                        depth = 0
+                        for i in range(start_idx, len(raw_content)):
+                            if raw_content[i] == '{':
+                                depth += 1
+                            elif raw_content[i] == '}':
+                                depth -= 1
+                                if depth == 0:
+                                    json_str = raw_content[start_idx:i+1]
+                                    break
+                if json_str:
+                    data = json.loads(json_str)
+                    result = FileGenerationResult(**data)
+            except Exception as fallback_err:
+                print(f"Error calling structured output API for file generation: {e}. Fallback failed: {fallback_err}")
+                
+    if result:
+        result.file_content = clean_agent_output(result.file_content)
+        
+    return result
 
 
 def dfs_tree_and_gen(root, refined_prompt, tree_structure, project_name, current_path="",
@@ -199,28 +252,21 @@ def process_file(node, full_path, context, refined_prompt, tree_structure,
                     os.makedirs(parent_dir, exist_ok=True)
 
         if should_generate_content(full_path):
-            content = generate_file_content(
+            result = generate_file(
                 context=context,
                 filepath=full_path,
                 refined_prompt=refined_prompt,
                 tree=tree_structure,
-                json_file_name=json_file_name,
                 file_output_format=file_output_format,
                 pm=pm,
                 provider_name=provider_name
             )
 
-            metadata = generate_file_metadata(
-                context=context,
-                filepath=full_path,
-                refined_prompt=refined_prompt,
-                tree=tree_structure,
-                json_file_name=json_file_name,
-                file_content=content,
-                file_output_format=file_output_format,
-                pm=pm,
-                provider_name=provider_name
-            )
+            if not result:
+                return None
+
+            content = result.file_content
+            metadata = result.metadata_description
 
             with lock:
                 with open(full_path, 'w') as f:
@@ -270,109 +316,89 @@ def process_directory(node, full_path, context, work_queue, output_base_dir="", 
         return None
 
 
-def initial_software_blueprint(prompt, pm, provider_name: Optional[str] = None):
+class ProjectBlueprint(BaseModel):
+    software_blueprint_details: Dict[str, Any] = Field(description="Dictionary containing core project intelligence, overview, and features")
+    folder_structure: str = Field(description="Raw ASCII string representing the exact directory and file structure tree")
+    file_formats: Dict[str, Any] = Field(description="Dictionary mapping precise filepaths from the folder structure to instructions on how each file must be generated")
+
+def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = None) -> Optional[ProjectBlueprint]:
     provider_name = provider_name or InferenceManager.get_default_provider()
     provider = InferenceManager.create_provider(provider_name)
-    system_instruction = pm.render_software_blueprint(user_prompt=prompt)
-
+    system_info = get_system_info()
+    system_instruction = pm.render_project_blueprint(user_prompt=prompt, system_info=system_info)
+    
     if provider_name == "google":
-        # Use Google's chat API for system instructions
         from google.genai import types
         from .utils.inference import retry_api_call
         client = provider.get_client()
-        chat_obj = retry_api_call(
-            client.chats.create,
+        response = retry_api_call(
+            client.models.generate_content,
             model=provider.model,
-            config=types.GenerateContentConfig(systemInstruction=system_instruction)
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                systemInstruction=system_instruction,
+                response_mime_type="application/json",
+                response_schema=ProjectBlueprint,
+            )
         )
-        response = retry_api_call(chat_obj.send_message, prompt)
-        response_text = response.text
+        if not response or not response.text:
+            return None
+            
+        try:
+            data = json.loads(response.text)
+            return ProjectBlueprint(**data)
+        except (json.JSONDecodeError, ValueError):
+            return None
+            
     else:
-        # For OpenRouter/OpenAI, use system message
+        # OpenRouter/OpenAI via structured outputs
         messages = [
             {"role": "system", "content": system_instruction},
             {"role": "user", "content": prompt}
         ]
-        response = provider.call_model(messages)
-        response_text = provider.extract_text(response)
-
-    match = re.search(r'\{.*\}', response_text, re.DOTALL)
-
-    if match:
-        clean_json_str = match.group(0)
+        
         try:
-            data = json.loads(clean_json_str)
-            # Sanitize project name: replace spaces with underscores
-            if "projectDetails" in data and "projectName" in data["projectDetails"]:
-                data["projectDetails"]["projectName"] = data["projectDetails"]["projectName"].replace(' ', '_')
-            system_info = get_system_info()
-            data["systemInfo"] = system_info
-            return data
-        except json.JSONDecodeError:
+            client = provider.get_client()
+            completion = client.beta.chat.completions.parse(
+                model=provider.model,
+                messages=messages,
+                response_format=ProjectBlueprint,
+            )
+            return completion.choices[0].message.parsed
+        except Exception as e:
+            # Fallback for providers that don't fully support structured outputs
+            # and may return stringified JSON with markdown ticks instead
+            try:
+                # Need standard chat completion to get the raw string
+                completion = client.chat.completions.create(
+                    model=provider.model,
+                    messages=messages,
+                )
+                raw_content = completion.choices[0].message.content
+                json_str = None
+                import re
+                match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_content, re.DOTALL)
+                if match:
+                    json_str = match.group(1)
+                else:
+                    start_idx = raw_content.find('{')
+                    if start_idx != -1:
+                        depth = 0
+                        for i in range(start_idx, len(raw_content)):
+                            if raw_content[i] == '{':
+                                depth += 1
+                            elif raw_content[i] == '}':
+                                depth -= 1
+                                if depth == 0:
+                                    json_str = raw_content[start_idx:i+1]
+                                    break
+                if json_str:
+                    data = json.loads(json_str)
+                    return ProjectBlueprint(**data)
+            except Exception as fallback_err:
+                print(f"Error calling structured output API: {e}. Fallback failed: {fallback_err}")
+                
             return None
-    return None
-
-
-def folder_structure(project_overview, pm, provider_name: Optional[str] = None):
-    provider_name = provider_name or InferenceManager.get_default_provider()
-    provider = InferenceManager.create_provider(provider_name)
-    system_instruction = pm.render_folder_structure(project_overview=project_overview)
-
-    if provider_name == "google":
-        from google.genai import types
-        from .utils.inference import retry_api_call
-        client = provider.get_client()
-        response = retry_api_call(
-            client.models.generate_content,
-            model=provider.model,
-            contents=types.Content(
-                role='user',
-                parts=[types.Part.from_text(text=json.dumps(project_overview))]
-            ),
-            config=types.GenerateContentConfig(systemInstruction=system_instruction)
-        )
-        return response.text
-    else:
-        messages = [
-            {"role": "system", "content": system_instruction},
-            {"role": "user", "content": json.dumps(project_overview)}
-        ]
-        response = provider.call_model(messages)
-        return provider.extract_text(response)
-
-
-def files_format(project_overview, folder_structure, pm, provider_name: Optional[str] = None):
-    provider_name = provider_name or InferenceManager.get_default_provider()
-    provider = InferenceManager.create_provider(provider_name)
-    system_instruction = pm.render_file_format(
-        project_overview=project_overview,
-        folder_structure=folder_structure
-    )
-
-    if provider_name == "google":
-        from google.genai import types
-        from .utils.inference import retry_api_call
-        client = provider.get_client()
-        response = retry_api_call(
-            client.models.generate_content,
-            model=provider.model,
-            contents=types.Content(
-                role='user',
-                parts=[
-                    types.Part.from_text(text=json.dumps(project_overview)),
-                    types.Part.from_text(text=json.dumps(folder_structure))
-                ]
-            ),
-            config=types.GenerateContentConfig(systemInstruction=system_instruction)
-        )
-        return response.text
-    else:
-        messages = [
-            {"role": "system", "content": system_instruction},
-            {"role": "user", "content": json.dumps({"project_overview": project_overview, "folder_structure": folder_structure})}
-        ]
-        response = provider.call_model(messages)
-        return provider.extract_text(response)
 
 
 def generate_tree(resp, project_name="root"):
@@ -477,14 +503,17 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
 
     provider_name = provider_name or InferenceManager.get_default_provider()
 
-    emit("step", "Creating software blueprint...")
-    software_blueprint = initial_software_blueprint(user_prompt, pm, provider_name)
+    emit("step", "Analyzing structure and creating unified project blueprint...")
+    blueprint = generate_project_blueprint(user_prompt, pm, provider_name)
+    
+    if not blueprint:
+        emit("error", "Failed to generate project blueprint.")
+        return None
 
-    emit("step", "Creating folder structure...")
-    folder_struc = folder_structure(software_blueprint, pm, provider_name)
-
-    emit("step", "Creating file format contracts...")
-    file_format = files_format(software_blueprint, folder_struc, pm, provider_name)
+    software_blueprint = blueprint.software_blueprint_details
+    folder_struc = blueprint.folder_structure
+    file_format = blueprint.file_formats
+    file_output_format = file_format
 
     emit("step", "Building project tree and generating files...")
     folder_tree = generate_tree(folder_struc, project_name="")
@@ -519,20 +548,6 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
     with open(json_file_name, 'w') as f:
         json.dump(metadata_dict, f, indent=4)
 
-    try:
-        if isinstance(software_blueprint, str):
-            software_blueprint = json.loads(software_blueprint)
-    except:
-        pass
-
-    try:
-        if isinstance(file_format, str):
-            file_output_format = json.loads(file_format)
-        else:
-            file_output_format = file_format
-    except:
-        file_output_format = {}
-
     emit("step", "Generating Dockerfile and test files...")
 
     try:
@@ -544,7 +559,8 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
             metadata_dict=metadata_dict,
             dependency_analyzer=dependency_analyzer,
             pm=pm,
-            on_status=on_status
+            on_status=on_status,
+            provider=InferenceManager.create_provider(provider_name)
         )
 
         test_gen_results = test_gen.generate_all()

@@ -1,0 +1,25 @@
+You are an expert Principal Software Engineer. Your objective is to produce robust, production-ready, and highly professional code.
+Please generate the complete content and metadata description for the requested file.
+
+Context: 
+{{ context }}
+
+Filepath: {{ filepath }}
+{% if refined_prompt %}
+Overall Project Blueprint:
+{{ refined_prompt | tojson(indent=2) }}
+{% endif %}
+
+{% if tree %}
+Full Output Structure:
+{{ tree }}
+{% endif %}
+
+{% if file_output_format %}
+File format rules/contracts:
+{{ file_output_format | tojson(indent=2) }}
+{% endif %}
+
+Required JSON Structure:
+- `file_content`: The raw content of the file encoded as a string. Ensure it includes no markdown blocks, just the file content exactly as it should be written to disk.
+- `metadata_description`: A precise, 1-2 sentence technical description of the file's purpose and functionality.

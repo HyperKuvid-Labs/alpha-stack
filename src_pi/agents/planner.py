@@ -3,7 +3,8 @@ import json
 import re
 from typing import Dict, List, Optional
 from google.genai import types
-from ..utils.helpers import retry_api_call, build_project_structure_tree, MODEL_NAME, prime_intellect_client
+from ..utils.helpers import retry_api_call, build_project_structure_tree
+from src.utils.inference import InferenceManager
 from ..utils.tools import get_all_tools, extract_function_args
 
 
@@ -66,19 +67,13 @@ class PlanningAgent:
                 command_execution_history=command_execution_history
             )
 
-            client = prime_intellect_client()
+            provider = InferenceManager.get_active_provider()
             tools = get_all_tools()
 
             try:
                 messages = [{"role": "user", "content": prompt}] if isinstance(prompt, str) else prompt
 
-                response = retry_api_call(
-                    client.chat.completions.create,
-                    model=MODEL_NAME,
-                    messages=messages,
-                    tools=tools,
-                    tool_choice="auto"
-                )
+                response = provider.call_model(messages, tools=tools, tool_choice="auto")
 
                 response_message = response.choices[0].message
 
@@ -98,15 +93,8 @@ class PlanningAgent:
                             "content": json.dumps(result)
                         })
 
-                    final_response = retry_api_call(
-                        client.chat.completions.create,
-                        model=MODEL_NAME,
-                        messages=messages,
-                        tools=tools,
-                        tool_choice="none"
-                    )
-
-                    response_text = final_response.choices[0].message.content.strip()
+                    final_response = provider.call_model(messages, tools=tools, tool_choice="none")
+                    response_text = provider.extract_text(final_response).strip()
 
                 else:
                     response_text = response_message.content.strip()
@@ -126,13 +114,8 @@ class PlanningAgent:
             except Exception as e:
                 messages = [{"role": "user", "content": prompt}] if isinstance(prompt, str) else prompt
 
-                response = retry_api_call(
-                    client.chat.completions.create,
-                    model=MODEL_NAME,
-                    messages=messages
-                )
-
-                response_text = response.choices[0].message.content.strip()
+                response = provider.call_model(messages)
+                response_text = provider.extract_text(response).strip()
 
                 json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
                 if json_match:

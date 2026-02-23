@@ -2,7 +2,7 @@ from .helpers import (
     get_client, retry_api_call, clean_agent_output, extract_json_from_response,
     get_language_from_extension, build_project_structure_tree, get_system_info,
     is_valid_code, extract_code_from_response,
-    MODEL_NAME, MODEL_NAME_FLASH, SKIP_DIRS, LANGUAGE_MAP,
+    SKIP_DIRS, LANGUAGE_MAP,
     GENERATABLE_FILES, GENERATABLE_FILENAMES
 )
 from .tools import ToolHandler, get_all_tools, extract_function_args
@@ -15,7 +15,7 @@ __all__ = [
     "get_client", "retry_api_call", "clean_agent_output", "extract_json_from_response",
     "get_language_from_extension", "build_project_structure_tree", "get_system_info",
     "is_valid_code", "extract_code_from_response",
-    "MODEL_NAME", "MODEL_NAME_FLASH", "SKIP_DIRS", "LANGUAGE_MAP",
+    "SKIP_DIRS", "LANGUAGE_MAP",
     "GENERATABLE_FILES", "GENERATABLE_FILENAMES",
     "ToolHandler", "get_all_tools", "extract_function_args",
     "DependencyAnalyzer", "DependencyFeedbackLoop", "DependencyError", "TreeNode",

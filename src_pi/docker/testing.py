@@ -5,8 +5,9 @@ import select
 import subprocess
 from typing import Dict, List, Optional, Tuple
 from ..utils.helpers import (
-    retry_api_call, build_project_structure_tree, MODEL_NAME, prime_intellect_client
+    retry_api_call, build_project_structure_tree
 )
+from src.utils.inference import InferenceManager
 from ..utils.prompt_manager import PromptManager
 from ..utils.error_tracker import ErrorTracker
 from ..utils.tools import ToolHandler
@@ -271,7 +272,7 @@ class CommandExecutor:
 
 class LogSummarizerAgent:
     def __init__(self):
-        self.client = prime_intellect_client()
+        self.provider = InferenceManager.get_active_provider()
 
     def summarize_commands(self, commands: List[Dict]) -> str:
         if not commands:
@@ -282,14 +283,8 @@ class LogSummarizerAgent:
         try:
             messages = [{"role": "user", "content": prompt}] if isinstance(prompt, str) else prompt
 
-            response = retry_api_call(
-                self.client.chat.completions.create,
-                model="z-ai/glm-4.7",
-                messages=messages
-            )
-
-            response = response.choices[0].message.content
-            summary = response.strip()
+            response = self.provider.call_model(messages)
+            summary = self.provider.extract_text(response).strip()
 
             if summary.startswith('```'):
                 lines = summary.split('\n')
@@ -602,19 +597,13 @@ class DockerTestingPipeline:
                 project_structure_tree=project_structure_tree
             )
 
-            client = prime_intellect_client()
+            provider = InferenceManager.create_provider("prime_intellect")
             messages = [
                 {"role": "user", "content": prompt}
             ] if isinstance(prompt, str) else prompt
 
-            response = retry_api_call(
-                client.chat.completions.create,
-                model=MODEL_NAME,
-                messages=messages
-            )
-
-            response = response.choices[0].message.content
-            dockerfile_content = response.strip()
+            response = provider.call_model(messages)
+            dockerfile_content = provider.extract_text(response).strip()
 
             if dockerfile_content.startswith('```'):
                 lines = dockerfile_content.split('\n')
@@ -733,19 +722,13 @@ class DockerTestingPipeline:
                 project_root=self.project_root
             )
 
-            client = prime_intellect_client()
+            provider = InferenceManager.create_provider("prime_intellect")
             messages = [
                 {"role": "user", "content": prompt}
             ] if isinstance(prompt, str) else prompt
 
-            response = retry_api_call(
-                client.chat.completions.create,
-                model=MODEL_NAME,
-                messages=messages
-            )
-
-            response = response.choices[0].message.content
-            response_text = response.strip()
+            response = provider.call_model(messages)
+            response_text = provider.extract_text(response).strip()
 
             json_match = re.search(r'\{[^}]+\}', response_text, re.DOTALL)
             if json_match:

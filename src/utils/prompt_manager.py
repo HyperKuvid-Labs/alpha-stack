@@ -56,53 +56,20 @@ class PromptManager:
         except Exception as e:
             raise ValueError(f"Error rendering template '{template_name}': {str(e)} (Search path: {self.templates_dir})")
     
-    def render_software_blueprint(self, user_prompt: Optional[str] = None) -> str:
-        return self.render('software_blueprint.j2', user_prompt=user_prompt)
+    def render_project_blueprint(self, user_prompt: Optional[str] = None, system_info: Optional[Dict[str, Any]] = None) -> str:
+        return self.render('project_blueprint.j2', user_prompt=user_prompt, system_info=system_info)
     
-    def render_folder_structure(self, project_overview: Dict[str, Any]) -> str:
-        return self.render('folder_structure.j2', project_overview=project_overview)
-    
-    def render_file_format(self, project_overview: Dict[str, Any], folder_structure: str) -> str:
-        return self.render(
-            'file_format.j2',
-            project_overview=project_overview,
-            folder_structure=folder_structure
-        )
-    
-    def render_file_metadata(
+    def render_file_generation(
         self,
-        filename: str,
-        file_type: str,
-        context: str,
-        refined_prompt: str,
-        tree: str,
-        file_content: str,
-        file_output_format: str
-    ) -> str:
-        return self.render(
-            'file_metadata.j2',
-            filename=filename,
-            file_type=file_type,
-            context=context,
-            refined_prompt=refined_prompt,
-            tree=tree,
-            file_content=file_content,
-            file_output_format=file_output_format
-        )
-    
-    def render_file_content(
-        self,
-        filename: str,
-        file_type: str,
+        filepath: str,
         context: str,
         refined_prompt: str,
         tree: str,
         file_output_format: str
     ) -> str:
         return self.render(
-            'file_content.j2',
-            filename=filename,
-            file_type=file_type,
+            'file_generation.j2',
+            filepath=filepath,
             context=context,
             refined_prompt=refined_prompt,
             tree=tree,

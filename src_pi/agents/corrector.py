@@ -3,9 +3,9 @@ import json
 from typing import Dict
 from ..utils.helpers import (
     retry_api_call, build_project_structure_tree,
-    get_language_from_extension, extract_code_from_response, is_valid_code,
-    MODEL_NAME_FLASH, prime_intellect_client
+    get_language_from_extension, extract_code_from_response, is_valid_code
 )
+from src.utils.inference import InferenceManager
 from ..utils.tools import get_all_tools, extract_function_args
 
 class CorrectionAgent:
@@ -78,20 +78,14 @@ class CorrectionAgent:
             )
 
 
-            client = prime_intellect_client()
+            provider = InferenceManager.get_active_provider()
             tools = get_all_tools()
 
 
             try:
                 messages = [{"role": "user", "content": prompt}]
 
-                response = retry_api_call(
-                    client.chat.completions.create,
-                    model=MODEL_NAME_FLASH,
-                    messages=messages,
-                    tools=tools,
-                    tool_choice="none"
-                )
+                response = provider.call_model(messages, tools=tools, tool_choice="none")
 
 
                 response_message = response.choices[0].message
@@ -140,13 +134,7 @@ class CorrectionAgent:
 
                     update_file_called = any(tc.function.name == "update_file_code" for tc in response_message.tool_calls)
                     if not update_file_called:
-                        final_response = retry_api_call(
-                            client.chat.completions.create,
-                            model=MODEL_NAME_FLASH,
-                            messages=messages,
-                            tools=tools
-                        )
-
+                        final_response = provider.call_model(messages, tools=tools)
 
                         response_message = final_response.choices[0].message
 

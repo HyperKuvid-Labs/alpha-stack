@@ -3,7 +3,8 @@ import re
 import json
 import os
 import time
-from .utils.helpers import get_client, retry_api_call, get_system_info, clean_agent_output, GENERATABLE_FILES, GENERATABLE_FILENAMES, MODEL_NAME_FLASH, prime_intellect_client
+from .utils.helpers import get_client, retry_api_call, get_system_info, clean_agent_output, GENERATABLE_FILES, GENERATABLE_FILENAMES
+from src.utils.inference import InferenceManager
 from .utils.prompt_manager import PromptManager
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from threading import Lock
@@ -42,19 +43,13 @@ def generate_file_metadata(context, filepath, refined_prompt, tree, json_file_na
         file_output_format=file_output_format
     )
 
-    client = prime_intellect_client()
-
+    provider = InferenceManager.create_provider("prime_intellect")
     messages = [
         {"role": "user", "content": prompt}
     ] if isinstance(prompt, str) else prompt
 
-    resp = retry_api_call(
-        client.chat.completions.create,
-        model=MODEL_NAME_FLASH,
-        messages=messages
-    )
-
-    return resp.choices[0].message.content
+    resp = provider.call_model(messages)
+    return provider.extract_text(resp)
 
 
 def generate_file_content(context, filepath, refined_prompt, tree, json_file_name, file_output_format, pm):
@@ -68,16 +63,12 @@ def generate_file_content(context, filepath, refined_prompt, tree, json_file_nam
         tree=tree,
         file_output_format=file_output_format
     )
-    client = prime_intellect_client()
+    provider = InferenceManager.create_provider("prime_intellect")
     messages = [
         {"role": "user", "content": prompt}
     ] if isinstance(prompt, str) else prompt
-    resp = retry_api_call(
-        client.chat.completions.create,
-        model=MODEL_NAME_FLASH,
-        messages=messages
-    )
-    cleaned_output = clean_agent_output(resp.choices[0].message.content)
+    resp = provider.call_model(messages)
+    cleaned_output = clean_agent_output(provider.extract_text(resp))
     return cleaned_output
 
 
@@ -259,7 +250,7 @@ def process_directory(node, full_path, context, work_queue, output_base_dir="", 
 
 
 def initial_software_blueprint(prompt, pm):
-    client = prime_intellect_client()
+    provider = InferenceManager.create_provider("prime_intellect")
     system_instruction = pm.render_software_blueprint(user_prompt=prompt)
 
     messages = [
@@ -267,13 +258,9 @@ def initial_software_blueprint(prompt, pm):
         {"role": "user", "content": prompt}
     ]
 
-    response = retry_api_call(
-        client.chat.completions.create,
-        model='z-ai/glm-4.7',
-        messages=messages
-    )
-
-    match = re.search(r'\{.*\}', response.choices[0].message.content, re.DOTALL)
+    response = provider.call_model(messages)
+    content = provider.extract_text(response)
+    match = re.search(r'\{.*\}', content, re.DOTALL)
 
     if match:
         clean_json_str = match.group(0)
@@ -288,7 +275,7 @@ def initial_software_blueprint(prompt, pm):
 
 
 def folder_structure(project_overview, pm):
-    client = prime_intellect_client()
+    provider = InferenceManager.create_provider("prime_intellect")
     system_instruction = pm.render_folder_structure(project_overview=project_overview)
 
     messages = [
@@ -296,16 +283,12 @@ def folder_structure(project_overview, pm):
         {"role": "user", "content": json.dumps(project_overview)}
     ]
 
-    resp = retry_api_call(
-        client.chat.completions.create,
-        model="z-ai/glm-4.7",
-        messages=messages
-    )
-    return resp.choices[0].message.content
+    resp = provider.call_model(messages)
+    return provider.extract_text(resp)
 
 
 def files_format(project_overview, folder_structure, pm):
-    client = prime_intellect_client()
+    provider = InferenceManager.create_provider("prime_intellect")
     system_instruction = pm.render_file_format(
         project_overview=project_overview,
         folder_structure=folder_structure
@@ -317,13 +300,8 @@ def files_format(project_overview, folder_structure, pm):
         {"role": "user", "content": json.dumps(folder_structure)}
     ]
 
-    resp = retry_api_call(
-        client.chat.completions.create,
-        model="z-ai/glm-4.7",
-        messages=messages
-    )
-
-    return resp.choices[0].message.content
+    resp = provider.call_model(messages)
+    return provider.extract_text(resp)
 
 
 def generate_tree(resp, project_name="root"):

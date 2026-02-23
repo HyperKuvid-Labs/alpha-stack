@@ -71,6 +71,7 @@ class DockerExecutor:
             stall_seconds = 150
 
             try:
+                assert process.stdout is not None
                 while True:
                     if process.poll() is not None:
                         remaining = process.stdout.read()
@@ -143,6 +144,16 @@ class DockerExecutor:
             self.last_build_logs = f"Docker build error: {str(e)}"
             return {"success": False, "logs": self.last_build_logs}
 
+    def _is_test_command(self, command: str) -> bool:
+        test_keywords = [
+            "pytest", "npm test", "yarn test", "jest", 
+            "cargo test", "go test", "rspec", "phpunit", 
+            "mocha", "vitest", "python -m unittest",
+            "test_runner"
+        ]
+        cmd_lower = command.lower()
+        return any(keyword in cmd_lower for keyword in test_keywords)
+
     def run(self, command: str) -> Dict:
         """Run a full docker run command. Agent provides the entire command."""
         if not command:
@@ -159,6 +170,19 @@ class DockerExecutor:
 
             logs = result.stdout + "\n" + result.stderr
             success = result.returncode == 0
+            is_test = self._is_test_command(command)
+
+            # Fix: Update internal state so it correctly syncs to PipelineState
+            # Append to previous logs rather than overwriting completely
+            prev_logs = self.last_test_logs
+            if prev_logs:
+                combined = prev_logs + f"\n\n--- Output of {command} ---\n{logs}"
+            else:
+                combined = f"--- Output of {command} ---\n{logs}"
+
+            if is_test:
+                self.test_success = success
+            self.last_test_logs = combined[-3000:]
 
             return {
                 "success": success,
@@ -166,14 +190,22 @@ class DockerExecutor:
                 "exit_code": result.returncode,
                 "test_success": self.test_success,
                 "build_success": self.build_success,
+                "is_test_command": is_test,
             }
 
         except subprocess.TimeoutExpired:
+            timeout_msg = f"Command timeout (10 minutes): {command}"
+            prev_logs = self.last_test_logs
+            if prev_logs:
+                combined = prev_logs + f"\n\n--- Output of {command} ---\n{timeout_msg}"
+            else:
+                combined = f"--- Output of {command} ---\n{timeout_msg}"
+                
             self.test_success = False
-            self.last_test_logs = "Command timeout (10 minutes)"
+            self.last_test_logs = combined[-3000:]
             return {
                 "success": False,
-                "logs": self.last_test_logs,
+                "logs": timeout_msg,
                 "exit_code": -1,
                 "test_success": False,
             }
@@ -260,40 +292,24 @@ class DockerTestingPipeline:
         return build_project_structure_tree(self.project_root)
 
     def generate_dockerfile(self) -> bool:
+        """Generate a Dockerfile by delegating to DockerTestFileGenerator for consistency."""
         try:
-            project_structure_tree = build_project_structure_tree(self.project_root)
+            from .generator import DockerTestFileGenerator
 
-            prompt = self.pm.render(
-                "dockerfile_generation.j2",
+            gen = DockerTestFileGenerator(
+                project_root=self.project_root,
                 software_blueprint=self.software_blueprint,
                 folder_structure=self.folder_structure,
                 file_output_format=self.file_output_format,
-                file_summaries={},
-                external_dependencies=[],
-                project_root=self.project_root,
-                project_structure_tree=project_structure_tree,
+                metadata_dict={},  # We don't have a full metadata dict here, but generator can handle it
+                dependency_analyzer=self.dependency_analyzer,
+                pm=self.pm,
+                on_status=self.on_status,
+                provider=self.provider,
             )
-
-            messages = [{"role": "user", "content": prompt}]
-            response = self.provider.call_model(messages)
-            dockerfile_content = self.provider.extract_text(response)
-
-            if dockerfile_content.startswith("```"):
-                lines = dockerfile_content.split("\n")
-                if len(lines) > 1:
-                    dockerfile_content = "\n".join(lines[1:])
-                    if dockerfile_content.endswith("```"):
-                        dockerfile_content = dockerfile_content[:-3].rstrip()
-
-            with open(self.dockerfile_path, "w", encoding="utf-8") as f:
-                f.write(dockerfile_content)
-
-            dockerignore_path = os.path.join(self.project_root, ".dockerignore")
-            with open(dockerignore_path, "w", encoding="utf-8") as f:
-                f.write(generate_dockerignore_content())
-
-            return True
-        except Exception:
+            return gen.generate_dockerfile()
+        except Exception as e:
+            self._emit("error", f"Failed to generate Dockerfile: {e}")
             return False
 
     def _sync_state(self) -> None:

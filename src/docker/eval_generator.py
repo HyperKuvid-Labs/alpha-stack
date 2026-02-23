@@ -2,8 +2,9 @@ import os
 import json
 import re
 from typing import Dict, List, Optional
-from ..utils.helpers import get_openai_client, clean_agent_output, retry_api_call
+from ..utils.helpers import clean_agent_output, retry_api_call
 from ..utils.prompt_manager import PromptManager
+from openai import OpenAI
 from ..utils.error_tracker import ErrorTracker
 from dotenv import load_dotenv
 
@@ -75,7 +76,7 @@ class DockerTestFileGeneratorEval:
 
         load_dotenv()
         api_key = os.getenv("OPENROUTER_API_KEY")
-        client = get_openai_client(api_key=api_key)
+        client = OpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1")
 
         messages = [
             {"role": "user", "content": prompt}
@@ -91,7 +92,8 @@ class DockerTestFileGeneratorEval:
             },
         )
 
-        resp = completion.choices[0].message.content
+        resp = completion.choices[0].message.content if completion and completion.choices else ""
+        resp = resp or ""
         response_text = resp.strip()
 
         json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
@@ -144,7 +146,7 @@ class DockerTestFileGeneratorEval:
 
             load_dotenv()
             api_key = os.getenv("OPENROUTER_API_KEY")
-            client = get_openai_client(api_key=api_key)
+            client = OpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1")
 
             messages = [
                 {"role": "user", "content": prompt}
@@ -160,7 +162,8 @@ class DockerTestFileGeneratorEval:
                 },
             )
 
-            resp = completion.choices[0].message.content
+            resp = completion.choices[0].message.content if completion and completion.choices else ""
+            resp = resp or ""
             test_content = clean_agent_output(resp)
 
             with open(abs_test_path, 'w', encoding='utf-8') as f:
@@ -192,7 +195,7 @@ class DockerTestFileGeneratorEval:
         load_dotenv()
         api_key = os.getenv("OPENROUTER_API_KEY")
 
-        client = get_openai_client(api_key=api_key)
+        client = OpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1")
 
         messages = [
             {"role": "user", "content": prompt}
@@ -208,7 +211,8 @@ class DockerTestFileGeneratorEval:
             },
         )
 
-        resp = completion.choices[0].message.content
+        resp = completion.choices[0].message.content if completion and completion.choices else ""
+        resp = resp or ""
 
         dockerfile_content = resp.strip()
 

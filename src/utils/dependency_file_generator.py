@@ -1,6 +1,6 @@
 import os
 from typing import List, Optional, Dict, Set
-from .helpers import clean_agent_output, MODEL_NAME
+from .helpers import clean_agent_output
 from .prompt_manager import PromptManager
 from .inference import InferenceManager
 
@@ -66,7 +66,6 @@ class DependencyFileGenerator:
         file_output_format: Dict,
         external_dependencies: List[str],
         pm: Optional[PromptManager] = None,
-        model_name: Optional[str] = None,
         provider_name: Optional[str] = None,
         on_status=None,
     ):
@@ -76,7 +75,7 @@ class DependencyFileGenerator:
         self.file_output_format = file_output_format
         self.external_dependencies = external_dependencies
         self.pm = pm or PromptManager()
-        self.model_name = model_name or MODEL_NAME
+
         self.provider_name = provider_name
         self.on_status = on_status
 
@@ -87,10 +86,7 @@ class DependencyFileGenerator:
     def generate_all(self) -> Dict:
         results = {"generated_files": [], "success": True}
         if self.provider_name is None:
-            if self.model_name and self.model_name.startswith("models/"):
-                provider_name = "google"
-            else:
-                provider_name = InferenceManager.get_default_provider()
+            provider_name = InferenceManager.get_default_provider()
         else:
             provider_name = self.provider_name
 
@@ -106,7 +102,7 @@ class DependencyFileGenerator:
         )
 
         messages = [{"role": "user", "content": prompt}]
-        response = provider.call_model(messages, model=self.model_name)
+        response = provider.call_model(messages)
         content = provider.extract_text(response)
 
         content = clean_agent_output(content)

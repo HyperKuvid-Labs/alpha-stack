@@ -5,7 +5,8 @@ from typing import Dict, List, Optional, Set
 from pathlib import Path
 import networkx as nx
 from jinja2 import Environment, FileSystemLoader
-from .helpers import get_client, retry_api_call, SKIP_DIRS, MODEL_NAME, GENERATABLE_FILES, GENERATABLE_FILENAMES
+from .helpers import get_client, retry_api_call, SKIP_DIRS, GENERATABLE_FILES, GENERATABLE_FILENAMES
+from .inference import InferenceManager
 
 
 class TreeNode:
@@ -691,7 +692,7 @@ class DependencyFeedbackLoop:
                               source_content: str, target_content: str,
                               dependency: str) -> Optional[DependencyError]:
         try:
-            client = get_client()
+            provider = InferenceManager.get_active_provider()
 
             source_rel_path = os.path.relpath(source_file, self.project_root)
             target_rel_path = os.path.relpath(target_file, self.project_root)
@@ -732,13 +733,9 @@ Respond JSON:
 
 Set has_error false if no issues."""
 
-            response = retry_api_call(
-                client.models.generate_content,
-                model=MODEL_NAME,
-                contents=prompt
-            )
-
-            text = response.text or ""
+            messages = [{"role": "user", "content": prompt}]
+            response = provider.call_model(messages)
+            text = provider.extract_text(response)
             json_match = re.search(r'\{.*?\}', text, re.DOTALL)
             if json_match:
                 result = json.loads(json_match.group())

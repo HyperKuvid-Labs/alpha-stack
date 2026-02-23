@@ -96,9 +96,6 @@ docs/
 !README.md
 
 # Tests (run separately via docker run)
-tests/
-test/
-__tests__/
 *.test.*
 *.spec.*
 pytest.ini
@@ -129,7 +126,8 @@ class DockerTestFileGenerator:
     def __init__(self, project_root: str, software_blueprint: Dict,
                  folder_structure: str, file_output_format: Dict,
                  metadata_dict: Dict, dependency_analyzer,
-                 pm: Optional[PromptManager] = None, on_status=None):
+                 pm: Optional[PromptManager] = None, on_status=None,
+                 provider=None):
         self.project_root = project_root
         self.software_blueprint = software_blueprint
         self.folder_structure = folder_structure
@@ -139,6 +137,7 @@ class DockerTestFileGenerator:
         self.pm = pm or PromptManager(templates_dir="prompts")
         self.error_tracker = ErrorTracker(project_root)
         self.on_status = on_status
+        self.provider = provider
     
     def _emit(self, event_type: str, message: str, **kwargs):
         if self.on_status:
@@ -164,14 +163,18 @@ class DockerTestFileGenerator:
             project_root=self.project_root
         )
         
-        client = get_client()
-        response = retry_api_call(
-            client.models.generate_content,
-            model="models/gemini-2.5-pro",
-            contents=prompt
-        )
-        
-        response_text = response.text.strip()
+        if self.provider:
+            messages = [{"role": "user", "content": prompt}]
+            response = self.provider.call_model(messages)
+            response_text = self.provider.extract_text(response).strip()
+        else:
+            client = get_client()
+            response = retry_api_call(
+                client.models.generate_content,
+                model="models/gemini-2.5-pro",
+                contents=prompt
+            )
+            response_text = response.text.strip() if response and response.text else ""
         
         json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
         if json_match:
@@ -221,14 +224,18 @@ class DockerTestFileGenerator:
                 project_root=self.project_root
             )
             
-            client = get_client()
-            response = retry_api_call(
-                client.models.generate_content,
-                model="models/gemini-2.5-pro",
-                contents=prompt
-            )
-            
-            test_content = clean_agent_output(response.text)
+            if self.provider:
+                messages = [{"role": "user", "content": prompt}]
+                response = self.provider.call_model(messages)
+                test_content = clean_agent_output(self.provider.extract_text(response))
+            else:
+                client = get_client()
+                response = retry_api_call(
+                    client.models.generate_content,
+                    model="models/gemini-2.5-pro",
+                    contents=prompt
+                )
+                test_content = clean_agent_output(response.text if response and response.text else "")
             
             with open(abs_test_path, 'w', encoding='utf-8') as f:
                 f.write(test_content)
@@ -256,14 +263,18 @@ class DockerTestFileGenerator:
             project_root=self.project_root
         )
         
-        client = get_client()
-        response = retry_api_call(
-            client.models.generate_content,
-            model="models/gemini-2.5-pro",
-            contents=prompt
-        )
-        
-        dockerfile_content = response.text.strip()
+        if self.provider:
+            messages = [{"role": "user", "content": prompt}]
+            response = self.provider.call_model(messages)
+            dockerfile_content = self.provider.extract_text(response)
+        else:
+            client = get_client()
+            response = retry_api_call(
+                client.models.generate_content,
+                model="models/gemini-2.5-pro",
+                contents=prompt
+            )
+            dockerfile_content = response.text.strip() if response and response.text else ""
         
         if dockerfile_content.startswith('```'):
             lines = dockerfile_content.split('\n')

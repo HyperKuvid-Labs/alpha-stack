@@ -113,55 +113,37 @@ def run_test(provider_name_arg=None):
     start_time = time.time()
 
     # ========================================================================
-    # PHASE 1: Software Blueprint
+    # PHASE 1: Structured Project Blueprint
     # ========================================================================
-    print_header("PHASE 1: SOFTWARE BLUEPRINT")
-    print("Creating initial software blueprint from user prompt...")
+    print_header("PHASE 1: COMPUTING PROJECT BLUEPRINT")
+    print("Generating comprehensive intelligence, structure, and file contracts...")
 
-    from src.generator import initial_software_blueprint
+    from src.generator import generate_project_blueprint
 
     phase1_start = time.time()
-    software_blueprint = initial_software_blueprint(TEST_PROMPT, pm, provider_name)
+    blueprint = generate_project_blueprint(TEST_PROMPT, pm, provider_name)
     phase1_time = time.time() - phase1_start
 
-    print_json(software_blueprint, "Software Blueprint Output")
-    print(f"\n⏱️  Phase 1 completed in {phase1_time:.2f}s")
-
-    if not software_blueprint:
-        print(" Failed to create software blueprint!")
+    if not blueprint:
+        print(" Failed to compute software blueprint!")
         return
 
-    # ========================================================================
-    # PHASE 2: Folder Structure
-    # ========================================================================
-    print_header("PHASE 2: FOLDER STRUCTURE")
-    print("Generating folder structure from blueprint...")
+    # Extract parsed fields from Pydantic model
+    software_blueprint = blueprint.software_blueprint_details
+    folder_struc = blueprint.folder_structure
+    file_format = blueprint.file_formats
 
-    from src.generator import folder_structure
-
-    phase2_start = time.time()
-    folder_struc = folder_structure(software_blueprint, pm, provider_name)
-    phase2_time = time.time() - phase2_start
-
+    print_json(software_blueprint, "Software Blueprint Output")
     print_subheader("Folder Structure Output")
     print(folder_struc)
-    print(f"\n  Phase 2 completed in {phase2_time:.2f}s")
-
-    # ========================================================================
-    # PHASE 3: File Format Contracts
-    # ========================================================================
-    print_header("PHASE 3: FILE FORMAT CONTRACTS")
-    print("Creating file format contracts...")
-
-    from src.generator import files_format
-
-    phase3_start = time.time()
-    file_format = files_format(software_blueprint, folder_struc, pm, provider_name)
-    phase3_time = time.time() - phase3_start
-
     print_subheader("File Format Output")
-    print(file_format)
-    print(f"\n  Phase 3 completed in {phase3_time:.2f}s")
+    print_json(file_format, "File Format Output")
+
+    print(f"\n⏱️  Phase 1 computed in {phase1_time:.2f}s")
+
+    # (Skipping phase 2 and 3 metrics)
+    phase2_time = 0.0
+    phase3_time = 0.0
 
     # ========================================================================
     # PHASE 4: Generate Tree & Files
@@ -247,6 +229,7 @@ def run_test(provider_name_arg=None):
             dependency_analyzer=dependency_analyzer,
             pm=pm,
             on_status=status_handler,
+            provider=InferenceManager.create_provider(provider_name),
         )
 
         test_gen_results = test_gen.generate_all()
@@ -380,9 +363,7 @@ def run_test(provider_name_arg=None):
     print(f" Project Location: {project_root_path}")
     print()
     print("  Phase Timings:")
-    print(f"   Phase 1 (Blueprint):        {phase1_time:.2f}s")
-    print(f"   Phase 2 (Folder Structure): {phase2_time:.2f}s")
-    print(f"   Phase 3 (File Formats):     {phase3_time:.2f}s")
+    print(f"   Phase 1 (Blueprint, Struct, Contracts): {phase1_time:.2f}s")
     print(f"   Phase 4 (File Generation):  {phase4_time:.2f}s")
     print(f"   Phase 5 (Dep Analysis):     {phase5_time:.2f}s")
     print(f"   Phase 6 (Docker Gen):       {phase6_time:.2f}s")

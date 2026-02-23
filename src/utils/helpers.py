@@ -178,40 +178,20 @@ def clean_agent_output(content: str) -> str:
     if not content:
         return ""
 
-    lines = content.split('\n')
-    if lines:
-        first_line = lines[0].strip().lower()
-        language_keywords = {
-            'python', 'javascript', 'typescript', 'java', 'cpp', 'c++', 'c', 'rust',
-            'go', 'php', 'ruby', 'swift', 'kotlin', 'scala', 'html', 'css', 'scss',
-            'json', 'yaml', 'yml', 'xml', 'sql', 'shell', 'bash', 'sh', 'dockerfile',
-            'terraform', 'solidity', 'vue', 'svelte', 'dart', 'elixir', 'erlang',
-            'csharp', 'c#', 'objective-c', 'objc', 'r', 'matlab', 'perl', 'lua'
-        }
-
-        is_language_line = (
-            first_line in language_keywords or
-            (len(first_line) < 20 and not first_line.startswith('```') and
-             not first_line.startswith('#') and not first_line.startswith('//') and
-             not first_line.startswith('/*') and not first_line.startswith('*') and
-             not '=' in first_line and not '(' in first_line and not '{' in first_line)
-        )
-
-        if is_language_line and len(lines) > 1:
-            content = '\n'.join(lines[1:])
-        else:
-            code_block_pattern = r'^```[\w]*\n(.*?)\n```$'
-            match = re.match(code_block_pattern, content, re.DOTALL)
-            if match:
-                content = match.group(1)
-            else:
-                if content.startswith('```'):
-                    lines = content.split('\n')
-                    if lines[0].strip().startswith('```'):
-                        lines = lines[1:]
-                    if lines and lines[-1].strip() == '```':
-                        lines = lines[:-1]
-                    content = '\n'.join(lines)
+    # Check for full markdown block spanning the content
+    code_block_pattern = r'^```(?:[a-zA-Z0-9_\-\+]+)?\n(.*?)\n```$'
+    match = re.match(code_block_pattern, content, re.DOTALL)
+    if match:
+        content = match.group(1).strip()
+    else:
+        # Fallback strip if it just starts and ends with ticks but doesn't perfectly match the regex
+        if content.startswith('```'):
+            lines = content.split('\n')
+            if lines and lines[0].strip().startswith('```'):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == '```':
+                lines = lines[:-1]
+            content = '\n'.join(lines).strip()
 
     content = content.rstrip('`').strip()
 
@@ -234,19 +214,6 @@ def retry_api_call(func, *args, max_retries: int = 10, **kwargs):
             time.sleep(wait_time)
             attempt += 1
 
-def extract_code_from_response(content: str, language: str = "python") -> str:
-    if not content:
-        return ""
-    content = content.strip()
-    cleaned = clean_agent_output(content)
-    code_block_pattern = (
-        r'```(?:python|py|javascript|js|typescript|ts|java|cpp|c\+\+|rust|go|php|'
-        r'ruby|swift|kotlin|scala|html|css|scss|sql|shell|bash|sh)?\n(.*?)```'
-    )
-    matches = re.findall(code_block_pattern, content, re.DOTALL)
-    if matches:
-        return matches[-1].strip()
-    return cleaned
 def get_system_info() -> Dict[str, Any]:
     system_info = {
         "operatingSystem": {

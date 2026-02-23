@@ -2,7 +2,8 @@ import os
 import json
 import re
 from typing import Dict, List, Optional
-from ..utils.helpers import prime_intellect_client, clean_agent_output, retry_api_call
+from ..utils.helpers import clean_agent_output, retry_api_call
+from src.utils.inference import InferenceManager
 from ..utils.prompt_manager import PromptManager
 from ..utils.error_tracker import ErrorTracker
 
@@ -80,7 +81,7 @@ class DockerTestFileGeneratorEval:
         )
 
 
-        client = prime_intellect_client()
+        provider = InferenceManager.create_provider("prime_intellect")
 
 
         messages = [
@@ -88,14 +89,10 @@ class DockerTestFileGeneratorEval:
         ]
 
 
-        completion = retry_api_call(
-            client.chat.completions.create,
-            model=self.model_name,
-            messages=messages
-        )
+        completion = provider.call_model(messages)
 
 
-        resp = completion.choices[0].message.content
+        resp = provider.extract_text(completion)
         response_text = resp.strip()
 
 
@@ -158,7 +155,7 @@ class DockerTestFileGeneratorEval:
             )
 
 
-            client = prime_intellect_client()
+            provider = InferenceManager.get_active_provider()
 
 
             messages = [
@@ -166,14 +163,10 @@ class DockerTestFileGeneratorEval:
             ]
 
 
-            completion = retry_api_call(
-                client.chat.completions.create,
-                model=self.model_name,
-                messages=messages
-            )
+            completion = provider.call_model(messages)
 
 
-            resp = completion.choices[0].message.content
+            resp = provider.extract_text(completion)
             test_content = clean_agent_output(resp)
 
 
@@ -210,7 +203,7 @@ class DockerTestFileGeneratorEval:
         )
 
 
-        client = prime_intellect_client()
+        provider = InferenceManager.create_provider("prime_intellect")
 
 
         messages = [
@@ -218,14 +211,10 @@ class DockerTestFileGeneratorEval:
         ]
 
 
-        completion = retry_api_call(
-            client.chat.completions.create,
-            model=self.model_name,
-            messages=messages
-        )
+        completion = provider.call_model(messages)
 
 
-        resp = completion.choices[0].message.content
+        resp = provider.extract_text(completion)
 
 
         dockerfile_content = resp.strip()

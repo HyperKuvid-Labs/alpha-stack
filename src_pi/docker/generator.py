@@ -2,7 +2,8 @@ import os
 import json
 import re
 from typing import Dict, List, Optional
-from ..utils.helpers import prime_intellect_client, clean_agent_output, retry_api_call
+from ..utils.helpers import clean_agent_output, retry_api_call
+from src.utils.inference import InferenceManager
 from ..utils.prompt_manager import PromptManager
 from ..utils.error_tracker import ErrorTracker
 
@@ -180,17 +181,13 @@ class DockerTestFileGenerator:
             project_root=self.project_root
         )
 
-        client = prime_intellect_client()
+        provider = InferenceManager.create_provider("prime_intellect")
 
         messages = [{"role": "user", "content": prompt}]
 
-        response = retry_api_call(
-            client.chat.completions.create,
-            model=self.model_name,
-            messages=messages
-        )
+        response = provider.call_model(messages)
 
-        response_text = response.choices[0].message.content.strip()
+        response_text = provider.extract_text(response).strip()
 
         json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
         if json_match:
@@ -240,17 +237,13 @@ class DockerTestFileGenerator:
                 project_root=self.project_root
             )
 
-            client = prime_intellect_client()
+            provider = InferenceManager.get_active_provider()
 
             messages = [{"role": "user", "content": prompt}]
 
-            response = retry_api_call(
-                client.chat.completions.create,
-                model=self.model_name,
-                messages=messages
-            )
+            response = provider.call_model(messages)
 
-            test_content = clean_agent_output(response.choices[0].message.content)
+            test_content = clean_agent_output(provider.extract_text(response))
 
             with open(abs_test_path, 'w', encoding='utf-8') as f:
                 f.write(test_content)
@@ -278,17 +271,13 @@ class DockerTestFileGenerator:
             project_root=self.project_root
         )
 
-        client = prime_intellect_client()
+        provider = InferenceManager.get_active_provider()
 
         messages = [{"role": "user", "content": prompt}]
 
-        response = retry_api_call(
-            client.chat.completions.create,
-            model=self.model_name,
-            messages=messages
-        )
+        response = provider.call_model(messages)
 
-        dockerfile_content = response.choices[0].message.content.strip()
+        dockerfile_content = provider.extract_text(response).strip()
 
         if dockerfile_content.startswith('```'):
             lines = dockerfile_content.split('\n')
