@@ -327,15 +327,28 @@ class DockerTestingPipeline:
         return self.pm.render(
             "planner_pipeline.j2",
             software_blueprint=self.software_blueprint,
-            project_structure_tree=dep_graph,
+            folder_structure=self.folder_structure,
+            dependency_graph=dep_graph,
             project_root=self.project_root,
             image_name=self.image_name,
             state=self.state,
             memory_context=memory_context,
         )
 
+    # Tools that must run exclusively (never in parallel with anything)
+    EXCLUSIVE_TOOLS = frozenset({"docker_build", "docker_run", "batch_edit_files"})
+
     def _run_planner_session(self) -> int:
-        """Run one planner session. Returns the number of tool calls made."""
+        """Run one planner session. Returns the number of tool calls made.
+
+        Tool calls are executed in parallel when possible:
+        - Non-Docker tools run concurrently via a thread pool.
+        - docker_build / docker_run always run alone (sequential, exclusive).
+        - Results are collected in the original call order and sent back
+          to the LLM only after every call in the batch has finished.
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
         prompt = self._build_planner_prompt()
         messages = self.provider.create_initial_message(prompt)
         tool_calls_made = 0
@@ -347,20 +360,96 @@ class DockerTestingPipeline:
             if not function_calls:
                 break
 
-            function_responses = []
+            # ── partition into ordered groups ──────────────────────────
+            # Each group is either:
+            #   ("parallel", [fc, fc, …])   – safe to run concurrently
+            #   ("exclusive", [fc])          – must run alone
+            groups = []
+            current_parallel = []
+
             for fc in function_calls:
-                func_name = fc["name"]
-                func_args = fc.get("args", {})
+                if fc["name"] in self.EXCLUSIVE_TOOLS:
+                    # flush any pending parallel calls first
+                    if current_parallel:
+                        groups.append(("parallel", list(current_parallel)))
+                        current_parallel = []
+                    groups.append(("exclusive", [fc]))
+                else:
+                    current_parallel.append(fc)
 
-                self._emit("tool_call", f"{func_name}({list(func_args.keys())})")
+            if current_parallel:
+                groups.append(("parallel", list(current_parallel)))
 
-                result = self.tool_handler.handle_function_call(func_name, func_args)
-                tool_calls_made += 1
+            # ── execute each group ────────────────────────────────────
+            # results[i] will hold the function_response for function_calls[i]
+            results_by_id = {}  # fc index → func_response
 
-                func_response = self.provider.create_function_response(
-                    func_name, result, fc.get("id")
-                )
-                function_responses.append(func_response)
+            # map each fc to its original index so we can reassemble in order
+            fc_index = {id(fc): i for i, fc in enumerate(function_calls)}
+
+            for kind, group_fcs in groups:
+                if kind == "exclusive":
+                    # single exclusive tool — run synchronously
+                    fc = group_fcs[0]
+                    func_name = fc["name"]
+                    func_args = fc.get("args", {})
+
+                    self._emit("tool_call", f"{func_name}({list(func_args.keys())})")
+                    result = self.tool_handler.handle_function_call(func_name, func_args)
+                    tool_calls_made += 1
+
+                    func_response = self.provider.create_function_response(
+                        func_name, result, fc.get("id")
+                    )
+                    results_by_id[fc_index[id(fc)]] = func_response
+
+                else:
+                    # parallel group — run concurrently
+                    if len(group_fcs) == 1:
+                        # optimisation: skip thread pool for a single call
+                        fc = group_fcs[0]
+                        func_name = fc["name"]
+                        func_args = fc.get("args", {})
+
+                        self._emit("tool_call", f"{func_name}({list(func_args.keys())})")
+                        result = self.tool_handler.handle_function_call(func_name, func_args)
+                        tool_calls_made += 1
+
+                        func_response = self.provider.create_function_response(
+                            func_name, result, fc.get("id")
+                        )
+                        results_by_id[fc_index[id(fc)]] = func_response
+                    else:
+                        # log all calls first
+                        for fc in group_fcs:
+                            self._emit(
+                                "tool_call",
+                                f"{fc['name']}({list(fc.get('args', {}).keys())}) [parallel]",
+                            )
+
+                        def _exec(fc_item):
+                            return (
+                                fc_item,
+                                self.tool_handler.handle_function_call(
+                                    fc_item["name"], fc_item.get("args", {})
+                                ),
+                            )
+
+                        with ThreadPoolExecutor(max_workers=len(group_fcs)) as pool:
+                            futures = {pool.submit(_exec, fc): fc for fc in group_fcs}
+                            for future in as_completed(futures):
+                                fc_done, result = future.result()
+                                tool_calls_made += 1
+
+                                func_response = self.provider.create_function_response(
+                                    fc_done["name"], result, fc_done.get("id")
+                                )
+                                results_by_id[fc_index[id(fc_done)]] = func_response
+
+            # ── reassemble responses in original order ────────────────
+            function_responses = [
+                results_by_id[i] for i in range(len(function_calls))
+            ]
 
             self.provider.accumulate_messages(messages, response, function_responses)
 

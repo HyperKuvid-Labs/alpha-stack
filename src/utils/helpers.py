@@ -5,25 +5,10 @@ import time
 import platform
 import sys
 import subprocess
-from typing import Dict, Any, Optional, List
-from google import genai
-from dotenv import load_dotenv
-from ..config import get_api_key
-
-load_dotenv(dotenv_path='.env')
-
-MODEL_NAME = "models/gemini-2.5-pro"
+from typing import Dict, Any, List
 
 SKIP_DIRS = {'__pycache__', '.git', '.vscode', '.idea', 'node_modules', '.pytest_cache'}
 
-LANGUAGE_MAP = {
-    '.py': 'python', '.js': 'javascript', '.ts': 'typescript',
-    '.java': 'java', '.cpp': 'cpp', '.c': 'c', '.rs': 'rust',
-    '.go': 'go', '.php': 'php', '.rb': 'ruby', '.swift': 'swift',
-    '.kt': 'kotlin', '.scala': 'scala', '.html': 'html', '.css': 'css',
-    '.scss': 'scss', '.json': 'json', '.yaml': 'yaml', '.yml': 'yaml',
-    '.xml': 'xml', '.sql': 'sql', '.sh': 'shell', '.bash': 'bash'
-}
 
 GENERATABLE_FILENAMES = {
     'Dockerfile', 'docker-compose.yml', 'docker-compose.yaml',
@@ -64,20 +49,7 @@ GENERATABLE_FILES = {
     '.lock', '.plist', '.conf', '.cfg', '.properties', '.pem', '.crt', '.csr', '.key', '.pub',
 }
 
-_client = None
 
-def get_client():
-    global _client
-    if _client is None:
-        api_key = get_api_key()
-        if not api_key:
-            raise ValueError("GOOGLE_API_KEY is missing. Please run 'alphastack setup' or export the variable.")
-        _client = genai.Client(api_key=api_key)
-    return _client
-
-def get_language_from_extension(file_path: str) -> str:
-    ext = os.path.splitext(file_path)[1].lower()
-    return LANGUAGE_MAP.get(ext, 'python')
 
 
 def build_project_structure_tree(project_root: str) -> str:
@@ -126,47 +98,7 @@ def build_project_structure_tree(project_root: str) -> str:
     return "\n".join(lines)
 
 
-def extract_json_from_response(text: str, expect_array: bool = False) -> Optional[Any]:
-    if not text:
-        return None
 
-    text = text.strip()
-
-    try:
-        if expect_array:
-            json_match = re.search(r'\[.*\]', text, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group())
-            json_match = re.search(r'\{.*\}', text, re.DOTALL)
-            if json_match:
-                result = json.loads(json_match.group())
-                return [result] if isinstance(result, dict) else result
-        else:
-            json_match = re.search(r'\{.*?\}', text, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group())
-            json_match = re.search(r'\[.*\]', text, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group())
-    except json.JSONDecodeError:
-        pass
-
-    return None
-
-
-def walk_project_files(project_root: str, skip_dirs: set = None) -> List[str]:
-    if skip_dirs is None:
-        skip_dirs = SKIP_DIRS
-
-    files = []
-    for root, dirs, filenames in os.walk(project_root):
-        dirs[:] = [d for d in dirs if d not in skip_dirs and not d.startswith('.')]
-
-        for filename in filenames:
-            if not filename.startswith('.'):
-                files.append(os.path.join(root, filename))
-
-    return sorted(files)
 
 
 def clean_agent_output(content: str) -> str:
@@ -201,18 +133,7 @@ def clean_agent_output(content: str) -> str:
     return content
 
 
-def retry_api_call(func, *args, max_retries: int = 10, **kwargs):
-    """Retry API call with exponential backoff"""
-    attempt = 1
-    while attempt <= max_retries:
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            if attempt == max_retries:
-                raise  # Re-raise on final attempt
-            wait_time = min(0.5 * (2 ** (attempt - 1)), 10)  # Exponential backoff, max 10s
-            time.sleep(wait_time)
-            attempt += 1
+
 
 def get_system_info() -> Dict[str, Any]:
     system_info = {

@@ -278,10 +278,77 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "required": ["command"],
             },
         },
+        {
+            "name": "batch_edit_files",
+            "description": (
+                "Delegate multiple file-editing tasks to parallel corrector mini-agents. "
+                "Each task targets ONE file and spawns an independent LLM agent that reads "
+                "the file, applies the requested changes, and verifies the result. "
+                "Use this when you need to edit several files at once (e.g., fixing the same "
+                "pattern across multiple files, or making coordinated changes). "
+                "Each task must contain a detailed 'instructions' field describing EXACTLY "
+                "what to change, including the full context of the error or requirement. "
+                "The corrector agents only have access to file read/write/patch tools — "
+                "they cannot run shell commands or Docker."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tasks": {
+                        "type": "array",
+                        "description": "List of file-edit tasks. Each task is an object with 'file_path' and 'instructions'.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "file_path": {
+                                    "type": "string",
+                                    "description": "Relative path to the target file (e.g., 'src/main.py')",
+                                },
+                                "instructions": {
+                                    "type": "string",
+                                    "description": (
+                                        "Detailed editing instructions for this file. Include: "
+                                        "what to change, why, expected before/after, and any "
+                                        "relevant error messages or test output."
+                                    ),
+                                },
+                            },
+                            "required": ["file_path", "instructions"],
+                        },
+                    }
+                },
+                "required": ["tasks"],
+            },
+        },
+        {
+            "name": "batch_read_files",
+            "description": (
+                "Read multiple files in parallel. Returns the contents of all requested "
+                "files at once, much faster than calling get_file_code repeatedly. "
+                "Use this when you need to inspect 2 or more files (e.g., reading a source "
+                "file and its test file, or reading several related modules). "
+                "Each file read is independent and fail-safe — if one file is missing or "
+                "unreadable, the others still succeed."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_paths": {
+                        "type": "array",
+                        "description": "List of relative file paths to read (e.g., ['src/main.py', 'tests/test_main.py'])",
+                        "items": {
+                            "type": "string",
+                            "description": "Relative path to a file from project root",
+                        },
+                    }
+                },
+                "required": ["file_paths"],
+            },
+        },
     ]
 
 
-# Tools the planner is allowed to use (read + write + docker)
+# Tools the planner is allowed to use (read + write + docker + batch edit)
 PLANNER_TOOL_NAMES = {
     "get_file_code",
     "update_file_code",
@@ -293,6 +360,8 @@ PLANNER_TOOL_NAMES = {
     "get_file_dependents",
     "docker_build",
     "docker_run",
+    "batch_edit_files",
+    "batch_read_files",
 }
 
 # Tools the executor is allowed to use (file read/write only — no docker, no recursion)

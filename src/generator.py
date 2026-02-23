@@ -490,7 +490,7 @@ def generate_tree(resp, project_name="root"):
 
 
 def generate_project(user_prompt, output_base_dir, on_status=None, provider_name: Optional[str] = None):
-    from .utils.dependencies import DependencyAnalyzer, DependencyFeedbackLoop
+    from .utils.dependencies import DependencyAnalyzer
     from .docker.testing import run_docker_testing
     from .docker.generator import DockerTestFileGenerator
     from .utils.error_tracker import ErrorTracker
@@ -569,6 +569,10 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
 
     emit("step", "Starting dependency analysis for entire project...")
     dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
+
+    from .utils.dependencies import build_dependency_graph_tree
+    dep_graph = build_dependency_graph_tree(project_root_path, dependency_analyzer)
+    print("\n[dependency_graph]\n" + dep_graph + "\n")
 
     emit("step", "Extracting external dependencies and generating dependency files...")
     try:

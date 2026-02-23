@@ -2,7 +2,7 @@ import os
 import json
 import re
 from typing import Dict, List, Optional
-from ..utils.helpers import get_client, clean_agent_output, retry_api_call
+from ..utils.helpers import clean_agent_output
 from ..utils.prompt_manager import PromptManager
 from ..utils.error_tracker import ErrorTracker
 
@@ -163,18 +163,12 @@ class DockerTestFileGenerator:
             project_root=self.project_root
         )
         
-        if self.provider:
-            messages = [{"role": "user", "content": prompt}]
-            response = self.provider.call_model(messages)
-            response_text = self.provider.extract_text(response).strip()
-        else:
-            client = get_client()
-            response = retry_api_call(
-                client.models.generate_content,
-                model="models/gemini-2.5-pro",
-                contents=prompt
-            )
-            response_text = response.text.strip() if response and response.text else ""
+        if not self.provider:
+            raise ValueError("DockerTestFileGenerator requires a provider instance")
+
+        messages = [{"role": "user", "content": prompt}]
+        response = self.provider.call_model(messages)
+        response_text = self.provider.extract_text(response).strip()
         
         json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
         if json_match:
@@ -224,18 +218,9 @@ class DockerTestFileGenerator:
                 project_root=self.project_root
             )
             
-            if self.provider:
-                messages = [{"role": "user", "content": prompt}]
-                response = self.provider.call_model(messages)
-                test_content = clean_agent_output(self.provider.extract_text(response))
-            else:
-                client = get_client()
-                response = retry_api_call(
-                    client.models.generate_content,
-                    model="models/gemini-2.5-pro",
-                    contents=prompt
-                )
-                test_content = clean_agent_output(response.text if response and response.text else "")
+            messages = [{"role": "user", "content": prompt}]
+            response = self.provider.call_model(messages)
+            test_content = clean_agent_output(self.provider.extract_text(response))
             
             with open(abs_test_path, 'w', encoding='utf-8') as f:
                 f.write(test_content)
@@ -263,18 +248,9 @@ class DockerTestFileGenerator:
             project_root=self.project_root
         )
         
-        if self.provider:
-            messages = [{"role": "user", "content": prompt}]
-            response = self.provider.call_model(messages)
-            dockerfile_content = self.provider.extract_text(response)
-        else:
-            client = get_client()
-            response = retry_api_call(
-                client.models.generate_content,
-                model="models/gemini-2.5-pro",
-                contents=prompt
-            )
-            dockerfile_content = response.text.strip() if response and response.text else ""
+        messages = [{"role": "user", "content": prompt}]
+        response = self.provider.call_model(messages)
+        dockerfile_content = self.provider.extract_text(response)
         
         if dockerfile_content.startswith('```'):
             lines = dockerfile_content.split('\n')

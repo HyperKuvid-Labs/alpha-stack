@@ -40,9 +40,15 @@ Both build and tests are passing. Nothing left to do.
 {{ software_blueprint | json_dumps }}
 ```
 
-## Project Structure (with dependency graph)
+## Folder Structure
 ```
-{{ project_structure_tree }}
+{{ folder_structure }}
+```
+
+## Dependency Graph
+Each file lists its classes, functions, internal dependencies (deps), and reverse dependencies (used-by).
+```
+{{ dependency_graph }}
 ```
 
 {% if memory_context %}
@@ -59,6 +65,8 @@ Both build and tests are passing. Nothing left to do.
 - `run_shell_command(command)` — Run shell commands on the host (ls, grep, find, cat, etc.).
 - `get_file_dependencies(file_path)` — What internal files this file imports.
 - `get_file_dependents(file_path)` — What files import this file.
+- `batch_edit_files(tasks)` — **Parallel multi-file editing.** Provide a list of `{file_path, instructions}` tasks. Each task spawns an independent corrector agent that reads the file, applies the changes, and verifies them — all in parallel. Use this when you need to edit 2+ files at once. Each task must be self-contained with detailed instructions (the corrector agents have NO other context — only the task text and the file itself).
+- `batch_read_files(file_paths)` — **Parallel multi-file reading.** Provide a list of file paths and get all their contents back at once. Much faster than calling `get_file_code` repeatedly. Use this whenever you need to inspect 2+ files (e.g., a source file and its test, or several related modules). Fail-safe: if one file is missing, the others still return.
 
 ## Rules
 - Always read the relevant files and error logs BEFORE making changes. Understand the root cause first.
@@ -70,3 +78,5 @@ Both build and tests are passing. Nothing left to do.
 - Make minimal changes — fix only what is broken, do not refactor or add comments.
 - When using `docker_run`, ALWAYS include `--entrypoint ""` to override any Dockerfile ENTRYPOINT. Also include `--rm` to clean up containers, and `-v {{ project_root }}:/app -w /app` to bind-mount the source.
 - When a test expects specific output (e.g. error messages, help text), fix the SOURCE code to match what the TESTS expect, not the other way around.
+- **When you need to read multiple files**, use `batch_read_files` instead of calling `get_file_code` multiple times. This reads all files in parallel and is faster.
+- **When you need to edit multiple files**, use `batch_edit_files` instead of editing them one at a time. This runs all edits in parallel and is much faster. Make each task's instructions detailed enough that the corrector agent can work independently (include the error message, expected behavior, and exact changes needed).

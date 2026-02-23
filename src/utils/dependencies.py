@@ -5,8 +5,13 @@ from typing import Dict, List, Optional, Set
 from pathlib import Path
 import networkx as nx
 from jinja2 import Environment, FileSystemLoader
-from .helpers import get_client, retry_api_call, SKIP_DIRS, GENERATABLE_FILES, GENERATABLE_FILENAMES
+from .helpers import SKIP_DIRS, GENERATABLE_FILES, GENERATABLE_FILENAMES
 from .inference import InferenceManager
+from .treesitter_parser import (
+    parse_file, parse_file_from_content, verify_symbols,
+    get_language_for_file, ParseResult, ImportInfo,
+    TREE_SITTER_AVAILABLE, SUPPORTED_LANGUAGES,
+)
 
 
 class TreeNode:
@@ -81,6 +86,7 @@ class DependencyAnalyzer:
         self.project_root: Optional[str] = None
         self.project_files: Set[str] = set()
         self.dependency_details: Dict[str, List[Dict[str, Optional[str]]]] = {}
+        self.file_symbols: Dict[str, Dict[str, List[str]]] = {}
         self.folder_tree: Optional[TreeNode] = None
         template_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'prompts')
         if os.path.exists(template_dir):
@@ -134,7 +140,21 @@ class DependencyAnalyzer:
 
         file_ext = Path(abs_path).suffix.lower()
         language = self.supported_extensions.get(file_ext, 'unknown')
-        dependencies = self.extract_dependencies(abs_path, content, folder_structure, language)
+
+        # Use tree-sitter to extract imports, classes, and functions
+        ts_lang = get_language_for_file(abs_path)
+        if TREE_SITTER_AVAILABLE and ts_lang:
+            parse_result = parse_file_from_content(content, ts_lang)
+            self.file_symbols[abs_path] = {
+                "classes": parse_result.classes,
+                "functions": parse_result.functions,
+            }
+            raw_deps = set()
+            for imp in parse_result.imports:
+                raw_deps.add(imp.module)
+            dependencies = raw_deps
+        else:
+            dependencies = self.extract_dependencies(abs_path, content, folder_structure, language)
 
         details: List[Dict[str, Optional[str]]] = []
 
@@ -151,6 +171,7 @@ class DependencyAnalyzer:
         self.dependency_details[abs_path] = details
 
     def extract_dependencies(self, file_path: str, content: str, folder_structure: str, language: Optional[str] = None) -> Set[str]:
+        """Fallback regex-based extraction for languages not supported by tree-sitter."""
         dependencies = set()
         file_dir = os.path.dirname(file_path)
         file_ext = Path(file_path).suffix.lower()
@@ -540,7 +561,7 @@ def build_dependency_graph_tree(project_root: str, dependency_analyzer: 'Depende
                 file_connector = "└── " if entry_is_last else "├── "
                 lines.append(f"{child_prefix}{file_connector}{entry}")
 
-                # Get dependencies and dependents for this file
+                # Get dependencies, dependents, and symbols for this file
                 abs_file = os.path.abspath(entry_path)
                 dep_details = dependency_analyzer.dependency_details.get(abs_file, [])
                 internal_deps = [
@@ -553,7 +574,16 @@ def build_dependency_graph_tree(project_root: str, dependency_analyzer: 'Depende
                 dependents_rel = [
                     os.path.relpath(p, project_root) for p in dependents_abs
                 ]
+
+                file_syms = dependency_analyzer.file_symbols.get(abs_file, {})
+                file_classes = file_syms.get("classes", [])
+                file_functions = file_syms.get("functions", [])
+
                 annot_prefix = child_prefix + ("    " if entry_is_last else "│   ")
+                if file_classes:
+                    lines.append(f"{annot_prefix}  classes: {', '.join(file_classes)}")
+                if file_functions:
+                    lines.append(f"{annot_prefix}  functions: {', '.join(file_functions)}")
                 if internal_deps:
                     lines.append(f"{annot_prefix}  deps: {', '.join(internal_deps)}")
                 if dependents_rel:
@@ -573,7 +603,6 @@ class DependencyFeedbackLoop:
                  file_output_format: Optional[Dict] = None,
                  pm=None, error_tracker=None):
         from .tools import ToolHandler
-        from ..agents.corrector import ExecutorAgent
         from .prompt_manager import PromptManager
         from .error_tracker import ErrorTracker
 
@@ -587,16 +616,6 @@ class DependencyFeedbackLoop:
         folder_tree = getattr(self.dependency_analyzer, "folder_tree", None)
         self.error_tracker = error_tracker or ErrorTracker(project_root, folder_tree)
         self.tool_handler = ToolHandler(project_root, self.error_tracker, dependency_analyzer=self.dependency_analyzer)
-
-        self.executor_agent = ExecutorAgent(
-            project_root=project_root,
-            software_blueprint=self.software_blueprint,
-            folder_structure=self.folder_structure,
-            file_output_format=self.file_output_format,
-            pm=self.pm,
-            error_tracker=self.error_tracker,
-            tool_handler=self.tool_handler
-        )
 
     def walk_project_files(self) -> List[str]:
         files = []
@@ -663,22 +682,70 @@ class DependencyFeedbackLoop:
                     ))
                     continue
 
+                # Verify target is inside project root
+                if self.project_root and not abs_dep_path.startswith(os.path.abspath(self.project_root)):
+                    errors.append(DependencyError(
+                        file_path=file_path,
+                        error_type="PATH_OUTSIDE_PROJECT",
+                        message=f"Dependency resolves outside project root: {os.path.relpath(dep_path, self.project_root)}",
+                        dependency=raw_dep,
+                        affected_files=[dep_path]
+                    ))
+                    continue
+
                 coupling_error = self.check_coupling(file_path, dep_path, raw_dep)
 
                 if coupling_error:
                     errors.append(coupling_error)
 
+        if errors:
+            rel_file = os.path.relpath(file_path, self.project_root) if self.project_root else file_path
+            for e in errors:
+                print(f"[dep_check] {rel_file}: {e.error_type} - {e.message}")
+
         return errors
 
     def check_coupling(self, source_file: str, target_file: str, dependency: str) -> Optional[DependencyError]:
+        """Deterministic coupling check using tree-sitter symbol verification."""
         try:
-            with open(source_file, 'r', encoding='utf-8') as f:
-                source_content = f.read()
+            abs_source = os.path.abspath(source_file)
+            abs_target = os.path.abspath(target_file)
 
-            with open(target_file, 'r', encoding='utf-8') as f:
-                target_content = f.read()
+            # Get the symbols the source file imports from the target
+            source_symbols = self.dependency_analyzer.file_symbols.get(abs_source, {})
+            target_symbols = self.dependency_analyzer.file_symbols.get(abs_target, {})
 
-            return self._agent_check_coupling(source_file, target_file, source_content, target_content, dependency)
+            # If we don't have tree-sitter data for either file, skip the check
+            if not source_symbols and not target_symbols:
+                return None
+
+            target_classes = target_symbols.get("classes", [])
+            target_functions = target_symbols.get("functions", [])
+
+            # Find what symbols the source imports from this dependency
+            imported_symbols = self._get_imported_symbols_for_dep(
+                abs_source, dependency
+            )
+
+            if not imported_symbols:
+                return None
+
+            missing = verify_symbols(imported_symbols, target_classes, target_functions)
+
+            if missing:
+                return DependencyError(
+                    file_path=source_file,
+                    error_type="MISSING_EXPORT",
+                    message=f"Symbols not found in target: {', '.join(missing)}",
+                    dependency=dependency,
+                    affected_files=[target_file],
+                    coupling_details={
+                        "missing_symbols": missing,
+                        "available_classes": target_classes,
+                        "available_functions": target_functions,
+                    }
+                )
+            return None
         except Exception as e:
             return DependencyError(
                 file_path=source_file,
@@ -688,76 +755,20 @@ class DependencyFeedbackLoop:
                 affected_files=[target_file]
             )
 
-    def _agent_check_coupling(self, source_file: str, target_file: str,
-                              source_content: str, target_content: str,
-                              dependency: str) -> Optional[DependencyError]:
+    def _get_imported_symbols_for_dep(self, source_path: str, dependency: str) -> List[str]:
+        """Get which specific symbols the source file imports from a dependency."""
+        ts_lang = get_language_for_file(source_path)
+        if not ts_lang or not TREE_SITTER_AVAILABLE:
+            return []
+
         try:
-            provider = InferenceManager.get_active_provider()
-
-            source_rel_path = os.path.relpath(source_file, self.project_root)
-            target_rel_path = os.path.relpath(target_file, self.project_root)
-
-            prompt = f"""Analyze code coupling between two files.
-
-Source: {source_rel_path}
-Target: {target_rel_path}
-Import: {dependency}
-
-Source:
-```
-{source_content[:2000]}
-```
-
-Target:
-```
-{target_content[:2000]}
-```
-
-Check:
-1. Import path matches target file path
-2. Imports/exports match
-3. Symbols imported are exported
-4. No signature mismatches
-5. Types match
-
-Respond JSON:
-{{
-    "has_error": true/false,
-    "error_type": "PATH_MISMATCH"|"COUPLING_MISMATCH"|"MISSING_EXPORT"|"TYPE_MISMATCH"|"SIGNATURE_MISMATCH",
-    "message": "description",
-    "corrected_import": "fix if path mismatch",
-    "missing_symbols": ["symbol1"],
-    "type_mismatches": ["name: expected X, got Y"],
-    "signature_mismatches": ["name: expected (params), got (params)"]
-}}
-
-Set has_error false if no issues."""
-
-            messages = [{"role": "user", "content": prompt}]
-            response = provider.call_model(messages)
-            text = provider.extract_text(response)
-            json_match = re.search(r'\{.*?\}', text, re.DOTALL)
-            if json_match:
-                result = json.loads(json_match.group())
-                if result.get("has_error"):
-                    coupling_details = {
-                        "missing_symbols": result.get("missing_symbols", []),
-                        "type_mismatches": result.get("type_mismatches", []),
-                        "signature_mismatches": result.get("signature_mismatches", []),
-                        "corrected_import": result.get("corrected_import")
-                    }
-
-                    return DependencyError(
-                        file_path=source_file,
-                        error_type=result.get("error_type", "COUPLING_MISMATCH"),
-                        message=result.get("message", "Coupling mismatch detected"),
-                        dependency=dependency,
-                        affected_files=[target_file],
-                        coupling_details=coupling_details
-                    )
-            return None
+            result = parse_file(source_path, ts_lang)
+            for imp in result.imports:
+                if imp.module == dependency or dependency in imp.raw:
+                    return imp.symbols
         except Exception:
-            return None
+            pass
+        return []
 
     def _get_changed_files_from_tracker(self) -> Set[str]:
         changed_files = set()
@@ -878,10 +889,10 @@ Set has_error false if no issues."""
                 print(f"[dep_resolution] tasks_planned={len(tasks)}")
                 changed_files = set()
                 for task in tasks:
-                    result = self.executor_agent.execute_task(task)
+                    # TODO: re-enable when executor is wired back
+                    result = {}
                     if result.get("changed_files"):
                         changed_files.update(result["changed_files"])
-                    self.executor_agent.invalidate_cache()
 
                 if changed_files:
                     print(f"[dep_resolution] changed_files={len(changed_files)}")

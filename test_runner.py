@@ -3,7 +3,6 @@ import sys
 import json
 import time
 import argparse
-import argparse
 
 # Add the project to path
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -14,10 +13,19 @@ sys.path.insert(0, os.path.join(project_root, "src"))
 from src.utils.prompt_manager import PromptManager
 from src.utils.inference import InferenceManager
 from src.config import get_api_key, set_api_key
+from src.generator import generate_project_blueprint, generate_tree, dfs_tree_and_gen
+from src.utils.dependencies import DependencyAnalyzer
+from src.docker.generator import DockerTestFileGenerator
+from src.utils.dependency_file_generator import (
+    extract_all_external_dependencies,
+    DependencyFileGenerator,
+)
+from src.utils.error_tracker import ErrorTracker
+from src.docker.testing import run_docker_testing
 
 # 
 # Set your test prompt here
-TEST_PROMPT = """write a program to add ,multiple and subtract 2 integers"""
+TEST_PROMPT = """write a program to add ,multiple and subtract 2 integers in c"""
 
 # Output directory for generated projec"
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_output")
@@ -71,11 +79,6 @@ def status_handler(event_type, message, **kwargs):
     print(f"{icon} {message}")
 
 
-# ============================================================================
-# MAIN TEST RUNNER
-# ============================================================================
-
-
 def run_test(provider_name_arg=None):
     print_header("ALPHASTACK TEST RUNNER")
 
@@ -111,14 +114,9 @@ def run_test(provider_name_arg=None):
     pm = PromptManager()
 
     start_time = time.time()
-
-    # ========================================================================
-    # PHASE 1: Structured Project Blueprint
-    # ========================================================================
     print_header("PHASE 1: COMPUTING PROJECT BLUEPRINT")
     print("Generating comprehensive intelligence, structure, and file contracts...")
 
-    from src.generator import generate_project_blueprint
 
     phase1_start = time.time()
     blueprint = generate_project_blueprint(TEST_PROMPT, pm, provider_name)
@@ -144,15 +142,9 @@ def run_test(provider_name_arg=None):
     # (Skipping phase 2 and 3 metrics)
     phase2_time = 0.0
     phase3_time = 0.0
-
-    # ========================================================================
-    # PHASE 4: Generate Tree & Files
-    # ========================================================================
     print_header("PHASE 4: GENERATE PROJECT TREE & FILES")
     print("Building project tree and generating all files...")
 
-    from src.generator import generate_tree, dfs_tree_and_gen
-    from src.utils.dependencies import DependencyAnalyzer
 
     phase4_start = time.time()
 
@@ -199,14 +191,9 @@ def run_test(provider_name_arg=None):
                 print(f"{subindent}📄 {file}")
 
     print(f"\n Phase 4 completed in {phase4_time:.2f}s")
-
-    # ========================================================================
-    # PHASE 6: Docker & Test File Generation
-    # ========================================================================
     print_header("PHASE 6: DOCKER & TEST FILE GENERATION")
     print("Generating Dockerfile and test files...")
 
-    from src.docker.generator import DockerTestFileGenerator
 
     # Parse file_format if it's a string
     try:
@@ -240,10 +227,6 @@ def run_test(provider_name_arg=None):
 
     phase6_time = time.time() - phase6_start
     print(f"\n Phase 6 completed in {phase6_time:.2f}s")
-
-    # ========================================================================
-    # PHASE 5: Dependency Analysis (after test generation)
-    # ========================================================================
     print_header("PHASE 5: DEPENDENCY ANALYSIS")
     print("Analyzing project dependencies...")
 
@@ -259,17 +242,9 @@ def run_test(provider_name_arg=None):
 
     print(" Dependency analysis complete")
     print(f"\nPhase 5 completed in {phase5_time:.2f}s")
-
-    # ========================================================================
-    # PHASE 6.5: Dependency File Generation
-    # ========================================================================
     print_header("PHASE 6.5: DEPENDENCY FILE GENERATION")
     print("Generating dependency files from external dependencies...")
 
-    from src.utils.dependency_file_generator import (
-        extract_all_external_dependencies,
-        DependencyFileGenerator,
-    )
 
     phase65_start = time.time()
 
@@ -297,14 +272,9 @@ def run_test(provider_name_arg=None):
 
     phase65_time = time.time() - phase65_start
     print(f"\n Phase 6.5 completed in {phase65_time:.2f}s")
-
-    # ========================================================================
-    # PHASE 7: Dependency Resolution (Feedback Loop) - DISABLED
-    # ========================================================================
     print_header("PHASE 7: DEPENDENCY RESOLUTION (FEEDBACK LOOP)")
     print("Skipping dependency resolution (disabled for ablation).")
 
-    from src.utils.error_tracker import ErrorTracker
 
     error_tracker = ErrorTracker(project_root_path)
     dep_results = {
@@ -318,15 +288,10 @@ def run_test(provider_name_arg=None):
     print_subheader("Dependency Resolution Results")
     print_json(dep_results)
     print(f"\n Phase 7 completed in {phase7_time:.2f}s")
-
-    # ========================================================================
-    # PHASE 8: Docker Testing Pipeline
-    # ========================================================================
     print_header("PHASE 8: DOCKER TESTING PIPELINE")
     print("Running Docker build and tests...")
     print("  Note: Docker must be running for this phase to succeed")
 
-    from src.docker.testing import run_docker_testing
 
     phase8_start = time.time()
 
@@ -340,6 +305,7 @@ def run_test(provider_name_arg=None):
             error_tracker=error_tracker,
             dependency_analyzer=dependency_analyzer,
             on_status=status_handler,
+            provider_name=provider_name,
         )
     except Exception as e:
         print(f" Docker testing failed with exception: {e}")
@@ -353,10 +319,6 @@ def run_test(provider_name_arg=None):
     print_subheader("Docker Testing Results")
     print_json(docker_results)
     print(f"\n Phase 8 completed in {phase8_time:.2f}s")
-
-    # ========================================================================
-    # SUMMARY
-    # ========================================================================
     total_time = time.time() - start_time
 
     print_header("SUMMARY")
@@ -386,10 +348,6 @@ def run_test(provider_name_arg=None):
             print("   - Dependency resolution had issues")
         if not docker_results.get("success"):
             print("   - Docker testing had issues")
-
-    # ========================================================================
-    # SAVE AND DISPLAY ERROR LOGS
-    # ========================================================================
     print_header("ERROR LOGS & DEBUG INFO")
 
     # Save error tracker to file

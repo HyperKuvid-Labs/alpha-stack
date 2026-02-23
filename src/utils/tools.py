@@ -109,6 +109,10 @@ class ToolHandler:
             return self._docker_build(command=args.get("command", ""))
         elif function_name == "docker_run":
             return self._docker_run(command=args.get("command", ""))
+        elif function_name == "batch_edit_files":
+            return self._batch_edit_files(tasks=args.get("tasks", []))
+        elif function_name == "batch_read_files":
+            return self._batch_read_files(file_paths=args.get("file_paths", []))
         else:
             return {"error": f"Unknown function: {function_name}"}
 
@@ -447,4 +451,62 @@ class ToolHandler:
         deps = self.dependency_analyzer.get_dependents(full_path)
         rel_deps = [os.path.relpath(p, self.project_root) for p in deps]
         return {"success": True, "file_path": file_path, "dependents": rel_deps}
+
+    def _batch_edit_files(self, tasks: list) -> Dict[str, Any]:
+        from .corrector_tool import batch_edit_files
+        return batch_edit_files(tasks, self)
+
+    def _batch_read_files(self, file_paths: list) -> Dict[str, Any]:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        if not file_paths:
+            return {"success": False, "error": "No file_paths provided"}
+
+        # Deduplicate while preserving order
+        seen = set()
+        unique_paths = []
+        for fp in file_paths:
+            if fp and fp not in seen:
+                seen.add(fp)
+                unique_paths.append(fp)
+
+        if not unique_paths:
+            return {"success": False, "error": "No valid file paths provided"}
+
+        print(f"[batch_read] Reading {len(unique_paths)} files in parallel...")
+
+        def _read_one(fp: str) -> Dict[str, Any]:
+            try:
+                result = self._get_file_code(fp)
+                return {"file_path": fp, **result}
+            except Exception as e:
+                return {"file_path": fp, "success": False, "error": str(e)}
+
+        results = []
+        with ThreadPoolExecutor(max_workers=min(len(unique_paths), 8)) as pool:
+            future_to_path = {
+                pool.submit(_read_one, fp): fp for fp in unique_paths
+            }
+            for future in as_completed(future_to_path):
+                try:
+                    result = future.result()
+                except Exception as e:
+                    fp = future_to_path[future]
+                    result = {"file_path": fp, "success": False, "error": str(e)}
+                results.append(result)
+
+        # Sort results back to input order
+        path_order = {fp: i for i, fp in enumerate(unique_paths)}
+        results.sort(key=lambda r: path_order.get(r["file_path"], 999))
+
+        succeeded = sum(1 for r in results if r.get("success"))
+        failed = len(results) - succeeded
+
+        return {
+            "success": failed == 0,
+            "total": len(results),
+            "succeeded": succeeded,
+            "failed": failed,
+            "results": results,
+        }
 
