@@ -9,5 +9,5 @@ The generated architecture must be fully compatible with the following system co
 ### Required JSON Output Structure
 Ensure your response strictly adheres to the following JSON schema representation:
 - `software_blueprint_details`: A comprehensive dictionary detailing core project specifications (name, version, summary, features).
-- `folder_structure`: A raw ASCII directory tree representing the exact layout of the repository.
+- `folder_structure`: A raw ASCII directory tree representing the exact layout of the repository. Only include important source code and configuration files. Do NOT include `README.md`, `LICENSE`, or other generic documentation boilerplate.
 - `file_formats`: A dictionary mapping precise file paths (relative to the project root) to detailed implementation contracts. For critical files, explicitly define the internal logic, core function signatures, implementation steps, and relationships with other files to ensure zero ambiguity during the generation phase.

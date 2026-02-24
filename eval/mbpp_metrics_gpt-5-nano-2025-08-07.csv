@@ -1,0 +1,10 @@
+task_id,success,pass_count,total_count,time_taken_seconds,tokens_used,correction_loops,files_generated,final_error
+11,False,0,3,198.36,5560,1,18,Parse error or crash
+11,False,0,3,1183.33,5444,1,18,Failed
+11,True,3,3,1426.05,7512,1,10,
+11,False,0,3,2978.0,7190,1,4,Failed
+11,False,0,3,2975.75,4871,1,8,Failed
+11,False,0,3,2608.29,5030,1,5,Failed
+12,False,0,3,3515.89,20854,1,13,Failed
+14,False,0,3,491.95,5373,1,10,Failed
+16,False,0,3,0,0,0,0,Generation failed

@@ -45,6 +45,7 @@ class InferenceProvider(ABC):
     def __init__(self, config: Dict[str, Any]):
         self.config = config
         self._client = None
+        self.total_tokens_used = 0
 
     @property
     def model(self) -> str:
@@ -202,7 +203,10 @@ class GoogleProvider(InferenceProvider):
             if param in kwargs:
                 call_kwargs[param] = kwargs[param]
 
-        return retry_api_call(self.get_client().models.generate_content, **call_kwargs)
+        response = retry_api_call(self.get_client().models.generate_content, **call_kwargs)
+        if hasattr(response, "usage_metadata") and hasattr(response.usage_metadata, "total_token_count"):
+            self.total_tokens_used += response.usage_metadata.total_token_count
+        return response
 
     def extract_function_calls(self, response: Any) -> List[Dict[str, Any]]:
         if not hasattr(response, "function_calls") or not response.function_calls:
@@ -284,7 +288,10 @@ class OpenAICompatibleProvider(InferenceProvider):
         for param in ["temperature", "max_tokens", "top_p"]:
             if param in kwargs:
                 call_kwargs[param] = kwargs[param]
-        return retry_api_call(self.get_client().chat.completions.create, **call_kwargs)
+        response = retry_api_call(self.get_client().chat.completions.create, **call_kwargs)
+        if hasattr(response, "usage") and hasattr(response.usage, "total_tokens"):
+            self.total_tokens_used += response.usage.total_tokens
+        return response
 
     def extract_function_calls(self, response: Any) -> List[Dict[str, Any]]:
         function_calls = []
@@ -448,6 +455,17 @@ class InferenceManager:
         if InferenceManager._active_provider is None:
             return InferenceManager.initialize()
         return InferenceManager._active_provider
+
+    @staticmethod
+    def get_total_tokens() -> int:
+        if InferenceManager._active_provider:
+            return InferenceManager._active_provider.total_tokens_used
+        return 0
+
+    @staticmethod
+    def reset_tokens():
+        if InferenceManager._active_provider:
+            InferenceManager._active_provider.total_tokens_used = 0
 
     @staticmethod
     def reset():

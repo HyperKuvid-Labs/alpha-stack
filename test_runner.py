@@ -14,7 +14,7 @@ from src.utils.prompt_manager import PromptManager
 from src.utils.inference import InferenceManager
 from src.config import get_api_key, set_api_key
 from src.generator import generate_project_blueprint, generate_tree, dfs_tree_and_gen
-from src.utils.dependencies import DependencyAnalyzer
+from src.utils.dependencies import DependencyAnalyzer, DependencyFeedbackLoop
 from src.docker.generator import DockerTestFileGenerator
 from src.utils.dependency_file_generator import (
     extract_all_external_dependencies,
@@ -25,7 +25,30 @@ from src.docker.testing import run_docker_testing
 
 # 
 # Set your test prompt here
-TEST_PROMPT = """write a program to add ,multiple and subtract 2 integers in c"""
+TEST_PROMPT = """Implement a tiny RPC framework over TCP with the following features:
+
+Custom binary framing: [length(uint32)][payload bytes].
+
+Requests: {id, method, payload} as JSON.
+
+Responses: {id, result, error} as JSON.
+Server:
+
+Register handlers by method name (e.g., "Add", "Echo").
+
+Each connection handled by a goroutine; use another goroutine for decoding frames and dispatching.
+Client:
+
+Supports concurrent calls; use a map of id -> response channel guarded by a mutex.
+
+Support context.Context for per-call timeout/cancel.
+Show example methods and unit tests for:
+
+Partial frame reception.
+
+Timeouts.
+
+Concurrent in-flight requests."""
 
 # Output directory for generated projec"
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_output")
@@ -173,6 +196,7 @@ def run_test(provider_name_arg=None):
     )
 
     project_root_path = os.path.join(OUTPUT_DIR, folder_tree.value)
+    error_tracker = ErrorTracker(project_root_path)
     phase4_time = time.time() - phase4_start
 
     print_subheader("Generated Project Tree")
@@ -241,6 +265,15 @@ def run_test(provider_name_arg=None):
         json.dump(metadata_dict, f, indent=4)
 
     print(" Dependency analysis complete")
+    
+    # Visualization of dependency graph
+    if hasattr(dependency_analyzer, "graph") and dependency_analyzer.graph.nodes:
+        print_subheader("Dependency Graph")
+        for node in dependency_analyzer.graph.nodes:
+            deps = list(dependency_analyzer.graph.successors(node))
+            if deps:
+                rel_node = os.path.relpath(str(node), project_root_path) if os.path.isabs(str(node)) else str(node)
+                print(f"  🔗 {rel_node} -> {', '.join([os.path.relpath(str(d), project_root_path) if os.path.isabs(str(d)) else str(d) for d in deps])}")
     print(f"\nPhase 5 completed in {phase5_time:.2f}s")
     print_header("PHASE 6.5: DEPENDENCY FILE GENERATION")
     print("Generating dependency files from external dependencies...")
@@ -273,17 +306,21 @@ def run_test(provider_name_arg=None):
     phase65_time = time.time() - phase65_start
     print(f"\n Phase 6.5 completed in {phase65_time:.2f}s")
     print_header("PHASE 7: DEPENDENCY RESOLUTION (FEEDBACK LOOP)")
-    print("Skipping dependency resolution (disabled for ablation).")
+    print("Attempting to resolve dependency issues...")
 
-
-    error_tracker = ErrorTracker(project_root_path)
-    dep_results = {
-        "success": True,
-        "iterations": 0,
-        "remaining_errors": [],
-        "skipped": True,
-    }
-    phase7_time = 0.0
+    phase7_start = time.time()
+    feedback_loop = DependencyFeedbackLoop(
+        dependency_analyzer=dependency_analyzer,
+        project_root=project_root_path,
+        software_blueprint=software_blueprint,
+        folder_structure=folder_struc,
+        file_output_format=file_output_format,
+        pm=pm,
+        error_tracker=error_tracker
+    )
+    
+    dep_results = feedback_loop.run_feedback_loop()
+    phase7_time = time.time() - phase7_start
 
     print_subheader("Dependency Resolution Results")
     print_json(dep_results)

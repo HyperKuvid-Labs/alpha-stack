@@ -165,7 +165,7 @@ class DockerExecutor:
                 cwd=self.project_root,
                 capture_output=True,
                 text=True,
-                timeout=600,
+                timeout=120,
             )
 
             logs = result.stdout + "\n" + result.stderr
@@ -194,7 +194,7 @@ class DockerExecutor:
             }
 
         except subprocess.TimeoutExpired:
-            timeout_msg = f"Command timeout (10 minutes): {command}"
+            timeout_msg = f"Command timeout (2 minutes): {command}"
             prev_logs = self.last_test_logs
             if prev_logs:
                 combined = prev_logs + f"\n\n--- Output of {command} ---\n{timeout_msg}"
@@ -336,7 +336,7 @@ class DockerTestingPipeline:
         )
 
     # Tools that must run exclusively (never in parallel with anything)
-    EXCLUSIVE_TOOLS = frozenset({"docker_build", "docker_run", "batch_edit_files"})
+    EXCLUSIVE_TOOLS = frozenset({"docker_build", "docker_run", "batch_edit_files", "give_up"})
 
     def _run_planner_session(self) -> int:
         """Run one planner session. Returns the number of tool calls made.
@@ -352,6 +352,7 @@ class DockerTestingPipeline:
         prompt = self._build_planner_prompt()
         messages = self.provider.create_initial_message(prompt)
         tool_calls_made = 0
+        gave_up = False
 
         for _ in range(self.max_rounds_per_session):
             response = self.provider.call_model(messages, tools=self.tools)
@@ -398,6 +399,9 @@ class DockerTestingPipeline:
                     result = self.tool_handler.handle_function_call(func_name, func_args)
                     tool_calls_made += 1
 
+                    if isinstance(result, dict) and result.get("gave_up"):
+                        gave_up = True
+
                     func_response = self.provider.create_function_response(
                         func_name, result, fc.get("id")
                     )
@@ -414,6 +418,9 @@ class DockerTestingPipeline:
                         self._emit("tool_call", f"{func_name}({list(func_args.keys())})")
                         result = self.tool_handler.handle_function_call(func_name, func_args)
                         tool_calls_made += 1
+
+                        if isinstance(result, dict) and result.get("gave_up"):
+                            gave_up = True
 
                         func_response = self.provider.create_function_response(
                             func_name, result, fc.get("id")
@@ -441,6 +448,9 @@ class DockerTestingPipeline:
                                 fc_done, result = future.result()
                                 tool_calls_made += 1
 
+                                if isinstance(result, dict) and result.get("gave_up"):
+                                    gave_up = True
+
                                 func_response = self.provider.create_function_response(
                                     fc_done["name"], result, fc_done.get("id")
                                 )
@@ -452,6 +462,9 @@ class DockerTestingPipeline:
             ]
 
             self.provider.accumulate_messages(messages, response, function_responses)
+
+            if gave_up:
+                break
 
             self._sync_state()
             if self.state.build_success and self.state.test_success:

@@ -345,6 +345,20 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "required": ["file_paths"],
             },
         },
+        {
+            "name": "give_up",
+            "description": "Call this tool when you have tried everything and don't know how to proceed or fix the remaining issues. This will end your session and report that you have given up on the task.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "description": "The reason why you are giving up and what challenges were insurmountable.",
+                    }
+                },
+                "required": ["reason"],
+            },
+        },
     ]
 
 
@@ -362,6 +376,7 @@ PLANNER_TOOL_NAMES = {
     "docker_run",
     "batch_edit_files",
     "batch_read_files",
+    "give_up",
 }
 
 # Tools the executor is allowed to use (file read/write only — no docker, no recursion)

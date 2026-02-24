@@ -877,22 +877,22 @@ class DependencyFeedbackLoop:
 
             tasks = [
                 {
-                    "title": f"Fix dependency error in {e.get('file', 'unknown')}",
-                    "description": e.get("error", "Fix dependency error"),
-                    "files": e.get("file", ""),
-                    "steps": [e.get("error", "")],
-                    "priority": 1,
+                    "file_path": e.get("file", ""),
+                    "instructions": f"Fix dependency error: {e.get('error', '')}. {e.get('message', '')}",
                 }
                 for e in errors_dict if e.get("file")
             ]
             if tasks:
+                from .corrector_tool import batch_edit_files
                 print(f"[dep_resolution] tasks_planned={len(tasks)}")
+                
+                batch_result = batch_edit_files(tasks, self.tool_handler)
                 changed_files = set()
-                for task in tasks:
-                    # TODO: re-enable when executor is wired back
-                    result = {}
-                    if result.get("changed_files"):
-                        changed_files.update(result["changed_files"])
+                
+                if batch_result.get("success") or batch_result.get("succeeded", 0) > 0:
+                    for res in batch_result.get("results", []):
+                        if res.get("success") and res.get("file_path"):
+                            changed_files.add(os.path.abspath(res["file_path"]))
 
                 if changed_files:
                     print(f"[dep_resolution] changed_files={len(changed_files)}")

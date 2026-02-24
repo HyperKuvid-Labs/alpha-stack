@@ -1,0 +1,11 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "perimeter_of_square"
+version = "1.0.0"
+description = "A compact Python module that computes the perimeter of a square from its side length with validation."
+requires-python = ">=3.8"
+
+env = []

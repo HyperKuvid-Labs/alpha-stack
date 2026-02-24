@@ -1,0 +1,12 @@
+{
+    "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/eval/eval_results/mbpp_task_17/tests/test_solution.py": [
+        {
+            "description": "Pytest unit tests for the perimeter_of_square function, validating correct perimeter calculations for zero, integers, and floating-point inputs, as well as proper exception handling for negative and non-numeric inputs."
+        }
+    ],
+    "/Users/adityagk/Desktop/capstone/iteration-1_alpha_stack/eval/eval_results/mbpp_task_17/./solution.py": [
+        {
+            "description": "Defines a single-pure function perimeter_of_square(side) that validates input as a non-negative numeric (int or float, with booleans rejected) and returns the square's perimeter as a float. Raises TypeError for invalid types and ValueError for negative or NaN inputs."
+        }
+    ]
+}

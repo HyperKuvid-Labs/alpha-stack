@@ -139,8 +139,6 @@ def get_system_info() -> Dict[str, Any]:
     system_info = {
         "operatingSystem": {
             "name": platform.system(),
-            "release": platform.release(),
-            "version": platform.version(),
             "platform": platform.platform(),
             "architecture": platform.machine(),
             "processor": platform.processor()

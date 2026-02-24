@@ -57,13 +57,11 @@ class ErrorTracker:
             "error_context": error_context,
             "has_content_snapshot": before_content is not None or after_content is not None
         }
-
-        # here as we have the change over here, like the actions, we can use that ot update the error traces for the tree node's error trace in the treenode, to basically keep track of what changes were made for which errors, and when giving for the future changes, the planner can see what changes were made for which errors previously
         if self.folder_tree and actions:
             node = self.find_node_by_path(rel_path)
             if node:
                 node.error_traces.append({
-                    "timestamp": change_entry["timestamp"], # timestamp coz, the context now also contains the info which error was fixed first
+                    "timestamp": change_entry["timestamp"],
                     "error": error_msg,
                     "actions": actions,
                     "change_description": change_description

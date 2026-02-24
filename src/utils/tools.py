@@ -113,6 +113,8 @@ class ToolHandler:
             return self._batch_edit_files(tasks=args.get("tasks", []))
         elif function_name == "batch_read_files":
             return self._batch_read_files(file_paths=args.get("file_paths", []))
+        elif function_name == "give_up":
+            return self._give_up(reason=args.get("reason", "No reason provided."))
         else:
             return {"error": f"Unknown function: {function_name}"}
 
@@ -135,6 +137,16 @@ class ToolHandler:
             self.tool_call_logger.log(self.agent_name, function_name, args)
         except Exception:
             pass
+
+    def _give_up(self, reason: str) -> Dict[str, Any]:
+        """Stop everything and signal that the agent has given up."""
+        print(f"\n[!] AGENT GAVE UP: {reason}\n")
+        return {
+            "success": False,
+            "gave_up": True,
+            "reason": reason,
+            "message": "Session terminated because the agent gave up."
+        }
 
     def _log_to_thread_memory(self, function_name: str, args: Dict[str, Any], result: Dict[str, Any]) -> None:
         if not self.thread_memory:

@@ -21,9 +21,6 @@ class TreeNode:
         self.error_traces = []
     def add_child(self, child_node):
         self.children.append(child_node)
-
-
-# Dependency files that should be skipped during initial generation
 DEPENDENCY_FILES_TO_SKIP = {
     'requirements.txt', 'requirements-dev.txt', 'requirements-test.txt',
     'Pipfile', 'Pipfile.lock', 'pyproject.toml', 'poetry.lock', 'setup.py', 'setup.cfg',
@@ -42,7 +39,7 @@ DEPENDENCY_FILES_TO_SKIP = {
 def should_generate_content(filepath):
     ext = os.path.splitext(filepath)[1].lower()
     filename = os.path.basename(filepath)
-    skip_names = {"Dockerfile", "docker-compose.yml", "docker-compose.yaml", "ci.yml", "di.yml"}
+    skip_names = {"Dockerfile", "docker-compose.yml", "docker-compose.yaml", "ci.yml", "di.yml", "README.md", "README.txt", "README", "LICENSE"}
     # Skip dependency files during initial generation
     if filename in skip_names or filename in DEPENDENCY_FILES_TO_SKIP:
         return False
@@ -104,7 +101,6 @@ def generate_file(context, filepath, refined_prompt, tree, file_output_format, p
             )
             result = completion.choices[0].message.parsed
         except Exception as e:
-            # Fallback for providers that don't fully support structured outputs
             try:
                 # Need standard chat completion to get the raw string
                 completion = client.chat.completions.create(
@@ -404,7 +400,7 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
 def generate_tree(resp, project_name="root"):
     content = resp.strip().replace('```', '').strip()
     lines = content.split('\n')
-    tree_line_pattern = re.compile(r'^(?:│\s*)*(?:├──\s*|└──\s*)?([^│├└#\n]+?)(?:/)?(?:\s*#.*)?$', re.IGNORECASE)
+    tree_line_pattern = re.compile(r'^(?:[│|]\s*)*(?:├──\s*|└──\s*|\|--\s*|\+--\s*|`--\s*|\|___\s*)?([^│├└|+#\n]+?)(?:/)?(?:\s*#.*)?$', re.IGNORECASE)
 
     root = None
     root_name = None
@@ -416,12 +412,13 @@ def generate_tree(resp, project_name="root"):
 
         match = tree_line_pattern.match(line.strip())
         if match:
-            root_name = match.group(1).strip().rstrip('/')
+            raw_name = match.group(1)
+            root_name = re.sub(r'^[│├└─|`+\-\s]+', '', raw_name).strip().rstrip('/')
         else:
             root_name = line.strip()
             if '#' in root_name:
                 root_name = root_name.split('#')[0].strip()
-            root_name = re.sub(r'[│├└─\s]+', '', root_name).strip().rstrip('/')
+            root_name = re.sub(r'^[│├└─|`+\-\s]+', '', root_name).strip().rstrip('/')
 
         # Replace spaces with underscores in folder names
         if root_name:
@@ -442,18 +439,28 @@ def generate_tree(resp, project_name="root"):
 
         indent = 0
         temp_line = line
-        while temp_line.startswith('│   ') or temp_line.startswith('    ') or temp_line.startswith('│ ') or temp_line.startswith('    '):
-            temp_line = temp_line[4:]
-            indent += 1
+        while True:
+            if temp_line.startswith('│   ') or temp_line.startswith('|   ') or temp_line.startswith('    '):
+                temp_line = temp_line[4:]
+                indent += 1
+            elif temp_line.startswith('│ ') or temp_line.startswith('| '):
+                temp_line = temp_line[2:]
+                indent += 1
+            elif temp_line.startswith('\t'):
+                temp_line = temp_line[1:]
+                indent += 1
+            else:
+                break
 
         match = tree_line_pattern.match(line.strip())
         if not match:
             name = line.strip()
             if '#' in name:
                 name = name.split('#')[0].strip()
-            name = re.sub(r'[│├└─\s]+', '', name).strip()
+            name = re.sub(r'^[│├└─|`+\-\s]+', '', name).strip()
         else:
-            name = match.group(1).strip()
+            raw_name = match.group(1)
+            name = re.sub(r'^[│├└─|`+\-\s]+', '', raw_name).strip()
 
         name = name.rstrip('/')
 
