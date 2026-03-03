@@ -1,0 +1,45 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage[utf8]{inputenc}
+\usepackage{hyperref}
+
+\title{AlphaStack: AI-powered project generator}
+\author{HyperKuvid-Labs}
+\date{2026}
+
+\begin{document}
+
+\maketitle
+
+\section{Abstract}
+AlphaStack is an AI-powered project generator that transforms natural language descriptions into complete, production-ready codebases with Docker configurations and automated testing. This paper presents a novel approach to autonomous code generation using multi-agent systems with iterative self-healing and comprehensive validation across diverse programming paradigms.
+
+\section{Introduction}
+Modern software development involves managing dependencies, configurations, and complex multi-file structures. AlphaStack tackles these challenges by introducing an intelligent multi-agent architecture capable of reasoning about code errors, applying context-aware fixes, and iterating until successful compilation and test passage.
+
+\section{Methodology}
+The system employs a Planning Agent to analyze errors and a Correction Agent to execute fixes. The process involves Docker-based isolation to validate builds and tests automatically. Evaluation was conducted across 40 programming challenges in four modern languages (CUDA, Go, Rust, TypeScript) with four difficulty tiers.
+
+\section{Architecture Diagram}
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{architecture.png}
+\caption{AlphaStack Workflow}
+\end{figure}
+
+\section{Results}
+Our evaluation on benchmark datasets such as HumanEval and MDDP using state-of-the-art models (GPT-5.2, GLM-5, MiniMax-m2.5, Claude Sonnet 4.6) demonstrates high success rates and efficiency in project generation and self-healing.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{results.png}
+\caption{Model Performance on HumanEval and MDDP}
+\end{figure}
+
+\section{Conclusion}
+AlphaStack effectively demonstrates how multi-agent reasoning combined with isolated environment execution can significantly improve autonomous code generation, delivering robust, production-ready codebases across multiple domains.
+
+\section{Supplementary Material}
+Source code, test suites, and further evaluation data are available at our public repository.
+
+\end{document}
