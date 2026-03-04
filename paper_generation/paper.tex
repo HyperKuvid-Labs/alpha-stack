@@ -1,0 +1,44 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+\title{AlphaStack: Autonomous Code Generation via Multi-Agent Systems}
+\author{Anonymous Authors}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Abstract}
+AlphaStack is an AI-powered project generator that transforms natural language descriptions into complete, production-ready codebases with Docker configurations and automated testing. This paper presents a novel approach to autonomous code generation using multi-agent systems with iterative self-healing and comprehensive validation across diverse programming paradigms.
+
+\section{Introduction}
+The complexity of modern software development requires advanced automation. AlphaStack addresses this by leveraging a Planning Agent and a Correction Agent to intelligently navigate build errors, dependency conflicts, and test failures.
+
+\section{Methodology}
+Our methodology relies on an Intelligent Multi-Agent Architecture. The Planning Agent analyzes errors and generates comprehensive fix strategies, while the Correction Agent executes these fixes. The system iterates until automated tests within an isolated Docker environment pass successfully.
+
+\section{Architecture Diagram}
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{architecture.png}
+    \caption{AlphaStack Architecture}
+\end{figure}
+
+\section{Results}
+We evaluated our system on HumanEval and MDDP benchmarks across several state-of-the-art models: gpt-5.2, glm-5, minimax-m2.5, and claude sonnet 4.6.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{results.png}
+    \caption{Model Performance on HumanEval and MDDP}
+\end{figure}
+
+\section{Conclusion}
+AlphaStack demonstrates significant potential in automating the software development lifecycle, producing robust, production-ready codebases with high success rates across varied benchmarks.
+
+\section{Supplementary Material}
+Further details regarding the 40 Programming Challenges across CUDA, Go, Rust, and TypeScript are available in the project repository.
+
+\end{document}
