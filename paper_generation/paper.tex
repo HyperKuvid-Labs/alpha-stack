@@ -1,0 +1,43 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+\title{AlphaStack: AI-powered project generator}
+\author{AlphaStack Team}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Abstract}
+AlphaStack is a novel approach to autonomous code generation using multi-agent systems with iterative self-healing and comprehensive validation across diverse programming paradigms. It transforms natural language descriptions into complete, production-ready codebases.
+
+\section{Introduction}
+This paper introduces AlphaStack, addressing key challenges in AI-assisted software development through a multi-agent architecture and iterative self-healing without human intervention.
+
+\section{Methodology}
+The core generation pipeline includes Blueprint Generation, Folder Structure, File Generation, and Metadata Management. It incorporates Intelligent Error Resolution through Planning and Correction agents, alongside Docker-Based Validation.
+
+\section{Architecture Diagram}
+The following diagram illustrates the workflow of AlphaStack from natural language input to a production-ready project.
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{architecture.png}
+    \caption{AlphaStack Architecture Diagram}
+\end{figure}
+
+\section{Results}
+We evaluated several state-of-the-art models (GPT-5.2, GLM-5, MiniMax-m2.5, Claude Sonnet 4.6) on the HumanEval and MDDP datasets.
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{results.png}
+    \caption{Model Performance Results}
+\end{figure}
+
+\section{Conclusion}
+AlphaStack effectively resolves software errors autonomously through its multi-agent system, demonstrating high success rates across different paradigms.
+
+\section*{Supplementary Material}
+Additional resources and evaluation metrics are available in the project repository.
+
+\end{document}
