@@ -1,0 +1,48 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+\title{AlphaStack: A Multi-Agent System for Autonomous Code Generation}
+\author{AlphaStack Team}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section*{Abstract}
+This paper presents AlphaStack, a novel approach to autonomous code generation using a multi-agent system. By leveraging Planning and Correction agents, AlphaStack intelligently transforms natural language descriptions into complete, production-ready codebases. The system incorporates iterative self-healing and Docker-based validation to automatically detect and resolve dependency conflicts, build errors, and test failures. Evaluated on diverse programming paradigms including CUDA, Go, Rust, and TypeScript, AlphaStack demonstrates significant improvements in generating robust and reliable software systems without human intervention.
+
+\section{Introduction}
+The complexity of modern software development necessitates tools that can bridge the gap between high-level requirements and functional code. Traditional code generation models often fail at producing multi-file structures or handling intricate dependencies. AlphaStack addresses these challenges by introducing an intelligent multi-agent architecture capable of not only generating code but also validating and correcting it iteratively. This self-healing capability is crucial for creating production-ready environments, complete with automated Docker container creation and comprehensive validation pipelines.
+
+\section{Methodology}
+AlphaStack employs a dual-agent system consisting of a Planning Agent and a Correction Agent. The Planning Agent analyzes requirements and errors, generating comprehensive fix strategies using tool-augmented reasoning. The Correction Agent executes these fixes, demonstrating deep code understanding and validation capabilities. The core generation pipeline involves Blueprint Generation, Folder Structure setup, File Generation, and Metadata Management. Crucially, the system utilizes Docker for isolated build and test environments, enabling resource-managed execution and a complete validation pipeline from build to test execution.
+
+\section{Architecture Diagram}
+The architecture of AlphaStack is illustrated in Figure \ref{fig:architecture}. It highlights the flow from natural language input through the multi-agent generation and validation cycles.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{architecture_diagram.png}
+    \caption{AlphaStack System Architecture}
+    \label{fig:architecture}
+\end{figure}
+
+\section{Results}
+We evaluated AlphaStack against state-of-the-art models including GPT-5.2, GLM-5, MiniMax-m2.5, and Claude Sonnet 4.6 on established benchmarks such as HumanEval and MDDP. The results demonstrate the efficacy of our multi-agent, self-healing approach, consistently achieving high success rates in generating executable and test-passing code.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{results_graph.png}
+    \caption{Performance Comparison on Benchmarks}
+    \label{fig:results}
+\end{figure}
+
+\section{Conclusion}
+AlphaStack represents a significant step forward in autonomous software engineering. By combining multi-agent reasoning with robust Docker-based validation, the system effectively manages the complexities of modern application development. Future work will focus on expanding language support and optimizing the self-healing iterations for even faster convergence to working solutions.
+
+\section*{Supplementary Material}
+The evaluation suite includes 40 challenges across CUDA, Go, Rust, and TypeScript, categorized into four difficulty tiers. The full repository, including the agent implementations and evaluation datasets, is available for further research and reproduction.
+
+\end{document}
