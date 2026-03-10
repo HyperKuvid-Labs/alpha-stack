@@ -1,0 +1,50 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+
+\title{AlphaStack: AI-Powered Project Generation via Multi-Agent Iterative Self-Healing}
+\author{AlphaStack Team}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{Abstract}
+This paper presents AlphaStack, a novel approach to autonomous code generation using a multi-agent system consisting of Planning and Correction agents. Through iterative self-healing and comprehensive Docker-based validation, AlphaStack translates natural language descriptions into production-ready codebases across diverse programming paradigms.
+
+\section{Introduction}
+Modern software development demands rapid iteration and robust error resolution. AlphaStack addresses these needs by combining large language models with tool-augmented reasoning to analyze requirements, generate multi-file structures, and autonomously resolve dependency conflicts, build errors, and test failures.
+
+\section{Methodology}
+The AlphaStack pipeline begins with Blueprint Generation, followed by Folder and File Generation. A Planning Agent analyzes any build or test errors, creating comprehensive fix strategies using file operations and command execution tools. The Correction Agent then applies these fixes. This iterative refinement continues within a sandboxed Docker environment until all validations pass.
+
+\section{Architecture Diagram}
+The following diagram illustrates the core generation pipeline and iterative self-healing process.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{architecture.png}
+    \caption{AlphaStack Architecture Flow}
+    \label{fig:architecture}
+\end{figure}
+
+\section{Results}
+AlphaStack was evaluated on 40 programming challenges across CUDA, Go, Rust, and TypeScript. The system demonstrates high success rates, particularly when utilizing state-of-the-art models. The performance comparison on the HumanEval and MDDP benchmarks is shown below.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{results.png}
+    \caption{Model Performance Comparison on HumanEval and MDDP}
+    \label{fig:results}
+\end{figure}
+
+\section{Conclusion}
+AlphaStack significantly advances autonomous software generation by integrating multi-agent reasoning with isolated Docker validation. The system's ability to self-heal and resolve complex dependency and build issues makes it a robust solution for diverse programming tasks.
+
+\section{Supplementary Material}
+Further details regarding the 40 programming challenges, 4-Tier Difficulty System, and evaluation metrics can be found in the AlphaStack repository's \texttt{eval} directory.
+
+\end{document}
