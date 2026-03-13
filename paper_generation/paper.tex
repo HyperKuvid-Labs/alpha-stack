@@ -1,0 +1,48 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+
+\title{AlphaStack: Autonomous Project Generation and Self-Healing with Multi-Agent Systems}
+\author{AlphaStack Team}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Abstract}
+This paper presents AlphaStack, a novel approach to autonomous code generation and error resolution. Utilizing a multi-agent system comprising Planning and Correction agents, AlphaStack seamlessly navigates the software development lifecycle from natural language blueprints to production-ready projects. We evaluate AlphaStack against state-of-the-art models on HumanEval and MDDP metrics, demonstrating its efficacy across diverse programming paradigms.
+
+\section{Introduction}
+Modern software development involves complex pipelines, dependency management, and iterative debugging. AlphaStack automates these processes through an AI-powered project generator. By leveraging isolated Docker environments and intelligent multi-agent reasoning, it addresses the challenges of code generation, self-healing, and end-to-end validation without human intervention.
+
+\section{Methodology}
+Our system employs a Planning Agent to analyze structural build and test errors, devising strategic fixes based on a structured toolset. Concurrently, a Correction Agent executes these plans with language-specific parsing constraints. The entire validation pipeline is enclosed within a sandboxed Docker environment to ensure security and determinism, facilitating iterative self-healing until predefined success criteria are met.
+
+\section{Architecture Diagram}
+The architecture of AlphaStack is primarily pipeline-oriented, routing natural language input through an AI analysis stage before transitioning into code generation and validation.
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{architecture.png}
+    \caption{AlphaStack System Architecture}
+    \label{fig:architecture}
+\end{figure}
+
+\section{Results}
+We evaluated AlphaStack utilizing several cutting-edge models, including GPT-5.2, GLM-5, MiniMax-m2.5, and Claude Sonnet 4.6. Our evaluation suite consists of challenges across CUDA, Go, Rust, and TypeScript.
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{results.png}
+    \caption{Tentative performance on HumanEval and MDDP metrics.}
+    \label{fig:results}
+\end{figure}
+
+\section{Conclusion}
+AlphaStack represents a significant leap forward in AI-assisted software engineering. By successfully integrating multi-agent reasoning with robust containerized validation, it paves the way for fully autonomous, self-correcting development pipelines.
+
+\section{Supplementary Material}
+Additional details regarding our 40-challenge evaluation suite, difficulty tiers, and comprehensive results are available in the project repository under the \texttt{src/prompts/eval/} directory.
+
+\end{document}
