@@ -63,7 +63,7 @@ def generate_file(context, filepath, refined_prompt, tree, file_output_format, p
         file_output_format=file_output_format
     )
 
-    print(f"Generating file '{filepath}' with context '{context}' using provider '{provider_name}'...")
+    # print(f"Generating file '{filepath}' with context '{context}' using provider '{provider_name}'...")
 
     result = None
 
@@ -182,8 +182,9 @@ def generate_file(context, filepath, refined_prompt, tree, file_output_format, p
         try:
             response = provider.call_model(messages)
             raw_content = provider.extract_text(response)
-            print(f"Raw response from vLLM for file generation: {raw_content}")
+            # print(f"Raw response from vLLM for file generation: {raw_content}")
             result = _parse_file_generation_result(raw_content)
+            print(f"Parsed file generation result from vLLM: {result}")
         except Exception as e:
             print(f"Error calling vLLM API for file generation: {e}")
 
@@ -285,6 +286,25 @@ def dfs_tree_and_gen(root, refined_prompt, tree_structure, project_name, current
         else:
             return process_directory(node, full_path, context, work_queue, work_output_base_dir, lock, root_val, on_status)
 
+    # vLLM generation is intentionally sequential to avoid unstable concurrent model calls.
+    if provider_name == "vllm":
+        while True:
+            try:
+                work_item = work_queue.get_nowait()
+            except Empty:
+                break
+
+            try:
+                result = process_work_item(work_item)
+                if result and 'children' in result:
+                    for child_work in result['children']:
+                        work_queue.put(child_work)
+            except Exception as exc:
+                if on_status:
+                    on_status("error", f"Sequential generation failed: {exc}")
+                    on_status("error", traceback.format_exc())
+        return
+
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         active_futures = set()
 
@@ -332,17 +352,29 @@ def process_file(node, full_path, context, refined_prompt, tree_structure,
                     os.makedirs(parent_dir, exist_ok=True)
 
         if should_generate_content(full_path):
-            result = generate_file(
-                context=context,
-                filepath=full_path,
-                refined_prompt=refined_prompt,
-                tree=tree_structure,
-                file_output_format=file_output_format,
-                pm=pm,
-                provider_name=provider_name
-            )
+            max_attempts = 3 if provider_name == "vllm" else 1
+            result = None
+
+            for attempt in range(1, max_attempts + 1):
+                result = generate_file(
+                    context=context,
+                    filepath=full_path,
+                    refined_prompt=refined_prompt,
+                    tree=tree_structure,
+                    file_output_format=file_output_format,
+                    pm=pm,
+                    provider_name=provider_name
+                )
+
+                if result:
+                    break
+
+                if on_status and attempt < max_attempts:
+                    on_status("warning", f"Empty generation result for '{full_path}' (attempt {attempt}/{max_attempts}). Retrying...")
 
             if not result:
+                if on_status:
+                    on_status("error", f"Failed to generate valid content for '{full_path}' after {max_attempts} attempt(s).")
                 return None
 
             content = result.file_content
@@ -752,6 +784,14 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
 
 
 def generate_tree(resp, project_name="root"):
+    def _looks_like_file_node(name: str) -> bool:
+        base_name = (name or "").strip().rstrip('/')
+        if not base_name:
+            return False
+        if base_name.startswith('.'):
+            return len(base_name) > 1 and '.' in base_name[1:]
+        return '.' in base_name
+
     content = resp.strip().replace('```', '').strip()
     lines = content.split('\n')
     tree_line_pattern = re.compile(r'^(?:[│|]\s*)*(?:├──\s*|└──\s*|\|--\s*|\+--\s*|`--\s*|\|___\s*)?([^│├└|+#\n]+?)(?:/)?(?:\s*#.*)?$', re.IGNORECASE)
@@ -825,20 +865,26 @@ def generate_tree(resp, project_name="root"):
             continue
 
         node = TreeNode(name)
+        node.is_file = _looks_like_file_node(name)
 
-        if indent == 0:
-            root.add_child(node)
-            stack = [root, node]
-        else:
-            while len(stack) <= indent:
-                stack.append(root)
-            while len(stack) > indent + 1:
-                stack.pop()
-            if stack:
-                stack[-1].add_child(node)
+        parent_index = min(max(indent, 0), len(stack) - 1)
+        parent_node = stack[parent_index] if stack else root
+
+        while parent_index > 0 and _looks_like_file_node(parent_node.value):
+            parent_index -= 1
+            parent_node = stack[parent_index]
+
+        parent_node.add_child(node)
+
+        stack = stack[:parent_index + 1]
+        if not node.is_file:
             stack.append(node)
 
     def mark_files_and_dirs(node):
+        if _looks_like_file_node(node.value):
+            node.is_file = True
+            return
+
         if not node.children:
             node.is_file = True
         else:
