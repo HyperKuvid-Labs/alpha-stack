@@ -61,11 +61,17 @@ class PromptManager:
             return self.render('project_blueprint_cuda.j2', user_prompt=user_prompt, system_info=system_info)
         return self.render('project_blueprint.j2', user_prompt=user_prompt, system_info=system_info)
 
-    def render_folder_structure_extraction(self, user_prompt: Optional[str] = None, blueprint_payload: Optional[Dict[str, Any]] = None) -> str:
+    def render_folder_structure_extraction(
+        self,
+        user_prompt: Optional[str] = None,
+        blueprint_payload: Optional[Dict[str, Any]] = None,
+        raw_blueprint_output: Optional[str] = None,
+    ) -> str:
         return self.render(
             'folder_structure_extraction.j2',
             user_prompt=user_prompt,
-            blueprint_payload=blueprint_payload or {}
+            blueprint_payload=blueprint_payload or {},
+            raw_blueprint_output=raw_blueprint_output or "",
         )
 
     def render_file_generation(

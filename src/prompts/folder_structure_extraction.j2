@@ -29,3 +29,8 @@ User request:
 
 Blueprint context (may be imperfect; infer and normalize):
 {{ blueprint_payload | tojson(indent=2) }}
+
+{% if raw_blueprint_output %}
+Raw blueprint output from previous generation attempt (possibly malformed JSON):
+{{ raw_blueprint_output }}
+{% endif %}

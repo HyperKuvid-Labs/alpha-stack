@@ -510,10 +510,14 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
             "file_formats": file_formats,
         }
 
-    def _generate_folder_structure_only(blueprint_payload: Dict[str, Any]) -> Optional[str]:
+    def _generate_folder_structure_only(
+        blueprint_payload: Optional[Dict[str, Any]] = None,
+        raw_blueprint_output: Optional[str] = None,
+    ) -> Optional[str]:
         followup_system_instruction = pm.render_folder_structure_extraction(
             user_prompt=prompt,
-            blueprint_payload=blueprint_payload,
+            blueprint_payload=blueprint_payload or {},
+            raw_blueprint_output=raw_blueprint_output,
         )
 
         followup_messages = [
@@ -551,6 +555,29 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
 
         return None
 
+    def _recover_minimal_blueprint_from_raw(raw_output: Optional[str]) -> Optional[ProjectBlueprint]:
+        if not isinstance(raw_output, str) or not raw_output.strip():
+            return None
+
+        repaired_tree = _generate_folder_structure_only(
+            blueprint_payload={},
+            raw_blueprint_output=raw_output,
+        )
+
+        if not repaired_tree:
+            extracted_tree = _extract_ascii_tree(raw_output)
+            if extracted_tree and _is_valid_ascii_tree(extracted_tree):
+                repaired_tree = extracted_tree
+
+        if not repaired_tree:
+            return None
+
+        return ProjectBlueprint(
+            software_blueprint_details={},
+            folder_structure=repaired_tree,
+            file_formats={},
+        )
+
     if provider_name == "google":
         from google.genai import types
         from .utils.inference import retry_api_call
@@ -578,7 +605,7 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
                 normalized["folder_structure"] = repaired_tree
             return ProjectBlueprint(**normalized)
         except (json.JSONDecodeError, ValueError, TypeError):
-            return None
+            return _recover_minimal_blueprint_from_raw(response.text)
 
     else:
         # vLLM path: use provider abstraction so endpoint routing is consistent
@@ -602,8 +629,8 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
                             normalized["folder_structure"] = repaired_tree
                         return ProjectBlueprint(**normalized)
             except Exception:
-                return None
-            return None
+                return _recover_minimal_blueprint_from_raw(raw_content if 'raw_content' in locals() else "")
+            return _recover_minimal_blueprint_from_raw(raw_content)
 
         # OpenRouter/OpenAI via structured outputs
         messages = [
@@ -640,8 +667,7 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
                         return ProjectBlueprint(**normalized)
             except Exception as fallback_err:
                 print(f"Error calling structured output API: {e}. Fallback failed: {fallback_err}")
-
-            return None
+            return _recover_minimal_blueprint_from_raw(raw_content if 'raw_content' in locals() else "")
 
 
 def generate_tree(resp, project_name="root"):
