@@ -458,10 +458,10 @@ class VLLMProvider(OpenAICompatibleProvider):
         return model_id
 
     def call_model(self, messages: List[Dict], tools: List[Dict] = None, **kwargs) -> Any:
-        model = self._resolve_model_name()
+        # model = self._resolve_model_name()
 
         payload = {
-            "model": model,
+            "model": "Qwen/Qwen3.5-2B",  # hardcoded for now since vLLM doesn't support dynamic model selection well
             "messages": messages,
         }
         if tools:
@@ -474,17 +474,17 @@ class VLLMProvider(OpenAICompatibleProvider):
         if "max_output_tokens" in kwargs and "max_tokens" not in payload:
             payload["max_tokens"] = kwargs["max_output_tokens"]
 
-        headers = {"Content-Type": "application/json"}
-        api_key = self.api_key or os.getenv("VLLM_API_KEY")
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
+        # headers = {"Content-Type": "application/json"}
+        # api_key = self.api_key or os.getenv("VLLM_API_KEY")
+        # if api_key:
+        #     headers["Authorization"] = f"Bearer {api_key}"
 
         response = retry_api_call(
             requests.post,
             self._get_chat_completions_url(),
             json=payload,
-            headers=headers,
-            timeout=30,
+            # headers=headers, why the fuck we need header over here, mc
+            # timeout=30,
         )
         response.raise_for_status()
         response_json = response.json()

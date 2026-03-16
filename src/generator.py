@@ -3,6 +3,7 @@ import re
 import json
 import os
 import time
+import traceback
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 
@@ -232,8 +233,10 @@ def dfs_tree_and_gen(root, refined_prompt, tree_structure, project_name, current
                         if result and 'children' in result:
                             for child_work in result['children']:
                                 work_queue.put(child_work)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        if on_status:
+                            on_status("error", f"Worker failed during parallel generation: {exc}")
+                            on_status("error", traceback.format_exc())
                 active_futures = set(not_done)
 
 
@@ -274,8 +277,10 @@ def process_file(node, full_path, context, refined_prompt, tree_structure,
                     "description": metadata
                 })
 
-    except Exception:
-        pass
+    except Exception as exc:
+        if on_status:
+            on_status("error", f"Failed to generate file '{full_path}': {exc}")
+            on_status("error", traceback.format_exc())
 
     return None
 
@@ -308,7 +313,9 @@ def process_directory(node, full_path, context, work_queue, output_base_dir="", 
 
         return {'children': children_work}
 
-    except OSError:
+    except OSError as exc:
+        if on_status:
+            on_status("warning", f"Directory creation failed for '{full_path}': {exc}")
         return None
 
 
@@ -342,6 +349,59 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
                 depth -= 1
                 if depth == 0:
                     return raw_content[start_idx:i + 1]
+        return None
+
+    def _is_valid_ascii_tree(tree_text: Any) -> bool:
+        if not isinstance(tree_text, str):
+            return False
+
+        lines = [line.rstrip() for line in tree_text.splitlines() if line.strip()]
+        if len(lines) < 2:
+            return False
+
+        root = lines[0].strip().strip("`")
+        if not root or any(token in root for token in ["{", "}", "[", "]", ":"]):
+            return False
+
+        has_tree_connectors = any(("├──" in line) or ("└──" in line) for line in lines[1:])
+        return has_tree_connectors
+
+    def _extract_ascii_tree(raw_content: str) -> Optional[str]:
+        if not raw_content:
+            return None
+
+        candidate = raw_content.strip()
+
+        fenced_match = re.search(r'```(?:[a-zA-Z0-9_+-]+)?\s*([\s\S]*?)\s*```', candidate)
+        if fenced_match:
+            candidate = fenced_match.group(1).strip()
+
+        if candidate.startswith("{"):
+            try:
+                parsed_obj = json.loads(candidate)
+                folder = parsed_obj.get("folder_structure") if isinstance(parsed_obj, dict) else None
+                if isinstance(folder, str):
+                    return folder.strip()
+            except Exception:
+                pass
+
+        if _is_valid_ascii_tree(candidate):
+            return candidate
+
+        lines = [line.rstrip() for line in candidate.splitlines()]
+        tree_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith(("├──", "└──", "│")) or (not tree_lines and stripped):
+                tree_lines.append(stripped)
+
+        if tree_lines:
+            extracted = "\n".join(tree_lines)
+            if _is_valid_ascii_tree(extracted):
+                return extracted
+
         return None
 
     def _clean_tree_name(raw_name: Any) -> str:
@@ -450,6 +510,47 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
             "file_formats": file_formats,
         }
 
+    def _generate_folder_structure_only(blueprint_payload: Dict[str, Any]) -> Optional[str]:
+        followup_system_instruction = pm.render_folder_structure_extraction(
+            user_prompt=prompt,
+            blueprint_payload=blueprint_payload,
+        )
+
+        followup_messages = [
+            {"role": "system", "content": followup_system_instruction},
+            {"role": "user", "content": "Return only the folder_structure tree."},
+        ]
+
+        try:
+            if provider_name == "google":
+                from google.genai import types
+                from .utils.inference import retry_api_call
+
+                response = retry_api_call(
+                    provider.get_client().models.generate_content,
+                    model=provider.model,
+                    contents="Return only the folder_structure tree.",
+                    config=types.GenerateContentConfig(systemInstruction=followup_system_instruction),
+                )
+                raw_content = response.text if response and hasattr(response, "text") else ""
+            elif provider_name == "vllm":
+                response = provider.call_model(followup_messages)
+                raw_content = provider.extract_text(response)
+            else:
+                completion = provider.get_client().chat.completions.create(
+                    model=provider.model,
+                    messages=followup_messages,
+                )
+                raw_content = completion.choices[0].message.content if completion and completion.choices else ""
+
+            extracted_tree = _extract_ascii_tree(raw_content)
+            if extracted_tree and _is_valid_ascii_tree(extracted_tree):
+                return extracted_tree
+        except Exception:
+            return None
+
+        return None
+
     if provider_name == "google":
         from google.genai import types
         from .utils.inference import retry_api_call
@@ -472,6 +573,9 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
             normalized = _normalize_project_blueprint_payload(data)
             if not normalized:
                 return None
+            repaired_tree = _generate_folder_structure_only(normalized)
+            if repaired_tree:
+                normalized["folder_structure"] = repaired_tree
             return ProjectBlueprint(**normalized)
         except (json.JSONDecodeError, ValueError, TypeError):
             return None
@@ -486,12 +590,16 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
             ]
             try:
                 response = provider.call_model(messages)
+                print(f"Raw response from vLLM: {response}")
                 raw_content = provider.extract_text(response)
                 json_str = _extract_json_str(raw_content)
                 if json_str:
                     data = json.loads(json_str)
                     normalized = _normalize_project_blueprint_payload(data)
                     if normalized:
+                        repaired_tree = _generate_folder_structure_only(normalized)
+                        if repaired_tree:
+                            normalized["folder_structure"] = repaired_tree
                         return ProjectBlueprint(**normalized)
             except Exception:
                 return None
@@ -526,6 +634,9 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
                     data = json.loads(json_str)
                     normalized = _normalize_project_blueprint_payload(data)
                     if normalized:
+                        repaired_tree = _generate_folder_structure_only(normalized)
+                        if repaired_tree:
+                            normalized["folder_structure"] = repaired_tree
                         return ProjectBlueprint(**normalized)
             except Exception as fallback_err:
                 print(f"Error calling structured output API: {e}. Fallback failed: {fallback_err}")
@@ -651,11 +762,14 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
     blueprint = generate_project_blueprint(user_prompt, pm, provider_name, problem_statement_language)
 
     if not blueprint:
-        emit("error", "Failed to generate project blueprint.")
+        emit("error", "Failed to generate project blueprint. Provider returned no valid structured output.")
         return None
+
+    print("completed blueprint generation")
 
     software_blueprint = blueprint.software_blueprint_details
     folder_struc = blueprint.folder_structure
+    emit("log", f"Generated folder structure:\n{folder_struc}")
     file_format = blueprint.file_formats
     file_output_format = file_format
 
@@ -667,6 +781,7 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
     metadata_dict = {}
     start_time = time.time()
 
+    emit("step", "Starting file generation with parallel workers...")
     dfs_tree_and_gen(
         root=folder_tree,
         refined_prompt=software_blueprint,
@@ -687,6 +802,7 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
     project_root_path = os.path.join(output_base_dir, folder_tree.value)
 
     if not os.path.exists(project_root_path):
+        emit("error", f"Project root path was not created: {project_root_path}")
         return None
 
     with open(json_file_name, 'w') as f:
@@ -709,8 +825,9 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
         )
 
         test_gen.generate_all()
-    except Exception:
-        pass
+    except Exception as exc:
+        emit("error", f"Dockerfile/test file generation failed: {exc}")
+        emit("error", traceback.format_exc())
 
     emit("step", "Starting dependency analysis for entire project...")
     dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
@@ -746,7 +863,8 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
         # Re-analyze project files to include the newly generated dependency files
         dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
     except Exception as e:
-        print(f"Error generating dependency files: {e}")
+        emit("error", f"Error generating dependency files: {e}")
+        emit("error", traceback.format_exc())
 
     # Dependency resolution disabled for ablation study
     emit("step", "Skipping dependency resolution (disabled)...")

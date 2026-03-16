@@ -2,6 +2,8 @@ import os
 import sys
 import time
 import json
+import io
+import traceback
 from pathlib import Path
 
 import pyfiglet
@@ -11,6 +13,7 @@ from prompt_toolkit.styles import Style as PromptStyle
 from rich.align import Align
 from rich.console import Console
 from rich.console import Group
+from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
 from rich.rule import Rule
@@ -21,7 +24,7 @@ from rich.text import Text
 from .config import get_api_key, set_api_key
 
 # Initialize Rich Console
-console = Console()
+console = Console(file=sys.__stdout__)
 
 # Tokyo Night Palette (using original Neon Noir variable names)
 
@@ -243,6 +246,53 @@ class StatusDisplay:
         self.spinner = Spinner("dots", style=NEON_PRIMARY)
         self.started_at = time.time()
         self.stats = {"success": 0, "warning": 0, "error": 0, "progress": 0}
+        self.max_log_lines = 14
+        self.last_error = None
+        self.last_traceback = None
+
+    class _LiveLogStream(io.TextIOBase):
+        def __init__(self, status_display, stream_name):
+            self.status_display = status_display
+            self.stream_name = stream_name
+            self._buffer = ""
+
+        def write(self, text):
+            if not text:
+                return 0
+            self._buffer += text
+            while "\n" in self._buffer:
+                line, self._buffer = self._buffer.split("\n", 1)
+                line = line.rstrip()
+                if not line:
+                    continue
+                if self.stream_name == "stderr":
+                    self.status_display.update(line, "error")
+                else:
+                    self.status_display.update(line, "log")
+            return len(text)
+
+        def flush(self):
+            if self._buffer.strip():
+                line = self._buffer.strip()
+                if self.stream_name == "stderr":
+                    self.status_display.update(line, "error")
+                else:
+                    self.status_display.update(line, "log")
+            self._buffer = ""
+
+    def stdout_stream(self):
+        return self._LiveLogStream(self, "stdout")
+
+    def stderr_stream(self):
+        return self._LiveLogStream(self, "stderr")
+
+    def add_exception(self, prefix, exc):
+        self.last_error = f"{prefix}: {exc}"
+        self.last_traceback = traceback.format_exc()
+        self.update(self.last_error, "error")
+        if self.last_traceback:
+            for line in self.last_traceback.strip().splitlines()[-8:]:
+                self.update(line, "error")
 
     def _elapsed(self):
         elapsed = int(time.time() - self.started_at)
@@ -264,40 +314,58 @@ class StatusDisplay:
         return stats
 
     def generate_layout(self):
-        """Build a compact, high-signal dashboard with current phase and feed."""
+        """Build a split dashboard with status on top and live logs below."""
         phase_table = Table.grid(expand=True)
         phase_table.add_column(width=3)
         phase_table.add_column(ratio=1)
         phase_table.add_row(self.spinner, Text(self.current_phase, style=f"bold {NEON_ACCENT}"))
 
-        if self.messages:
-            recent_lines = self.messages[-8:]
-            updates_text = Text("\n".join(recent_lines), style="white")
-        else:
-            updates_text = Text("No updates yet...", style=NEON_MUTED)
-
-        content = Group(
+        status_content = Group(
             self._header(),
             Text(""),
             Text("Current Phase", style="bold white"),
             phase_table,
             Text(""),
-            Text("Activity Feed", style="bold white"),
-            updates_text,
-            Text(""),
             self._stats_line(),
         )
 
-        return Align.center(
-            Panel(
-                content,
-                border_style=NEON_PRIMARY,
-                padding=(1, 2),
-                width=max(76, console.size.width - 6),
-                title="[bold white] PIPELINE STATUS [/bold white]",
+        if self.messages:
+            recent_lines = self.messages[-self.max_log_lines:]
+            logs_text = Text("\n".join(recent_lines), style="white")
+        else:
+            logs_text = Text("Waiting for first pipeline event...", style=NEON_MUTED)
+
+        width = max(76, console.size.width - 6)
+
+        layout = Layout()
+        layout.split_column(
+            Layout(
+                Align.center(
+                    Panel(
+                        status_content,
+                        border_style=NEON_PRIMARY,
+                        padding=(1, 2),
+                        width=width,
+                        title="[bold white] PIPELINE STATUS [/bold white]",
+                    )
+                ),
+                ratio=2,
             ),
-            vertical="middle",
+            Layout(
+                Align.center(
+                    Panel(
+                        logs_text,
+                        border_style=NEON_INFO,
+                        padding=(1, 2),
+                        width=width,
+                        title="[bold white] LIVE LOGS [/bold white]",
+                    )
+                ),
+                ratio=3,
+            ),
         )
+
+        return layout
 
     def _mark_current_phase_complete(self):
         if self.current_phase and self.current_phase != "Preparing pipeline...":
@@ -306,7 +374,7 @@ class StatusDisplay:
                 self._last_completed_phase = self.current_phase
 
     def __enter__(self):
-        self.live = Live(self.generate_layout(), refresh_per_second=10, console=console, screen=True)
+        self.live = Live(self.generate_layout(), refresh_per_second=10, console=console, screen=False)
         self.live.start()
         return self
 
@@ -329,6 +397,7 @@ class StatusDisplay:
         elif event_type == "error":
             self.messages.append(f"❌ {message}")
             self.stats["error"] += 1
+            self.last_error = message
         elif event_type == "warning":
             self.messages.append(f"⚠️  {message}")
             self.stats["warning"] += 1

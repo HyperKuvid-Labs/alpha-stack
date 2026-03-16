@@ -1,6 +1,7 @@
 import argparse
 import sys
 import os
+import contextlib
 
 
 def normalize_problem_statement_language(raw_value):
@@ -267,13 +268,28 @@ def interactive_mode():
         status_display.update(message, event_type)
 
     with status_display:
-        result = generate_project(
-            user_prompt,
-            output_dir,
-            on_status=tui_status_handler,
-            provider_name=provider_name,
-            problem_statement_language=problem_statement_language,
-        )
+        try:
+            with contextlib.redirect_stdout(status_display.stdout_stream()), contextlib.redirect_stderr(status_display.stderr_stream()):
+                result = generate_project(
+                    user_prompt,
+                    output_dir,
+                    on_status=tui_status_handler,
+                    provider_name=provider_name,
+                    problem_statement_language=problem_statement_language,
+                )
+        except Exception as exc:
+            status_display.add_exception("Unhandled exception during project generation", exc)
+            result = None
+
+    if not result or not isinstance(result, dict):
+        if status_display.last_error:
+            print_error(f"Project generation failed: {status_display.last_error}")
+        else:
+            print_error("Project generation failed before producing a result.")
+        if status_display.last_traceback:
+            console_preview = "\n".join(status_display.last_traceback.strip().splitlines()[-8:])
+            print_error(f"Recent traceback:\n{console_preview}")
+        return 1
 
     # After generation, show summary
     success = result.get("success", False)
