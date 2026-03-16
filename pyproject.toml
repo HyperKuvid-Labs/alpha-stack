@@ -47,10 +47,10 @@ dev = [
 alphastack = "src.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/alphastack/alphastack"
-Documentation = "https://github.com/alphastack/alphastack#readme"
-Repository = "https://github.com/alphastack/alphastack.git"
-Issues = "https://github.com/alphastack/alphastack/issues"
+Homepage = "https://github.com/HyperKuvid-Labs/alphastack"
+Documentation = "https://github.com/HyperKuvid-Labs/alphastack#readme"
+Repository = "https://github.com/HyperKuvid-Labs/alphastack.git"
+Issues = "https://github.com/HyperKuvid-Labs/alphastack/issues"
 
 [tool.setuptools]
 include-package-data = true

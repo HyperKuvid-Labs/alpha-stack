@@ -10,6 +10,15 @@ if ! command -v pip &> /dev/null; then
     exit 1
 fi
 
+# Bump project version before install
+echo " Bumping project version..."
+python3 scripts/bump_version.py --part patch
+
+if [ $? -ne 0 ]; then
+    echo " Version bump failed. Aborting install."
+    exit 1
+fi
+
 # Install the package in editable mode (or regular mode)
 echo " Installing dependencies and package..."
 pip install .

@@ -10,6 +10,14 @@ if %errorlevel% neq 0 (
 )
 
 REM Install the package
+echo Bumping project version...
+python scripts\bump_version.py --part patch
+if %errorlevel% neq 0 (
+    echo  Version bump failed. Aborting install.
+    pause
+    exit /b 1
+)
+
 echo Installing dependencies and package...
 pip install .
 
