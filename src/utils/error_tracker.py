@@ -66,7 +66,6 @@ class ErrorTracker:
                     "actions": actions,
                     "change_description": change_description
                 })
-                print(f"[DEBUG] Added error trace to {rel_path}, total: {len(node.error_traces)}")  # DEBUG
 
 
         if before_content:

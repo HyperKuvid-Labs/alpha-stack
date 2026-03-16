@@ -1,17 +1,47 @@
-from google.genai import types
 import re
 import json
 import os
 import time
-from typing import Optional, Dict, Any
+import logging
+from threading import Lock
+from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field
 
-from .utils.helpers import get_system_info, clean_agent_output, GENERATABLE_FILES, GENERATABLE_FILENAMES
+from .utils.helpers import get_system_info, clean_agent_output
 from .utils.inference import InferenceManager
 from .utils.prompt_manager import PromptManager
-from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
-from threading import Lock
-from queue import Queue, Empty
+from .utils.agent_memory import AgentMemory
+from .orchestrator import ParallelOrchestrator
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Generation log — records tool calls & LLM output per file during Phase 2
+# ---------------------------------------------------------------------------
+
+class GenerationLog:
+    """Thread-safe JSONL logger for generation phase tool calls and outputs."""
+
+    def __init__(self, output_base_dir: str):
+        self._path = os.path.join(output_base_dir, ".alpha_stack", "generation_log.jsonl")
+        os.makedirs(os.path.dirname(self._path), exist_ok=True)
+        self._lock = Lock()
+
+    def log(self, filepath: str, event: str, data: Dict):
+        entry = {
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "file": filepath,
+            "event": event,
+            **data,
+        }
+        with self._lock:
+            try:
+                with open(self._path, "a") as f:
+                    f.write(json.dumps(entry, default=str) + "\n")
+            except Exception:
+                pass
+
 
 class TreeNode:
     def __init__(self, value):
@@ -19,310 +49,683 @@ class TreeNode:
         self.children = []
         self.is_file = False
         self.error_traces = []
+
     def add_child(self, child_node):
         self.children.append(child_node)
-DEPENDENCY_FILES_TO_SKIP = {
-    'requirements.txt', 'requirements-dev.txt', 'requirements-test.txt',
-    'Pipfile', 'Pipfile.lock', 'pyproject.toml', 'poetry.lock', 'setup.py', 'setup.cfg',
-    'package.json', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lockb',
-    'go.mod', 'go.sum',
-    'Cargo.toml', 'Cargo.lock',
-    'pom.xml', 'build.gradle', 'build.gradle.kts', 'settings.gradle', 'gradle.properties',
-    'composer.json', 'composer.lock',
-    'Gemfile', 'Gemfile.lock',
-    'mix.exs', 'mix.lock',
-    'pubspec.yaml', 'pubspec.lock',
-    'CMakeLists.txt', 'conanfile.txt', 'vcpkg.json',
-    'rebar.config', 'rebar.lock',
-}
-
-def should_generate_content(filepath):
-    ext = os.path.splitext(filepath)[1].lower()
-    filename = os.path.basename(filepath)
-    skip_names = {"Dockerfile", "docker-compose.yml", "docker-compose.yaml", "ci.yml", "di.yml", "README.md", "README.txt", "README", "LICENSE"}
-    # Skip dependency files during initial generation
-    if filename in skip_names or filename in DEPENDENCY_FILES_TO_SKIP:
-        return False
-    return ext in GENERATABLE_FILES or filename in GENERATABLE_FILENAMES
 
 
 class FileGenerationResult(BaseModel):
     file_content: str = Field(description="The exact content to be written to the file")
-    metadata_description: str = Field(description="A 1-2 sentence description of what the file does")
 
 
-def generate_file(context, filepath, refined_prompt, tree, file_output_format, pm, provider_name: Optional[str] = None) -> Optional[FileGenerationResult]:
-    provider_name = provider_name or InferenceManager.get_default_provider()
-    provider = InferenceManager.create_provider(provider_name)
-    system_instruction = pm.render_file_generation(
-        filepath=filepath,
-        context=context,
-        refined_prompt=refined_prompt,
-        tree=tree,
-        file_output_format=file_output_format
-    )
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
 
-    result = None
+MAX_DEP_CONTENT_LINES = 200
+MAX_CHILD_TURNS = 8
+MAX_ORCHESTRATOR_TURNS = 8
+
+# Base tools — shared by both child and orchestrator agents
+BASE_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": (
+                "Read the content of a file that has already been generated. "
+                "Blocks until the file is ready. Use this to understand what "
+                "a dependency exports before writing import statements or call sites."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "filepath": {
+                        "type": "string",
+                        "description": "Relative path to the file, e.g. 'src/utils.py'"
+                    }
+                },
+                "required": ["filepath"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_external_packages",
+            "description": (
+                "Return all external (third-party) packages imported anywhere in the "
+                "project so far. Use this when generating manifest files like "
+                "requirements.txt, package.json, go.mod, Cargo.toml, etc."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_generated_files",
+            "description": "List all project files that have been generated and are available to read.",
+            "parameters": {"type": "object", "properties": {}, "required": []}
+        }
+    },
+]
+
+# Child-only tool — escalate to orchestrator agent
+_ASK_ORCHESTRATOR_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "ask_orchestrator",
+        "description": (
+            "Ask the project orchestrator for guidance. The orchestrator has the full "
+            "project blueprint and can tell you how files connect, what a dependency "
+            "exports, correct import paths, and anything about the architecture. "
+            "Use this when you are stuck or unsure."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": "Your question about the project"
+                }
+            },
+            "required": ["question"]
+        }
+    }
+}
+
+CHILD_TOOLS = BASE_TOOLS + [_ASK_ORCHESTRATOR_TOOL]
+
+# Orchestrator-only tools — can inspect + directly fix generated files
+_ORCHESTRATOR_ACTION_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "update_file_code",
+            "description": (
+                "Overwrite a generated file with corrected content. "
+                "Use this for direct fixes when you know exactly what the file should contain."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Relative path to the file (e.g. 'myproject/src/utils.py')"
+                    },
+                    "new_content": {
+                        "type": "string",
+                        "description": "Complete new file content"
+                    },
+                    "change_description": {
+                        "type": "string",
+                        "description": "Brief description of the change"
+                    }
+                },
+                "required": ["file_path", "new_content", "change_description"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "patch_file",
+            "description": (
+                "Apply a surgical patch to a generated file. "
+                "fix_type: full_rewrite | delete_lines | replace_lines | insert_after_line"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Relative path to the file"
+                    },
+                    "fix_type": {
+                        "type": "string",
+                        "description": "full_rewrite | delete_lines | replace_lines | insert_after_line"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Why this patch is needed"
+                    },
+                    "line_start": {
+                        "type": "integer",
+                        "description": "1-based start line"
+                    },
+                    "line_end": {
+                        "type": "integer",
+                        "description": "1-based end line (inclusive)"
+                    },
+                    "new_content": {
+                        "type": "string",
+                        "description": "Replacement or insertion content"
+                    }
+                },
+                "required": ["file_path", "fix_type", "description"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "regenerate_file",
+            "description": (
+                "Re-spawn a child agent to regenerate a file from scratch with your "
+                "correction instructions. Use when a file needs a complete rewrite."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Relative path to the file to regenerate"
+                    },
+                    "corrections": {
+                        "type": "string",
+                        "description": "Detailed correction instructions for the child agent"
+                    }
+                },
+                "required": ["file_path", "corrections"]
+            }
+        }
+    },
+]
+
+ORCHESTRATOR_TOOLS = BASE_TOOLS + _ORCHESTRATOR_ACTION_TOOLS
+
+
+# ---------------------------------------------------------------------------
+# Tool executor factory
+# ---------------------------------------------------------------------------
+
+def _make_base_tool_executor(tracker, dep_registry, output_base_dir, registered_files):
+    """Returns a callable(name, args) -> str that handles the 3 base tools."""
+
+    def execute(name: str, args: Dict) -> str:
+        if name == "read_file":
+            req_path = os.path.normpath(args.get("filepath", ""))
+            if registered_files is not None and req_path not in registered_files:
+                return (
+                    f"'{req_path}' is not a file in this project. "
+                    f"Available files: {sorted(registered_files)}"
+                )
+            available = tracker.wait_for_file(req_path)
+            if not available:
+                return f"'{req_path}' is not available (generation failed). Proceed without it."
+            full = os.path.join(output_base_dir, req_path)
+            if not os.path.exists(full):
+                return f"'{req_path}' does not exist on disk."
+            try:
+                with open(full, "r", encoding="utf-8", errors="ignore") as f:
+                    lines = f.readlines()
+                content = "".join(lines[:MAX_DEP_CONTENT_LINES])
+                if len(lines) > MAX_DEP_CONTENT_LINES:
+                    content += f"\n... ({len(lines) - MAX_DEP_CONTENT_LINES} more lines truncated)"
+                return content
+            except Exception as e:
+                return f"Error reading file: {e}"
+
+        elif name == "get_external_packages":
+            pkgs = dep_registry.all_external_packages()
+            return ", ".join(pkgs) if pkgs else "No external packages detected yet."
+
+        elif name == "list_generated_files":
+            files = tracker.list_done()
+            return "\n".join(sorted(files)) if files else "No files generated yet."
+
+        return f"Unknown tool: {name}"
+
+    return execute
+
+
+# ---------------------------------------------------------------------------
+# Generic agentic loop — used by both child and orchestrator agents
+# ---------------------------------------------------------------------------
+
+def _run_agentic_loop(
+    system_prompt: str,
+    user_message: str,
+    tools: List[Dict],
+    execute_tool,
+    max_turns: int = 8,
+    log_callback=None,
+) -> Optional[str]:
+    """
+    Run an agentic tool-calling loop. Returns the final text response or None.
+    Handles both Google Gemini and OpenAI/OpenRouter APIs.
+    log_callback(event, data) is called for tool calls and final output if provided.
+    """
+    provider = InferenceManager.get_active_provider()
+    provider_name = InferenceManager._active_provider_name or ""
 
     if provider_name == "google":
-        from google.genai import types
-        from .utils.inference import retry_api_call
-        client = provider.get_client()
+        return _run_google_loop(system_prompt, user_message, tools, execute_tool, provider, max_turns, log_callback)
+    else:
+        return _run_openai_loop(system_prompt, user_message, tools, execute_tool, provider, max_turns, log_callback)
+
+
+def _run_google_loop(system_prompt, user_message, tools, execute_tool, provider, max_turns, log_callback=None):
+    from google.genai import types
+    from .utils.inference import retry_api_call
+
+    client = provider.get_client()
+
+    google_tools = types.Tool(function_declarations=[
+        types.FunctionDeclaration(
+            name=t["function"]["name"],
+            description=t["function"]["description"],
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    k: types.Schema(type=types.Type.STRING, description=v.get("description", ""))
+                    for k, v in t["function"]["parameters"].get("properties", {}).items()
+                },
+                required=t["function"]["parameters"].get("required", []),
+            )
+        )
+        for t in tools
+    ])
+
+    contents = [{"role": "user", "parts": [{"text": user_message}]}]
+
+    for _ in range(max_turns):
         response = retry_api_call(
             client.models.generate_content,
             model=provider.model,
-            contents="Generate the file content and metadata description.",
+            contents=contents,
             config=types.GenerateContentConfig(
-                systemInstruction=system_instruction,
-                response_mime_type="application/json",
-                response_schema=FileGenerationResult,
+                system_instruction=system_prompt,
+                tools=[google_tools],
             )
         )
-        if response and response.text:
-            try:
-                data = json.loads(response.text)
-                result = FileGenerationResult(**data)
-            except (json.JSONDecodeError, ValueError):
-                pass
-            
-    else:
-        # OpenRouter/OpenAI via structured outputs
-        messages = [
-            {"role": "system", "content": system_instruction},
-            {"role": "user", "content": "Generate the file content and metadata description."}
-        ]
-        
-        try:
-            client = provider.get_client()
-            completion = client.beta.chat.completions.parse(
-                model=provider.model,
-                messages=messages,
-                response_format=FileGenerationResult,
-            )
-            result = completion.choices[0].message.parsed
-        except Exception as e:
-            try:
-                # Need standard chat completion to get the raw string
-                completion = client.chat.completions.create(
-                    model=provider.model,
-                    messages=messages,
-                )
-                raw_content = completion.choices[0].message.content
-                json_str = None
-                
-                # Strip markdown blocks
-                import re
-                match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_content, re.DOTALL)
-                if match:
-                    json_str = match.group(1)
-                else:
-                    # Generic scraping
-                    start_idx = raw_content.find('{')
-                    if start_idx != -1:
-                        depth = 0
-                        for i in range(start_idx, len(raw_content)):
-                            if raw_content[i] == '{':
-                                depth += 1
-                            elif raw_content[i] == '}':
-                                depth -= 1
-                                if depth == 0:
-                                    json_str = raw_content[start_idx:i+1]
-                                    break
-                if json_str:
-                    data = json.loads(json_str)
-                    result = FileGenerationResult(**data)
-            except Exception as fallback_err:
-                print(f"Error calling structured output API for file generation: {e}. Fallback failed: {fallback_err}")
-                
-    if result:
-        result.file_content = clean_agent_output(result.file_content)
-        
-    return result
+        if not response or not response.candidates:
+            break
 
+        parts = response.candidates[0].content.parts
+        fn_calls = [p for p in parts if hasattr(p, "function_call") and p.function_call]
 
-def dfs_tree_and_gen(root, refined_prompt, tree_structure, project_name, current_path="",
-                     parent_context="", json_file_name="", metadata_dict=None,
-                     dependency_analyzer=None, file_output_format="", max_workers=20,
-                     output_base_dir="", pm=None, on_status=None, provider_name: Optional[str] = None):
-    if metadata_dict is None:
-        metadata_dict = {}
-
-    if pm is None:
-        # If running as installed package, prompts might not be in CWD
-        # We rely on PromptManager's internal logic to find them now
-        pm = PromptManager()
-
-    lock = Lock()
-    work_queue = Queue()
-    root_value = root.value if root else project_name
-
-    if output_base_dir:
-        root_full_path = os.path.join(output_base_dir, root_value)
-    else:
-        root_full_path = root_value
-
-    if not os.path.exists(root_full_path):
-        os.makedirs(root_full_path, exist_ok=True)
-
-    for child in root.children:
-        work_queue.put({
-            'node': child,
-            'current_path': root_value,
-            'parent_context': parent_context,
-            'is_top_level': False,
-            'output_base_dir': output_base_dir,
-            'root_value': root_value
-        })
-
-    def process_work_item(work_item):
-        node = work_item['node']
-        current_path = work_item['current_path']
-        parent_context = work_item['parent_context']
-        work_output_base_dir = work_item.get('output_base_dir', output_base_dir)
-        root_val = work_item.get('root_value', root.value if root else "root")
-
-        clean_name = node.value.split('#')[0].strip()
-        clean_name = clean_name.replace('(', '').replace(')', '')
-        clean_name = clean_name.replace('uploads will go here, e.g., ', '')
-
-        relative_path = os.path.join(current_path, clean_name) if current_path else clean_name
-
-        if work_output_base_dir:
-            full_path = os.path.join(work_output_base_dir, relative_path)
+        if fn_calls:
+            contents.append({"role": "model", "parts": [{"function_call": p.function_call} for p in fn_calls]})
+            tool_results = []
+            for p in fn_calls:
+                fc = p.function_call
+                tool_out = execute_tool(fc.name, dict(fc.args))
+                if log_callback:
+                    log_callback("tool_call", {"tool": fc.name, "args": dict(fc.args), "result_preview": str(tool_out)[:300]})
+                tool_results.append({"function_response": {"name": fc.name, "response": {"result": tool_out}}})
+            contents.append({"role": "user", "parts": tool_results})
         else:
-            full_path = relative_path
-
-        context = os.path.join(parent_context, clean_name) if parent_context else clean_name
-
-        if node.is_file:
-            return process_file(
-                node, full_path, context, refined_prompt, tree_structure,
-                json_file_name, file_output_format, metadata_dict,
-                dependency_analyzer, lock, pm, on_status, provider_name
-            )
-        else:
-            return process_directory(node, full_path, context, work_queue, work_output_base_dir, lock, root_val, on_status)
-
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        active_futures = set()
-
-        while True:
-            while len(active_futures) < max_workers:
-                try:
-                    work_item = work_queue.get_nowait()
-                    future = executor.submit(process_work_item, work_item)
-                    active_futures.add(future)
-                except Empty:
-                    break
-
-            if not active_futures:
-                try:
-                    work_item = work_queue.get_nowait()
-                    future = executor.submit(process_work_item, work_item)
-                    active_futures.add(future)
-                    continue
-                except Empty:
-                    break
-
-            if active_futures:
-                done, not_done = wait(active_futures, timeout=1, return_when=FIRST_COMPLETED)
-                for future in done:
-                    try:
-                        result = future.result()
-                        if result and 'children' in result:
-                            for child_work in result['children']:
-                                work_queue.put(child_work)
-                    except Exception:
-                        pass
-                active_futures = set(not_done)
-
-
-def process_file(node, full_path, context, refined_prompt, tree_structure,
-                json_file_name, file_output_format, metadata_dict,
-                dependency_analyzer, lock, pm, on_status=None, provider_name: Optional[str] = None):
-    try:
-        parent_dir = os.path.dirname(full_path)
-        if parent_dir:
-            with lock:
-                if not os.path.exists(parent_dir):
-                    os.makedirs(parent_dir, exist_ok=True)
-
-        if should_generate_content(full_path):
-            result = generate_file(
-                context=context,
-                filepath=full_path,
-                refined_prompt=refined_prompt,
-                tree=tree_structure,
-                file_output_format=file_output_format,
-                pm=pm,
-                provider_name=provider_name
-            )
-
-            if not result:
-                return None
-
-            content = result.file_content
-            metadata = result.metadata_description
-
-            with lock:
-                with open(full_path, 'w') as f:
-                    f.write(content)
-
-                if full_path not in metadata_dict:
-                    metadata_dict[full_path] = []
-                metadata_dict[full_path].append({
-                    "description": metadata
-                })
-
-    except Exception:
-        pass
+            text = response.text or None
+            if log_callback and text:
+                log_callback("output", {"length": len(text), "preview": text[:200]})
+            return text
 
     return None
 
 
-def process_directory(node, full_path, context, work_queue, output_base_dir="", lock=None, root_value="", on_status=None):
-    try:
-        if lock:
-            with lock:
-                if not os.path.exists(full_path):
-                    os.makedirs(full_path, exist_ok=True)
+def _run_openai_loop(system_prompt, user_message, tools, execute_tool, provider, max_turns, log_callback=None):
+    client = provider.get_client()
+    messages: List[Dict] = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_message},
+    ]
+
+    for _ in range(max_turns):
+        try:
+            completion = client.chat.completions.create(
+                model=provider.model,
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+            )
+        except Exception as e:
+            print(f"[agentic_loop] API error: {e}")
+            break
+
+        msg = completion.choices[0].message
+
+        if msg.tool_calls:
+            messages.append(msg)
+            for tc in msg.tool_calls:
+                try:
+                    args = json.loads(tc.function.arguments)
+                except Exception:
+                    args = {}
+                tool_out = execute_tool(tc.function.name, args)
+                if log_callback:
+                    log_callback("tool_call", {"tool": tc.function.name, "args": args, "result_preview": str(tool_out)[:300]})
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": tool_out,
+                })
         else:
-            os.makedirs(full_path, exist_ok=True)
+            text = msg.content or None
+            if log_callback and text:
+                log_callback("output", {"length": len(text), "preview": text[:200]})
+            return text
 
-        if output_base_dir:
-            rel_path = os.path.relpath(full_path, output_base_dir)
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator tool executor (base + action tools)
+# ---------------------------------------------------------------------------
+
+def _make_orchestrator_tool_executor(tracker, dep_registry, output_base_dir, registered_files, orchestrator_ref, pm, memory=None):
+    """
+    Returns a callable(name, args) -> str for the orchestrator agent.
+    Handles base tools + action tools (update_file_code, patch_file, regenerate_file).
+    Optionally records actions to an AgentMemory instance.
+    """
+    from .utils.tools import ToolHandler
+
+    base_execute = _make_base_tool_executor(tracker, dep_registry, output_base_dir, registered_files)
+
+    # ToolHandler for file write operations — uses output_base_dir as root
+    # so filepaths like 'myproject/src/main.py' resolve correctly
+    tool_handler = ToolHandler(project_root=output_base_dir)
+
+    def execute(name: str, args: Dict) -> str:
+        # Base tools
+        if name in ("read_file", "get_external_packages", "list_generated_files"):
+            return base_execute(name, args)
+
+        # Regenerate — re-spawn child agent with corrections
+        if name == "regenerate_file":
+            filepath = os.path.normpath(args.get("file_path", ""))
+            corrections = args.get("corrections", "")
+
+            if filepath not in orchestrator_ref._tasks:
+                return json.dumps({"success": False, "error": f"'{filepath}' is not a registered file"})
+
+            prompt_rules = orchestrator_ref._tasks[filepath]["prompt_rules"]
+            if corrections:
+                prompt_rules += "\n\nCorrections from orchestrator:\n" + corrections
+
+            result = generate_file(
+                filepath=filepath,
+                prompt_rules=prompt_rules,
+                pm=pm,
+                tracker=tracker,
+                dep_registry=dep_registry,
+                output_base_dir=output_base_dir,
+                registered_files=registered_files,
+                blueprint_context=orchestrator_ref.blueprint_context,
+            )
+
+            if result and result.file_content:
+                full_path = os.path.join(output_base_dir, filepath)
+                os.makedirs(os.path.dirname(full_path) or output_base_dir, exist_ok=True)
+                with open(full_path, "w") as f:
+                    f.write(result.file_content)
+                orchestrator_ref._register_deps(filepath, full_path, content=result.file_content)
+                tracker.mark_done(filepath)
+                if memory:
+                    memory.record_regenerate(filepath, corrections[:80])
+                return json.dumps({"success": True, "message": f"Regenerated {filepath}"})
+
+            return json.dumps({"success": False, "error": f"Failed to regenerate {filepath}"})
+
+        # update_file_code, patch_file — delegate to ToolHandler
+        if name in ("update_file_code", "patch_file"):
+            result = tool_handler.handle_function_call(name, args)
+            # After modifying a file, update the dep registry
+            filepath = os.path.normpath(args.get("file_path", ""))
+            if isinstance(result, dict) and result.get("success"):
+                full_path = os.path.join(output_base_dir, filepath)
+                if os.path.exists(full_path):
+                    orchestrator_ref._register_deps(filepath, full_path)
+                if memory:
+                    desc = args.get("change_description", args.get("description", ""))
+                    memory.record_edit(0, filepath, desc)
+            return json.dumps(result) if isinstance(result, dict) else str(result)
+
+        return f"Unknown tool: {name}"
+
+    return execute
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator agent call
+# ---------------------------------------------------------------------------
+
+def call_orchestrator_agent(
+    question: str,
+    filepath: str,
+    blueprint_context: Dict[str, Any],
+    tracker,
+    dep_registry,
+    output_base_dir: str,
+    registered_files: set,
+    pm: PromptManager,
+    orchestrator_ref=None,
+    memory=None,
+) -> str:
+    """
+    Call the orchestrator agent with the full blueprint. Used for:
+      1. Child agent's ask_orchestrator tool
+      2. Worker retry on total failure
+    Returns the orchestrator's text guidance.
+    """
+    if orchestrator_ref is not None:
+        execute_tool = _make_orchestrator_tool_executor(
+            tracker, dep_registry, output_base_dir, registered_files,
+            orchestrator_ref, pm, memory=memory,
+        )
+        tools = ORCHESTRATOR_TOOLS
+    else:
+        execute_tool = _make_base_tool_executor(tracker, dep_registry, output_base_dir, registered_files)
+        tools = BASE_TOOLS
+
+    system_prompt = pm.render(
+        "orchestrator_agent.j2",
+        filepath=filepath,
+        blueprint_context=blueprint_context,
+        orchestrator_memory=memory.render() if memory else "",
+    )
+
+    result = _run_agentic_loop(
+        system_prompt=system_prompt,
+        user_message=question,
+        tools=tools,
+        execute_tool=execute_tool,
+        max_turns=MAX_ORCHESTRATOR_TURNS,
+    )
+
+    response = result or "Orchestrator could not provide guidance."
+    if memory:
+        memory.record_guidance(filepath, question[:80])
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Batch orchestrator — processes queued queries from multiple children
+# ---------------------------------------------------------------------------
+
+def process_orchestrator_batch(
+    queries: List[Dict],
+    blueprint_context: Dict[str, Any],
+    tracker,
+    dep_registry,
+    output_base_dir: str,
+    registered_files: set,
+    orchestrator_ref,
+    pm: PromptManager,
+    history: List[Dict],
+    memory=None,
+) -> Dict[str, str]:
+    """
+    Process a batch of orchestrator queries. Returns {query_id: response_text}.
+    Single queries go through call_orchestrator_agent directly.
+    Multiple queries are batched into one LLM call for coordinated responses.
+    """
+    import re as _re
+
+    # Single query — direct processing (no batch overhead)
+    if len(queries) == 1:
+        q = queries[0]
+        result = call_orchestrator_agent(
+            question=q["question"],
+            filepath=q["filepath"],
+            blueprint_context=blueprint_context,
+            tracker=tracker,
+            dep_registry=dep_registry,
+            output_base_dir=output_base_dir,
+            registered_files=registered_files,
+            pm=pm,
+            orchestrator_ref=orchestrator_ref,
+            memory=memory,
+        )
+        return {q["id"]: result}
+
+    # Multiple queries — batch processing
+    execute_tool = _make_orchestrator_tool_executor(
+        tracker, dep_registry, output_base_dir, registered_files,
+        orchestrator_ref, pm, memory=memory,
+    )
+
+    system_prompt = pm.render(
+        "orchestrator_agent.j2",
+        filepath="multiple agents",
+        blueprint_context=blueprint_context,
+        orchestrator_memory=memory.render() if memory else "",
+    )
+
+    # Build user message with history + all queries
+    parts = []
+    if history:
+        parts.append("### Recent Query History (for context)")
+        for h in history[-5:]:
+            parts.append(f"- Agent for `{h['filepath']}` asked: {h['question']}")
+            parts.append(f"  You responded: {h['response'][:200]}...")
+        parts.append("")
+
+    parts.append(f"### {len(queries)} Queries from Child Agents\n")
+    for i, q in enumerate(queries, 1):
+        parts.append(f"**[QUERY {i}]** From agent generating `{q['filepath']}`:")
+        parts.append(q["question"])
+        parts.append("")
+
+    parts.append("### Instructions")
+    parts.append("Analyze all queries together. Use tools to investigate and fix issues if needed.")
+    parts.append("Then respond with guidance for EACH query using this exact format:\n")
+    for i, q in enumerate(queries, 1):
+        parts.append(f"[RESPONSE {i}]")
+        parts.append(f"(your guidance for the agent generating `{q['filepath']}`)\n")
+
+    user_message = "\n".join(parts)
+
+    result = _run_agentic_loop(
+        system_prompt=system_prompt,
+        user_message=user_message,
+        tools=ORCHESTRATOR_TOOLS,
+        execute_tool=execute_tool,
+        max_turns=MAX_ORCHESTRATOR_TURNS,
+    )
+
+    if not result:
+        return {q["id"]: "Orchestrator could not provide guidance." for q in queries}
+
+    # Parse individual responses from the batch output
+    responses = {}
+    for i, q in enumerate(queries, 1):
+        pattern = rf"\[RESPONSE {i}\](.*?)(?=\[RESPONSE \d+\]|$)"
+        match = _re.search(pattern, result, _re.DOTALL)
+        if match:
+            responses[q["id"]] = match.group(1).strip()
         else:
-            rel_path = full_path
+            # Fallback: give full response to all
+            responses[q["id"]] = result.strip()
 
-        children_work = []
-        for child in node.children:
-            child_work = {
-                'node': child,
-                'current_path': rel_path,
-                'parent_context': context,
-                'is_top_level': False,
-                'output_base_dir': output_base_dir,
-                'root_value': root_value
-            }
-            children_work.append(child_work)
+        if memory:
+            memory.record_guidance(q["filepath"], q["question"][:80])
 
-        return {'children': children_work}
+    return responses
 
-    except OSError:
-        return None
 
+# ---------------------------------------------------------------------------
+# Child agent: generate a single file
+# ---------------------------------------------------------------------------
+
+def generate_file(
+    filepath: str,
+    prompt_rules: str,
+    pm: PromptManager,
+    tracker,
+    dep_registry,
+    output_base_dir: str,
+    registered_files: Optional[set] = None,
+    blueprint_context: Optional[Dict[str, Any]] = None,
+    orchestrator_mailbox=None,
+    gen_log: Optional[GenerationLog] = None,
+) -> Optional[FileGenerationResult]:
+    # Base tool executor (read_file, get_external_packages, list_generated_files)
+    execute_base = _make_base_tool_executor(tracker, dep_registry, output_base_dir, registered_files)
+
+    # Log callback for this file
+    def log_cb(event, data):
+        if gen_log:
+            gen_log.log(filepath, event, data)
+
+    # Child tool executor — adds ask_orchestrator on top of base
+    def execute_tool(name: str, args: Dict) -> str:
+        if name == "ask_orchestrator":
+            question = args.get("question", "")
+
+            # Route through mailbox if available (batched with other children's queries)
+            if orchestrator_mailbox is not None:
+                return orchestrator_mailbox.ask(question, filepath)
+
+            # Fallback: direct call (used by regenerated children from orchestrator)
+            if blueprint_context is None:
+                return "Orchestrator not available — no blueprint context."
+            return call_orchestrator_agent(
+                question=question,
+                filepath=filepath,
+                blueprint_context=blueprint_context,
+                tracker=tracker,
+                dep_registry=dep_registry,
+                output_base_dir=output_base_dir,
+                registered_files=registered_files or set(),
+                pm=pm,
+            )
+        return execute_base(name, args)
+
+    system_prompt = pm.render("file_generation.j2", filepath=filepath, prompt_rules=prompt_rules)
+
+    text = _run_agentic_loop(
+        system_prompt=system_prompt,
+        user_message="Generate the file now.",
+        tools=CHILD_TOOLS,
+        execute_tool=execute_tool,
+        max_turns=MAX_CHILD_TURNS,
+        log_callback=log_cb,
+    )
+
+    if text:
+        return FileGenerationResult(file_content=clean_agent_output(text))
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Blueprint generation (Phase 1 — unchanged)
+# ---------------------------------------------------------------------------
 
 class ProjectBlueprint(BaseModel):
     software_blueprint_details: Dict[str, Any] = Field(description="Dictionary containing core project intelligence, overview, and features")
     folder_structure: str = Field(description="Raw ASCII string representing the exact directory and file structure tree")
     file_formats: Dict[str, Any] = Field(description="Dictionary mapping precise filepaths from the folder structure to instructions on how each file must be generated")
 
+
 def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = None) -> Optional[ProjectBlueprint]:
-    provider_name = provider_name or InferenceManager.get_default_provider()
-    provider = InferenceManager.create_provider(provider_name)
+    provider = InferenceManager.get_active_provider()
+    provider_name = InferenceManager._active_provider_name or ""
     system_info = get_system_info()
     system_instruction = pm.render_project_blueprint(user_prompt=prompt, system_info=system_info)
-    
+
     if provider_name == "google":
         from google.genai import types
         from .utils.inference import retry_api_call
@@ -339,20 +742,17 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
         )
         if not response or not response.text:
             return None
-            
         try:
             data = json.loads(response.text)
             return ProjectBlueprint(**data)
         except (json.JSONDecodeError, ValueError):
             return None
-            
+
     else:
-        # OpenRouter/OpenAI via structured outputs
         messages = [
             {"role": "system", "content": system_instruction},
             {"role": "user", "content": prompt}
         ]
-        
         try:
             client = provider.get_client()
             completion = client.beta.chat.completions.parse(
@@ -362,17 +762,13 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
             )
             return completion.choices[0].message.parsed
         except Exception as e:
-            # Fallback for providers that don't fully support structured outputs
-            # and may return stringified JSON with markdown ticks instead
             try:
-                # Need standard chat completion to get the raw string
                 completion = client.chat.completions.create(
                     model=provider.model,
                     messages=messages,
                 )
                 raw_content = completion.choices[0].message.content
                 json_str = None
-                import re
                 match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_content, re.DOTALL)
                 if match:
                     json_str = match.group(1)
@@ -393,9 +789,12 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
                     return ProjectBlueprint(**data)
             except Exception as fallback_err:
                 print(f"Error calling structured output API: {e}. Fallback failed: {fallback_err}")
-                
             return None
 
+
+# ---------------------------------------------------------------------------
+# Tree parser (unchanged)
+# ---------------------------------------------------------------------------
 
 def generate_tree(resp, project_name="root"):
     content = resp.strip().replace('```', '').strip()
@@ -409,7 +808,6 @@ def generate_tree(resp, project_name="root"):
     for i, line in enumerate(lines):
         if not line.strip():
             continue
-
         match = tree_line_pattern.match(line.strip())
         if match:
             raw_name = match.group(1)
@@ -419,8 +817,6 @@ def generate_tree(resp, project_name="root"):
             if '#' in root_name:
                 root_name = root_name.split('#')[0].strip()
             root_name = re.sub(r'^[│├└─|`+\-\s]+', '', root_name).strip().rstrip('/')
-
-        # Replace spaces with underscores in folder names
         if root_name:
             root_name = root_name.replace(' ', '_')
             root = TreeNode(root_name)
@@ -463,8 +859,6 @@ def generate_tree(resp, project_name="root"):
             name = re.sub(r'^[│├└─|`+\-\s]+', '', raw_name).strip()
 
         name = name.rstrip('/')
-
-        # Replace spaces with underscores in folder/file names
         name = name.replace(' ', '_')
 
         if not name:
@@ -496,10 +890,13 @@ def generate_tree(resp, project_name="root"):
     return root
 
 
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
+
 def generate_project(user_prompt, output_base_dir, on_status=None, provider_name: Optional[str] = None):
     from .utils.dependencies import DependencyAnalyzer
-    from .docker.testing import run_docker_testing
-    from .docker.generator import DockerTestFileGenerator
+    from .testing.testing import run_testing_pipeline
     from .utils.error_tracker import ErrorTracker
 
     def emit(event_type, message, **kwargs):
@@ -509,10 +906,11 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
     pm = PromptManager()
 
     provider_name = provider_name or InferenceManager.get_default_provider()
+    InferenceManager.initialize(provider_name)
 
     emit("step", "Analyzing structure and creating unified project blueprint...")
     blueprint = generate_project_blueprint(user_prompt, pm, provider_name)
-    
+
     if not blueprint:
         emit("error", "Failed to generate project blueprint.")
         return None
@@ -526,53 +924,26 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
     folder_tree = generate_tree(folder_struc, project_name="")
     dependency_analyzer = DependencyAnalyzer()
     os.makedirs(output_base_dir, exist_ok=True)
-    json_file_name = os.path.join(output_base_dir, "projects_metadata.json")
-    metadata_dict = {}
-    start_time = time.time()
 
-    dfs_tree_and_gen(
-        root=folder_tree,
-        refined_prompt=software_blueprint,
-        tree_structure=folder_struc,
-        project_name="",
-        current_path="",
-        parent_context="",
-        json_file_name=json_file_name,
-        metadata_dict=metadata_dict,
-        dependency_analyzer=dependency_analyzer,
-        file_output_format=file_format,
-        output_base_dir=output_base_dir,
-        pm=pm,
-        on_status=on_status,
-        provider_name=provider_name
+    # Build orchestrator with full blueprint context
+    orchestrator = ParallelOrchestrator(output_base_dir=output_base_dir, max_workers=20)
+    orchestrator.set_blueprint(
+        software_blueprint=software_blueprint,
+        folder_structure=folder_struc,
+        file_formats=file_format,
     )
+
+    for filepath, details in file_format.items():
+        prompt_rules = details.get("purpose", "")
+        orchestrator.add_node(filepath, prompt_rules)
+
+    start_time = time.time()
+    orchestrator.execute()
 
     project_root_path = os.path.join(output_base_dir, folder_tree.value)
 
     if not os.path.exists(project_root_path):
         return None
-
-    with open(json_file_name, 'w') as f:
-        json.dump(metadata_dict, f, indent=4)
-
-    emit("step", "Generating Dockerfile and test files...")
-
-    try:
-        test_gen = DockerTestFileGenerator(
-            project_root=project_root_path,
-            software_blueprint=software_blueprint,
-            folder_structure=folder_struc,
-            file_output_format=file_output_format,
-            metadata_dict=metadata_dict,
-            dependency_analyzer=dependency_analyzer,
-            pm=pm,
-            on_status=on_status,
-            provider=InferenceManager.create_provider(provider_name)
-        )
-
-        test_gen_results = test_gen.generate_all()
-    except Exception:
-        pass
 
     emit("step", "Starting dependency analysis for entire project...")
     dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
@@ -581,43 +952,11 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
     dep_graph = build_dependency_graph_tree(project_root_path, dependency_analyzer)
     print("\n[dependency_graph]\n" + dep_graph + "\n")
 
-    emit("step", "Extracting external dependencies and generating dependency files...")
-    try:
-        from .utils.dependency_file_generator import (
-            extract_all_external_dependencies,
-            DependencyFileGenerator
-        )
-
-        # Extract all external dependencies from all files in the project
-        external_dependencies = extract_all_external_dependencies(dependency_analyzer, project_root_path)
-
-        # Generate dependency files using the coding agent
-        dep_file_gen = DependencyFileGenerator(
-            project_root=project_root_path,
-            software_blueprint=software_blueprint,
-            folder_structure=folder_struc,
-            file_output_format=file_output_format,
-            external_dependencies=external_dependencies,
-            pm=pm,
-            provider_name=provider_name,
-            on_status=on_status
-        )
-
-        dep_file_results = dep_file_gen.generate_all()
-
-        # Re-analyze project files to include the newly generated dependency files
-        dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
-    except Exception as e:
-        print(f"Error generating dependency files: {e}")
-
-    # Dependency resolution disabled for ablation study
-    emit("step", "Skipping dependency resolution (disabled)...")
     error_tracker = ErrorTracker(project_root_path, folder_tree)
-    dep_results = {"success": True, "iterations": 0, "remaining_errors": [], "skipped": True}
 
-    emit("step", "Running Docker testing pipeline...")
+    emit("step", "Running testing pipeline...")
 
-    docker_results = run_docker_testing(
+    testing_results = run_testing_pipeline(
         project_root=project_root_path,
         software_blueprint=software_blueprint,
         folder_structure=folder_struc,
@@ -629,30 +968,14 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
         provider_name=provider_name,
     )
 
-    for file_path, entries in metadata_dict.items():
-        deps = dependency_analyzer.get_dependency_details(file_path)
-        for entry in entries:
-            entry["couples_with"] = deps
-
-    with open(json_file_name, 'w') as f:
-        json.dump(metadata_dict, f, indent=4)
-
     end_time = time.time()
     elapsed = end_time - start_time
 
-    overall_success = dep_results.get("success", False) and docker_results.get("success", False)
-
-    if os.path.exists(json_file_name):
-        try:
-            os.remove(json_file_name)
-        except Exception:
-            pass
+    overall_success = testing_results.get("success", False)
 
     return {
         "project_path": project_root_path,
         "success": overall_success,
-        "dependency_resolution": dep_results,
-        "docker_testing": docker_results,
+        "testing": testing_results,
         "elapsed_time": elapsed
     }
-

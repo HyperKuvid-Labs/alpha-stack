@@ -172,17 +172,17 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
         },
         {
             "name": "run_shell_command",
-            "description": "Run a read-only shell command for context. No project execution.",
+            "description": "Run any shell command: install dependencies, run tests, build projects, or inspect files. This is the primary way to run tests. If a command stalls (no output for 60s), the process stays alive in the background and you get diagnostic info. You can then manage it with special commands: 'check_job <job_id>' (see latest output), 'kill_job <job_id>' (kill it), or 'list_jobs' (see all running/finished jobs).",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "command": {
                         "type": "string",
-                        "description": "Command to run (read-only).",
+                        "description": "Shell command to run, OR a job management command: 'check_job <job_id>' (new output since last check), 'kill_job <job_id>' (kill + get full output), 'wait_job <job_id>' (block until done), 'list_jobs'. Examples: 'pytest -v', 'check_job job_1', 'kill_job job_2'.",
                     },
                     "timeout_sec": {
                         "type": "integer",
-                        "description": "Timeout in seconds (default 5)",
+                        "description": "Stall timeout — if no output for this many seconds, the process is kept alive in background and control returns to you (default 60).",
                     },
                 },
                 "required": ["command"],
@@ -251,34 +251,6 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
             },
         },
         {
-            "name": "docker_build",
-            "description": "Build the Docker image. You provide the full docker build command. If omitted, defaults to 'docker build --progress=plain -t <image_name> .'",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "command": {
-                        "type": "string",
-                        "description": "Full docker build command (e.g., 'docker build --progress=plain -t myapp .'). Leave empty to use the default.",
-                    }
-                },
-                "required": [],
-            },
-        },
-        {
-            "name": "docker_run",
-            "description": "Run a command in a Docker container. You provide the FULL 'docker run ...' command including all flags, volume mounts, image name, and the command to execute. Only commands containing test runners (pytest, npm test, etc.) update the pipeline's test_success state.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "command": {
-                        "type": "string",
-                        "description": "Full docker run command (e.g., 'docker run --rm -v /app:/app myimage pytest -v').",
-                    }
-                },
-                "required": ["command"],
-            },
-        },
-        {
             "name": "batch_edit_files",
             "description": (
                 "Delegate multiple file-editing tasks to parallel corrector mini-agents. "
@@ -289,7 +261,7 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "Each task must contain a detailed 'instructions' field describing EXACTLY "
                 "what to change, including the full context of the error or requirement. "
                 "The corrector agents only have access to file read/write/patch tools — "
-                "they cannot run shell commands or Docker."
+                "they cannot run shell commands."
             ),
             "parameters": {
                 "type": "object",
@@ -359,10 +331,24 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "required": ["reason"],
             },
         },
+        {
+            "name": "mark_complete",
+            "description": "Call this tool ONLY after running your test command and confirming all tests pass. The pipeline will NOT stop until you call this. It verifies your recent shell output contains passing test results before accepting.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "description": "Summary of what was done: what was fixed, how many tests pass, etc.",
+                    }
+                },
+                "required": ["reason"],
+            },
+        },
     ]
 
 
-# Tools the planner is allowed to use (read + write + docker + batch edit)
+# Tools the planner is allowed to use
 PLANNER_TOOL_NAMES = {
     "get_file_code",
     "update_file_code",
@@ -372,14 +358,13 @@ PLANNER_TOOL_NAMES = {
     "get_action_history",
     "get_file_dependencies",
     "get_file_dependents",
-    "docker_build",
-    "docker_run",
     "batch_edit_files",
     "batch_read_files",
     "give_up",
+    "mark_complete",
 }
 
-# Tools the executor is allowed to use (file read/write only — no docker, no recursion)
+# Tools the executor is allowed to use (file read/write only — no recursion)
 EXECUTOR_TOOL_NAMES = {
     "get_file_code",
     "update_file_code",

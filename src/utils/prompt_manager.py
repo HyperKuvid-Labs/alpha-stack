@@ -59,22 +59,5 @@ class PromptManager:
     def render_project_blueprint(self, user_prompt: Optional[str] = None, system_info: Optional[Dict[str, Any]] = None) -> str:
         return self.render('project_blueprint.j2', user_prompt=user_prompt, system_info=system_info)
     
-    def render_file_generation(
-        self,
-        filepath: str,
-        context: str,
-        refined_prompt: str,
-        tree: str,
-        file_output_format: str
-    ) -> str:
-        return self.render(
-            'file_generation.j2',
-            filepath=filepath,
-            context=context,
-            refined_prompt=refined_prompt,
-            tree=tree,
-            file_output_format=file_output_format
-        )
-    
     def list_templates(self) -> list:
         return self.env.list_templates()

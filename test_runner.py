@@ -13,42 +13,25 @@ sys.path.insert(0, os.path.join(project_root, "src"))
 from src.utils.prompt_manager import PromptManager
 from src.utils.inference import InferenceManager
 from src.config import get_api_key, set_api_key
-from src.generator import generate_project_blueprint, generate_tree, dfs_tree_and_gen
-from src.utils.dependencies import DependencyAnalyzer, DependencyFeedbackLoop
-from src.docker.generator import DockerTestFileGenerator
-from src.utils.dependency_file_generator import (
-    extract_all_external_dependencies,
-    DependencyFileGenerator,
-)
+from src.generator import generate_project_blueprint, generate_tree
+from src.orchestrator import ParallelOrchestrator
+from src.utils.dependencies import DependencyAnalyzer, build_dependency_graph_tree
 from src.utils.error_tracker import ErrorTracker
-from src.docker.testing import run_docker_testing
+from src.testing.testing import run_testing_pipeline
 
 # 
 # Set your test prompt here
-TEST_PROMPT = """Implement a tiny RPC framework over TCP with the following features:
+TEST_PROMPT = """
+Create a Python library called 'cachebox' — a decorator-based function cache with TTL support.
 
-Custom binary framing: [length(uint32)][payload bytes].
-
-Requests: {id, method, payload} as JSON.
-
-Responses: {id, result, error} as JSON.
-Server:
-
-Register handlers by method name (e.g., "Add", "Echo").
-
-Each connection handled by a goroutine; use another goroutine for decoding frames and dispatching.
-Client:
-
-Supports concurrent calls; use a map of id -> response channel guarded by a mutex.
-
-Support context.Context for per-call timeout/cancel.
-Show example methods and unit tests for:
-
-Partial frame reception.
-
-Timeouts.
-
-Concurrent in-flight requests."""
+Requirements:
+1. A `@cachebox.cache(ttl=seconds, maxsize=int)` decorator that memoizes function results.
+2. Support LRU eviction when maxsize is reached, and automatic expiry after TTL.
+3. A `cachebox.stats()` function returning hits, misses, and evictions per cached function.
+4. A `cachebox.clear(func)` to manually invalidate a specific function's cache.
+5. Thread-safe — must work correctly under concurrent access.
+6. Tech stack: pure Python (no external deps), pytest for tests, pyproject.toml for packaging.
+"""
 
 # Output directory for generated projec"
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_output")
@@ -137,9 +120,12 @@ def run_test(provider_name_arg=None):
     pm = PromptManager()
 
     start_time = time.time()
+    
+    # ==========================================
+    # PHASE 1: COMPUTING PROJECT BLUEPRINT
+    # ==========================================
     print_header("PHASE 1: COMPUTING PROJECT BLUEPRINT")
     print("Generating comprehensive intelligence, structure, and file contracts...")
-
 
     phase1_start = time.time()
     blueprint = generate_project_blueprint(TEST_PROMPT, pm, provider_name)
@@ -162,42 +148,33 @@ def run_test(provider_name_arg=None):
 
     print(f"\n⏱️  Phase 1 computed in {phase1_time:.2f}s")
 
-    # (Skipping phase 2 and 3 metrics)
-    phase2_time = 0.0
-    phase3_time = 0.0
-    print_header("PHASE 4: GENERATE PROJECT TREE & FILES")
+
+    # ==========================================
+    # PHASE 2: GENERATE PROJECT TREE & FILES
+    # ==========================================
+    print_header("PHASE 2: GENERATE PROJECT TREE & FILES")
     print("Building project tree and generating all files...")
 
-
-    phase4_start = time.time()
+    phase2_start = time.time()
 
     folder_tree = generate_tree(folder_struc, project_name="")
     dependency_analyzer = DependencyAnalyzer()
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    json_file_name = os.path.join(OUTPUT_DIR, "projects_metadata.json")
-    metadata_dict = {}
 
-    dfs_tree_and_gen(
-        root=folder_tree,
-        refined_prompt=software_blueprint,
-        tree_structure=folder_struc,
-        project_name="",
-        current_path="",
-        parent_context="",
-        json_file_name=json_file_name,
-        metadata_dict=metadata_dict,
-        dependency_analyzer=dependency_analyzer,
-        file_output_format=file_format,
-        output_base_dir=OUTPUT_DIR,
-        pm=pm,
-        on_status=status_handler,
-        provider_name=provider_name,
-    )
+    # Build the Parallel Orchestrator from the blueprint's file_format
+    orchestrator = ParallelOrchestrator(output_base_dir=os.path.join(OUTPUT_DIR, folder_tree.value), max_workers=10)
+    orchestrator.set_blueprint(software_blueprint, folder_struc, file_format)
+
+    for filepath, details in file_format.items():
+        prompt_rules = details.get("purpose", "")
+        orchestrator.add_node(filepath, prompt_rules)
+
+    orchestrator.execute()
 
     project_root_path = os.path.join(OUTPUT_DIR, folder_tree.value)
     error_tracker = ErrorTracker(project_root_path)
-    phase4_time = time.time() - phase4_start
+    phase2_time = time.time() - phase2_start
 
     print_subheader("Generated Project Tree")
     print(f"Root: {folder_tree.value}")
@@ -214,10 +191,35 @@ def run_test(provider_name_arg=None):
             for file in files:
                 print(f"{subindent}📄 {file}")
 
-    print(f"\n Phase 4 completed in {phase4_time:.2f}s")
-    print_header("PHASE 6: DOCKER & TEST FILE GENERATION")
-    print("Generating Dockerfile and test files...")
+    print(f"\n Phase 2 completed in {phase2_time:.2f}s")
 
+
+    # ==========================================
+    # PHASE 3: DEPENDENCY ANALYSIS
+    # ==========================================
+    print_header("PHASE 3: DEPENDENCY ANALYSIS")
+    print("Analyzing project dependencies...")
+
+    phase3_start = time.time()
+    dependency_analyzer.analyze_project_files(
+        project_root_path, folder_tree=folder_tree, folder_structure=folder_struc
+    )
+    phase3_time = time.time() - phase3_start
+
+    print(" Dependency analysis complete")
+    
+    # Visualization of dependency graph
+    dep_graph = build_dependency_graph_tree(project_root_path, dependency_analyzer)
+    print("\nDependency Graph:\n" + dep_graph + "\n")
+
+    print(f"\nPhase 3 completed in {phase3_time:.2f}s")
+
+
+    # ==========================================
+    # PHASE 4: TESTING PIPELINE
+    # ==========================================
+    print_header("PHASE 4: TESTING PIPELINE")
+    print("Running tests (agent decides how based on project type)...")
 
     # Parse file_format if it's a string
     try:
@@ -228,112 +230,10 @@ def run_test(provider_name_arg=None):
     except:
         file_output_format = {}
 
-    phase6_start = time.time()
+    phase4_start = time.time()
 
     try:
-        test_gen = DockerTestFileGenerator(
-            project_root=project_root_path,
-            software_blueprint=software_blueprint,
-            folder_structure=folder_struc,
-            file_output_format=file_output_format,
-            metadata_dict=metadata_dict,
-            dependency_analyzer=dependency_analyzer,
-            pm=pm,
-            on_status=status_handler,
-            provider=InferenceManager.create_provider(provider_name),
-        )
-
-        test_gen_results = test_gen.generate_all()
-        print_subheader("Docker Generation Results")
-        print_json(test_gen_results)
-    except Exception as e:
-        print(f"  Docker generation error: {e}")
-
-    phase6_time = time.time() - phase6_start
-    print(f"\n Phase 6 completed in {phase6_time:.2f}s")
-    print_header("PHASE 5: DEPENDENCY ANALYSIS")
-    print("Analyzing project dependencies...")
-
-    phase5_start = time.time()
-    dependency_analyzer.analyze_project_files(
-        project_root_path, folder_tree=folder_tree, folder_structure=folder_struc
-    )
-    phase5_time = time.time() - phase5_start
-
-    # Save metadata
-    with open(json_file_name, "w") as f:
-        json.dump(metadata_dict, f, indent=4)
-
-    print(" Dependency analysis complete")
-    
-    # Visualization of dependency graph
-    if hasattr(dependency_analyzer, "graph") and dependency_analyzer.graph.nodes:
-        print_subheader("Dependency Graph")
-        for node in dependency_analyzer.graph.nodes:
-            deps = list(dependency_analyzer.graph.successors(node))
-            if deps:
-                rel_node = os.path.relpath(str(node), project_root_path) if os.path.isabs(str(node)) else str(node)
-                print(f"  🔗 {rel_node} -> {', '.join([os.path.relpath(str(d), project_root_path) if os.path.isabs(str(d)) else str(d) for d in deps])}")
-    print(f"\nPhase 5 completed in {phase5_time:.2f}s")
-    print_header("PHASE 6.5: DEPENDENCY FILE GENERATION")
-    print("Generating dependency files from external dependencies...")
-
-
-    phase65_start = time.time()
-
-    try:
-        external_dependencies = extract_all_external_dependencies(
-            dependency_analyzer, project_root_path
-        )
-
-        dep_file_gen = DependencyFileGenerator(
-            project_root=project_root_path,
-            software_blueprint=software_blueprint,
-            folder_structure=folder_struc,
-            file_output_format=file_output_format,
-            external_dependencies=external_dependencies,
-            pm=pm,
-            provider_name=provider_name,
-            on_status=status_handler,
-        )
-
-        dep_file_results = dep_file_gen.generate_all()
-        print_subheader("Dependency File Generation Results")
-        print_json(dep_file_results)
-    except Exception as e:
-        print(f"  Dependency file generation error: {e}")
-
-    phase65_time = time.time() - phase65_start
-    print(f"\n Phase 6.5 completed in {phase65_time:.2f}s")
-    print_header("PHASE 7: DEPENDENCY RESOLUTION (FEEDBACK LOOP)")
-    print("Attempting to resolve dependency issues...")
-
-    phase7_start = time.time()
-    feedback_loop = DependencyFeedbackLoop(
-        dependency_analyzer=dependency_analyzer,
-        project_root=project_root_path,
-        software_blueprint=software_blueprint,
-        folder_structure=folder_struc,
-        file_output_format=file_output_format,
-        pm=pm,
-        error_tracker=error_tracker
-    )
-    
-    dep_results = feedback_loop.run_feedback_loop()
-    phase7_time = time.time() - phase7_start
-
-    print_subheader("Dependency Resolution Results")
-    print_json(dep_results)
-    print(f"\n Phase 7 completed in {phase7_time:.2f}s")
-    print_header("PHASE 8: DOCKER TESTING PIPELINE")
-    print("Running Docker build and tests...")
-    print("  Note: Docker must be running for this phase to succeed")
-
-
-    phase8_start = time.time()
-
-    try:
-        docker_results = run_docker_testing(
+        testing_results = run_testing_pipeline(
             project_root=project_root_path,
             software_blueprint=software_blueprint,
             folder_structure=folder_struc,
@@ -345,46 +245,39 @@ def run_test(provider_name_arg=None):
             provider_name=provider_name,
         )
     except Exception as e:
-        print(f" Docker testing failed with exception: {e}")
+        print(f" Testing pipeline failed with exception: {e}")
         import traceback
 
         traceback.print_exc()
-        docker_results = {"success": False, "error": str(e), "exception": True}
+        testing_results = {"success": False, "error": str(e), "exception": True}
 
-    phase8_time = time.time() - phase8_start
+    phase4_time = time.time() - phase4_start
 
-    print_subheader("Docker Testing Results")
-    print_json(docker_results)
-    print(f"\n Phase 8 completed in {phase8_time:.2f}s")
+    print_subheader("Testing Results")
+    print_json(testing_results)
+    print(f"\n Phase 4 completed in {phase4_time:.2f}s")
     total_time = time.time() - start_time
 
     print_header("SUMMARY")
     print(f" Project Location: {project_root_path}")
     print()
     print("  Phase Timings:")
-    print(f"   Phase 1 (Blueprint, Struct, Contracts): {phase1_time:.2f}s")
-    print(f"   Phase 4 (File Generation):  {phase4_time:.2f}s")
-    print(f"   Phase 5 (Dep Analysis):     {phase5_time:.2f}s")
-    print(f"   Phase 6 (Docker Gen):       {phase6_time:.2f}s")
-    print(f"   Phase 6.5 (Dep Files):      {phase65_time:.2f}s")
-    print(f"   Phase 7 (Dep Resolution):   {phase7_time:.2f}s")
-    print(f"   Phase 8 (Docker Testing):   {phase8_time:.2f}s")
+    print(f"   Phase 1 (Blueprint):            {phase1_time:.2f}s")
+    print(f"   Phase 2 (File Generation):      {phase2_time:.2f}s")
+    print(f"   Phase 3 (Dep Analysis):         {phase3_time:.2f}s")
+    print(f"   Phase 4 (Testing Pipeline):     {phase4_time:.2f}s")
     print(f"   ─────────────────────────────────")
-    print(f"   TOTAL:                      {total_time:.2f}s")
+    print(f"   TOTAL:                          {total_time:.2f}s")
     print()
 
-    overall_success = dep_results.get("success", False) and docker_results.get(
-        "success", False
-    )
+    overall_success = testing_results.get("success", False)
 
     if overall_success:
         print(" PROJECT GENERATION: COMPLETE SUCCESS")
     else:
         print("  PROJECT GENERATION: COMPLETED WITH ISSUES")
-        if not dep_results.get("success"):
-            print("   - Dependency resolution had issues")
-        if not docker_results.get("success"):
-            print("   - Docker testing had issues")
+        if not testing_results.get("success"):
+            print("   - Testing pipeline had issues")
     print_header("ERROR LOGS & DEBUG INFO")
 
     # Save error tracker to file
@@ -417,7 +310,7 @@ def run_test(provider_name_arg=None):
             print(f"   File: {change.get('file', 'N/A')}")
             print(f"   Description: {change.get('change_description', 'N/A')}")
             if change.get("error"):
-                print(f"   Error Fixed: {change.get('error')[:200]}...")
+                print(f"   Error Fixed: {str(change.get('error', ''))[:200]}...")
             if change.get("actions"):
                 print(f"   Actions: {', '.join(change.get('actions', []))}")
     else:

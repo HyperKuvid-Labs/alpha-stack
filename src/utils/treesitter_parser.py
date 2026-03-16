@@ -34,6 +34,7 @@ class ParseResult:
     imports: List[ImportInfo] = field(default_factory=list)
     classes: List[str] = field(default_factory=list)
     functions: List[str] = field(default_factory=list)
+    function_signatures: List[str] = field(default_factory=list)
     has_error: bool = False
 
 
@@ -366,6 +367,92 @@ def _extract_go_functions(source_bytes: bytes, root_node) -> List[str]:
     return list(dict.fromkeys(_text(n, source_bytes) for n, _ in query.captures(root_node)))
 
 
+def _sig_before_body(node, body_type: str, source_bytes: bytes) -> Optional[str]:
+    """Extract node text up to (not including) the body node."""
+    for child in node.children:
+        if child.type == body_type:
+            raw = source_bytes[node.start_byte:child.start_byte].decode("utf-8", errors="replace")
+            return raw.strip()
+    return None
+
+
+def _extract_python_function_signatures(source_bytes: bytes, root_node) -> List[str]:
+    """Extract full signatures for top-level functions (without body)."""
+    language = get_language("python")
+    query = language.query("(module (function_definition) @fn_def)")
+    signatures: List[str] = []
+    for node, _ in query.captures(root_node):
+        sig = _sig_before_body(node, "block", source_bytes)
+        if sig:
+            signatures.append(sig.rstrip(':'))
+        else:
+            # Fallback: first line only
+            signatures.append(_text(node, source_bytes).split('\n')[0].rstrip(':'))
+    return list(dict.fromkeys(signatures))
+
+
+def _extract_js_ts_function_signatures(source_bytes: bytes, root_node, lang: str) -> List[str]:
+    """Extract signatures for top-level and exported function declarations."""
+    language = get_language(lang)
+    signatures: List[str] = []
+
+    for query_str in [
+        "(function_declaration) @fn_def",
+        "(export_statement declaration: (function_declaration) @fn_def)",
+    ]:
+        try:
+            for node, _ in language.query(query_str).captures(root_node):
+                sig = _sig_before_body(node, "statement_block", source_bytes)
+                if sig:
+                    signatures.append(sig.rstrip('{').strip())
+        except Exception:
+            pass
+
+    return list(dict.fromkeys(signatures))
+
+
+def _extract_go_function_signatures(source_bytes: bytes, root_node) -> List[str]:
+    """Extract function signatures (without body) for Go."""
+    language = get_language("go")
+    signatures: List[str] = []
+    try:
+        for node, _ in language.query("(function_declaration) @fn_def").captures(root_node):
+            sig = _sig_before_body(node, "block", source_bytes)
+            if sig:
+                signatures.append(sig)
+    except Exception:
+        pass
+    return signatures
+
+
+def _extract_rust_function_signatures(source_bytes: bytes, root_node) -> List[str]:
+    """Extract function signatures (without body) for Rust."""
+    language = get_language("rust")
+    signatures: List[str] = []
+    try:
+        for node, _ in language.query("(function_item) @fn_def").captures(root_node):
+            sig = _sig_before_body(node, "block", source_bytes)
+            if sig:
+                signatures.append(sig)
+    except Exception:
+        pass
+    return signatures
+
+
+def _extract_c_cpp_function_signatures(source_bytes: bytes, root_node, lang: str) -> List[str]:
+    """Extract function signatures (without body) for C/C++."""
+    language = get_language(lang)
+    signatures: List[str] = []
+    try:
+        for node, _ in language.query("(function_definition) @fn_def").captures(root_node):
+            sig = _sig_before_body(node, "compound_statement", source_bytes)
+            if sig:
+                signatures.append(sig)
+    except Exception:
+        pass
+    return signatures
+
+
 def parse_file(file_path: str, lang: Optional[str] = None) -> ParseResult:
     if not TREE_SITTER_AVAILABLE:
         return ParseResult(has_error=True)
@@ -424,12 +511,26 @@ def parse_file(file_path: str, lang: Optional[str] = None) -> ParseResult:
     elif lang == "go":
         functions = _extract_go_functions(source_bytes, root)
 
+    signatures: List[str] = []
+    if lang == "python":
+        signatures = _extract_python_function_signatures(source_bytes, root)
+    elif lang in ("javascript", "typescript"):
+        signatures = _extract_js_ts_function_signatures(source_bytes, root, lang)
+    elif lang == "rust":
+        signatures = _extract_rust_function_signatures(source_bytes, root)
+    elif lang in ("c", "cpp"):
+        signatures = _extract_c_cpp_function_signatures(source_bytes, root, lang)
+    elif lang == "go":
+        signatures = _extract_go_function_signatures(source_bytes, root)
+
     return ParseResult(
         imports=imports,
         classes=classes,
         functions=functions,
+        function_signatures=signatures,
         has_error=has_error,
     )
+
 def parse_file_from_content(content: str, lang: str) -> ParseResult:
     if not TREE_SITTER_AVAILABLE:
         return ParseResult(has_error=True)
@@ -452,28 +553,40 @@ def parse_file_from_content(content: str, lang: str) -> ParseResult:
     classes: List[str] = []
     functions: List[str] = []
 
+    signatures: List[str] = []
     if lang == "python":
         imports = _extract_python_imports(source_bytes, root)
         classes = _extract_python_classes(source_bytes, root)
         functions = _extract_python_functions(source_bytes, root)
+        signatures = _extract_python_function_signatures(source_bytes, root)
     elif lang in ("javascript", "typescript"):
         imports = _extract_js_family_imports(source_bytes, root, lang)
         classes = _extract_js_ts_classes(source_bytes, root, lang)
         functions = _extract_js_ts_functions(source_bytes, root, lang)
+        signatures = _extract_js_ts_function_signatures(source_bytes, root, lang)
     elif lang == "rust":
         imports = _extract_rust_imports(source_bytes, root)
         classes = _extract_rust_classes(source_bytes, root)
         functions = _extract_rust_functions(source_bytes, root)
+        signatures = _extract_rust_function_signatures(source_bytes, root)
     elif lang in ("c", "cpp"):
         imports = _extract_c_cpp_imports(source_bytes, root, lang)
         classes = _extract_c_cpp_classes(source_bytes, root, lang)
         functions = _extract_c_cpp_functions(source_bytes, root, lang)
+        signatures = _extract_c_cpp_function_signatures(source_bytes, root, lang)
     elif lang == "go":
         imports = _extract_go_imports(source_bytes, root)
         classes = _extract_go_classes(source_bytes, root)
         functions = _extract_go_functions(source_bytes, root)
+        signatures = _extract_go_function_signatures(source_bytes, root)
 
-    return ParseResult(imports=imports, classes=classes, functions=functions, has_error=has_error)
+    return ParseResult(
+        imports=imports,
+        classes=classes,
+        functions=functions,
+        function_signatures=signatures,
+        has_error=has_error,
+    )
 def verify_symbols(
     imported_symbols: List[str],
     target_classes: List[str],

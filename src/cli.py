@@ -51,30 +51,17 @@ def cmd_generate(args):
     print("FINAL RESULTS")
     print("=" * 80)
 
-    dep_result = result.get("dependency_resolution", {})
-    docker_result = result.get("docker_testing", {})
+    testing_result = result.get("testing", {})
     success = result.get("success", False)
 
-    print(f"\nDependency Resolution: {'SUCCESS' if dep_result.get('success') else 'FAILED'}")
-    if not dep_result.get('success'):
-        remaining = dep_result.get("remaining_errors", [])
-        if remaining:
-            print(f"   {len(remaining)} remaining issues")
-
-    print(f"\n🐳 Docker Build: {' SUCCESS' if docker_result.get('build_success') else ' FAILED'}")
-    if docker_result.get('build_success'):
-        print(f"   Iterations: {docker_result.get('build_iterations', 0)}")
-
-    print(f"\n Docker Tests: {' SUCCESS' if docker_result.get('tests_success') else ' FAILED'}")
-    if docker_result.get('tests_success'):
-        print(f"   Iterations: {docker_result.get('test_iterations', 0)}")
+    print(f"\n Tests: {' SUCCESS' if testing_result.get('tests_success') else ' FAILED'}")
+    if testing_result.get('tests_success'):
+        print(f"   Tool calls: {testing_result.get('tool_calls', 0)}")
 
     print(f"\n{'=' * 80}")
     if success:
         print(" PROJECT GENERATION: COMPLETE SUCCESS")
-        print("\n   All dependencies resolved")
-        print("    Docker build successful")
-        print("    All tests passed")
+        print("\n   All tests passed")
         print("\n   The project is ready to use!")
     else:
         print("  PROJECT GENERATION: INCOMPLETE")
@@ -108,13 +95,11 @@ def cmd_list(args):
 
     for project in sorted(projects):
         project_path = os.path.join(output_dir, project)
-        dockerfile_exists = os.path.exists(os.path.join(project_path, "Dockerfile"))
         readme_exists = os.path.exists(os.path.join(project_path, "README.md"))
 
-        status = "🐳" if dockerfile_exists else "📄"
         readme_status = "📖" if readme_exists else ""
 
-        print(f"   {status} {project} {readme_status}")
+        print(f"   📄 {project} {readme_status}")
 
     print("-" * 40)
     print(f"   Total: {len(projects)} project(s)")
@@ -226,7 +211,7 @@ def cmd_eval(args):
     )
 
     if not results:
-        print("\n❌ Evaluation failed")
+        print("\nEvaluation failed")
         return 1
 
     print("\n" + "=" * 80)
@@ -245,8 +230,7 @@ def cmd_eval(args):
             continue
 
         metrics = result.get("metrics", {})
-        dep_result = result.get("dependency_resolution", {})
-        docker_result = result.get("docker_testing", {})
+        testing_result = result.get("testing", {})
 
         print(f"\n⏱TIMING METRICS")
         print(f"   Blueprint Generation: {metrics.get('blueprint_generation_time', 0):.2f}s")
@@ -255,35 +239,15 @@ def cmd_eval(args):
         print(f"   First File: {metrics.get('first_file_generation_time', 0):.2f}s")
         print(f"   All Files: {metrics.get('all_files_generation_time', 0):.2f}s")
         print(f"   Dependency Analysis: {metrics.get('dependency_analysis_time', 0):.2f}s")
-        print(f"   Dockerfile Generation: {metrics.get('dockerfile_generation_time', 0):.2f}s")
-        print(f"   Dependency Resolution: {metrics.get('dependency_resolution_time', 0):.2f}s")
-        print(f"   Docker Testing: {metrics.get('docker_testing_time', 0):.2f}s")
+        print(f"   Testing: {metrics.get('testing_time', 0):.2f}s")
         print(f"   Total: {metrics.get('total_elapsed_time', 0):.2f}s")
 
         print(f"\nPROJECT METRICS")
         print(f"   Total Files Generated: {metrics.get('total_files_generated', 0)}")
 
-        print(f"\nDEPENDENCY RESOLUTION")
-        print(f"   Status: {'✅ SUCCESS' if metrics.get('dependency_resolution_success') else '❌ FAILED'}")
-        print(f"   Iterations: {metrics.get('dependency_resolution_iterations', 0)}")
-        print(f"   Remaining Errors: {metrics.get('dependency_remaining_errors_count', 0)}")
-
-        if metrics.get('dependency_errors_by_iteration'):
-            print(f"\n   Errors by Iteration:")
-            for iteration, errors in metrics['dependency_errors_by_iteration'].items():
-                print(f"      Iteration {iteration}: {len(errors)} error(s)")
-                for error in errors[:3]:
-                    print(f"         - {error['file']}: {error['error_type']}")
-                if len(errors) > 3:
-                    print(f"         ... and {len(errors) - 3} more")
-
-        print(f"\n🐳 DOCKER BUILD")
-        print(f"   Status: {'SUCCESS' if metrics.get('docker_build_success') else ' FAILED'}")
-        print(f"   Iterations: {metrics.get('docker_build_iterations', 0)}")
-
-        print(f"\n🧪 DOCKER TESTS")
-        print(f"   Status: {' SUCCESS' if metrics.get('docker_tests_success') else ' FAILED'}")
-        print(f"   Iterations: {metrics.get('docker_test_iterations', 0)}")
+        print(f"\n🧪 TESTS")
+        print(f"   Status: {' SUCCESS' if testing_result.get('tests_success') else ' FAILED'}")
+        print(f"   Tool calls: {testing_result.get('tool_calls', 0)}")
 
         print(f"\n{'=' * 80}")
         if metrics.get('overall_success'):
@@ -313,7 +277,7 @@ def main():
 
     parser = argparse.ArgumentParser(
         prog="alphastack",
-        description="ALPHASTACK - AI-powered project generator with Docker testing"
+        description="ALPHASTACK - AI-powered project generator with automated testing"
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")

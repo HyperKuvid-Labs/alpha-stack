@@ -584,8 +584,14 @@ def build_dependency_graph_tree(project_root: str, dependency_analyzer: 'Depende
                     lines.append(f"{annot_prefix}  classes: {', '.join(file_classes)}")
                 if file_functions:
                     lines.append(f"{annot_prefix}  functions: {', '.join(file_functions)}")
+                external_deps = sorted({
+                    d["raw"] for d in dep_details
+                    if d.get("kind") == "external" and d.get("raw")
+                })
                 if internal_deps:
                     lines.append(f"{annot_prefix}  deps: {', '.join(internal_deps)}")
+                if external_deps:
+                    lines.append(f"{annot_prefix}  external: {', '.join(external_deps)}")
                 if dependents_rel:
                     lines.append(f"{annot_prefix}  used-by: {', '.join(dependents_rel)}")
     try:

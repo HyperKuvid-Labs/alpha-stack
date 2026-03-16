@@ -28,6 +28,9 @@ def retry_api_call(func, *args, max_retries: int = 10, **kwargs):
 # Registry for providers
 _PROVIDER_REGISTRY = {}
 
+# Cache for parsed providers.json — read once, reused for the entire run
+_providers_config_cache: dict = {}
+
 
 def register_provider(name: str):
     """Decorator to register a provider class"""
@@ -474,13 +477,18 @@ class InferenceManager:
         InferenceManager._active_provider_name = None
 
     @staticmethod
+    def _load_providers_json() -> Dict[str, Any]:
+        """Load providers.json once and cache the result."""
+        if not _providers_config_cache:
+            config_path = Path(__file__).parent.parent / "providers.json"
+            with open(config_path, "r") as f:
+                _providers_config_cache.update(json.load(f))
+        return _providers_config_cache
+
+    @staticmethod
     def get_provider_config(provider_name: str) -> Dict[str, Any]:
-        """Read provider config from providers.json"""
-        config_path = Path(__file__).parent.parent / "providers.json"
-
-        with open(config_path, "r") as f:
-            config = json.load(f)
-
+        """Read provider config from providers.json (cached after first read)."""
+        config = InferenceManager._load_providers_json()
         provider_config = config["model_providers"][provider_name].copy()
 
         # Override with env var
@@ -511,7 +519,7 @@ class InferenceManager:
 
     @staticmethod
     def get_planner_tool_definitions() -> List[Dict[str, Any]]:
-        """Get tool definitions filtered for the planner (read-only + docker + executor)."""
+        """Get tool definitions filtered for the planner agent."""
         from .tool_definitions import get_planner_tool_definitions
 
         return get_planner_tool_definitions()
@@ -525,8 +533,6 @@ class InferenceManager:
 
     @staticmethod
     def get_default_provider() -> str:
-        """Get the default provider name from config"""
-        config_path = Path(__file__).parent.parent / "providers.json"
-        with open(config_path, "r") as f:
-            config = json.load(f)
+        """Get the default provider name from config (cached after first read)."""
+        config = InferenceManager._load_providers_json()
         return config.get("default_provider", "google")
