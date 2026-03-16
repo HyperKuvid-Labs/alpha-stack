@@ -1,0 +1,2 @@
+include src/providers.json
+recursive-include src/prompts *.j2

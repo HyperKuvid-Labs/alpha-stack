@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alphastack"
-version = "0.1.0"
+version = "0.1.2"
 description = "AI-powered project generator with Docker testing"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -60,7 +60,7 @@ where = ["."]
 include = ["src", "src.*"]
 
 [tool.setuptools.package-data]
-src = ["prompts/*.j2"]
+src = ["prompts/*.j2", "providers.json"]
 
 [tool.black]
 line-length = 100

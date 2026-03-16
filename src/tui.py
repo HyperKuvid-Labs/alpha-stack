@@ -169,10 +169,10 @@ def get_user_input():
             if change == "y":
                 setup_api_key()
         else:
-            pass
+            setup_api_key()
     else:
         console.print(
-            f"[{NEON_MUTED}]Provider '{provider}' selected. Ensure {provider.upper()}_API_KEY is set if required.[/{NEON_MUTED}]"
+            f"[{NEON_MUTED}]Provider '{provider}' selected.[/{NEON_MUTED}]"
         )
 
     history_file = os.path.expanduser("~/.alphastack_history")

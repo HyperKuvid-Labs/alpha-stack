@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 from dotenv import load_dotenv
+from ..read_provider import get_providers
 
 load_dotenv()
 
@@ -520,20 +521,7 @@ class InferenceManager:
 
     @staticmethod
     def get_provider_config(provider_name: str) -> Dict[str, Any]:
-        """Read provider config from providers.json"""
-        config_path = Path(__file__).parent.parent / "providers.json"
-
-        with open(config_path, "r") as f:
-            config = json.load(f)
-
-        provider_config = config["model_providers"][provider_name].copy()
-
-        # Override with env var
-        env_key = f"{provider_name.upper()}_API_KEY"
-        if os.getenv(env_key):
-            provider_config["api_key"] = os.getenv(env_key)
-
-        return provider_config
+        return get_providers()
 
     @staticmethod
     def create_provider(provider_name: str) -> InferenceProvider:
