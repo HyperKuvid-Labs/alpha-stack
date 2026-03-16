@@ -1,0 +1,67 @@
+Generate a production-ready shell script for building, testing, and running this project.
+The script should be placed in the main project directory (e.g. build_and_test.sh or run_tests.sh).
+
+## Project Context
+
+### Software Blueprint
+```json
+{{ software_blueprint | json_dumps }}
+```
+
+### Folder Structure
+```
+{{ folder_structure }}
+```
+
+### File Output Format
+```json
+{{ file_output_format | json_dumps }}
+```
+
+### Project Root
+{{ project_root }}
+
+### File Summaries
+{% if file_summaries %}
+{% for file_path, description in file_summaries.items() %}
+- **{{ file_path }}**: {{ description }}
+{% endfor %}
+{% else %}
+No file summaries available
+{% endif %}
+
+### External Dependencies
+{% if external_dependencies %}
+{% for dep in external_dependencies %}
+- {{ dep.get("raw", "") }}
+{% endfor %}
+{% else %}
+No external dependencies
+{% endif %}
+
+## Constraints
+
+1. **No Docker or container commands** — This is a native/local development & CI-friendly script. Do NOT include docker build, docker run, docker-compose, etc.
+2. **Assume CUDA Toolkit is already installed** — Do not attempt to install CUDA/nvidia drivers inside the script.
+3. **Keep commands idempotent where reasonable** — e.g. clean before build only if requested via flags
+4. **Use standard tools** — nvcc, make, cmake, cargo, go build, pip, npm, etc. depending on the stack
+
+## Requirements
+
+1. **Shebang & strict mode** — Start with `#!/usr/bin/env bash` and `set -euo pipefail`
+2. **Help / usage message** — Show available commands when run without arguments or with --help
+3. **Main commands to support** (at minimum):
+   - Build/compile the project
+   - Run unit/integration tests
+   - Clean build artifacts
+   - (Optional but recommended) Run the main application
+   - (Optional) Format/lint if the project defines such steps
+4. **Environment checks** — Optionally verify nvcc --version, nvidia-smi, or other critical tools
+5. **Color output** — Use simple ANSI colors to distinguish steps (PASS/FAIL/info/error)
+6. **Argument parsing** — Support at least: `./script.sh build`, `./script.sh test`, `./script.sh clean`, `./script.sh run`, `./script.sh all`
+7. **Exit codes** — Return non-zero on failure (especially test failures)
+
+## Output
+
+Return ONLY the raw shell script content (.sh file), no markdown, no explanations, no ```bash fences.
+Just the script starting with #!/usr/bin/env bash
