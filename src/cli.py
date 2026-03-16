@@ -3,10 +3,32 @@ import sys
 import os
 
 
+def normalize_problem_statement_language(raw_value):
+    value = (raw_value or "").strip().lower()
+    if not value:
+        return "others"
+    if value in {"cuda", "others"}:
+        return value
+    return None
+
+
+def prompt_problem_statement_language():
+    while True:
+        choice = input("Project language profile (cuda/others) [others]: ").strip().lower()
+        normalized = normalize_problem_statement_language(choice)
+        if normalized:
+            return normalized
+        print("Please choose either 'cuda' or 'others'.")
+
+
 def status_handler(event_type, message, **kwargs):
     if event_type == "step":
-        print(f"🔧 {message}")
-    elif event_type == "progress":
+        step_num = getattr(status_handler, "_step_num", 0) + 1
+        setattr(status_handler, "_step_num", step_num)
+        print(f"[{step_num}] {message}")
+        return
+
+    if event_type == "progress":
         print(f"   {message}")
     elif event_type == "success":
         print(f"{message}")
@@ -20,6 +42,8 @@ def status_handler(event_type, message, **kwargs):
 
 def cmd_generate(args):
     from .generator import generate_project
+
+    setattr(status_handler, "_step_num", 0)
 
     print("=" * 80)
     print("ALPHASTACK - Project Generator")
@@ -36,12 +60,23 @@ def cmd_generate(args):
         print("Project description is required!")
         return 1
 
+    problem_statement_language = normalize_problem_statement_language(getattr(args, "language", None))
+    if not problem_statement_language:
+        problem_statement_language = prompt_problem_statement_language()
+
     print(f"\nProject: {user_prompt[:50]}...")
     print(f"Output: {output_dir}")
+    print(f"Language profile: {problem_statement_language}")
     print()
 
     provider_name = getattr(args, "provider", None)
-    result = generate_project(user_prompt, output_dir, on_status=status_handler, provider_name=provider_name)
+    result = generate_project(
+        user_prompt,
+        output_dir,
+        on_status=status_handler,
+        provider_name=provider_name,
+        problem_statement_language=problem_statement_language,
+    )
 
     if not result:
         print("\nProject generation failed")
@@ -171,13 +206,13 @@ def interactive_mode():
         # Fallback if dependencies are missing
         print("  TUI dependencies missing. Run 'pip install alphastack[tui]' or install rich, pyfiglet, prompt_toolkit.")
         # Create dummy args for generic flow
-        dummy_args = argparse.Namespace(prompt=None, output=None)
+        dummy_args = argparse.Namespace(prompt=None, output=None, language=None)
         return cmd_generate(dummy_args)
 
     display_logo()
 
     try:
-        user_prompt, output_dir = get_user_input()
+        user_prompt, output_dir, problem_statement_language = get_user_input()
     except KeyboardInterrupt:
         print("\n Exiting...")
         return 0
@@ -191,7 +226,12 @@ def interactive_mode():
         status_display.update(message, event_type)
 
     with status_display:
-        result = generate_project(user_prompt, output_dir, on_status=tui_status_handler)
+        result = generate_project(
+            user_prompt,
+            output_dir,
+            on_status=tui_status_handler,
+            problem_statement_language=problem_statement_language,
+        )
 
     # After generation, show summary
     success = result.get("success", False)
@@ -207,104 +247,104 @@ def interactive_mode():
 
     return 0 if success else 1
 
-def cmd_eval(args):
-    prompt_number, model_name = args.prompt_number, args.model_name
-    from .eval_generator import eval_generate_project_batch
+# def cmd_eval(args):
+#     prompt_number, model_name = args.prompt_number, args.model_name
+#     from .eval_generator import eval_generate_project_batch
 
-    print("=" * 80)
-    print("ALPHASTACK - Model Evaluation Mode")
-    print("=" * 80)
-    print(f"\nPrompt Number: {prompt_number}")
-    print(f"Model: {model_name}")
-    print()
+#     print("=" * 80)
+#     print("ALPHASTACK - Model Evaluation Mode")
+#     print("=" * 80)
+#     print(f"\nPrompt Number: {prompt_number}")
+#     print(f"Model: {model_name}")
+#     print()
 
-    results = eval_generate_project_batch(
-        prompt_number=prompt_number,
-        output_base_dir="./eval_projects",
-        model_name=model_name,
-        on_status=status_handler
-    )
+#     results = eval_generate_project_batch(
+#         prompt_number=prompt_number,
+#         output_base_dir="./eval_projects",
+#         model_name=model_name,
+#         on_status=status_handler
+#     )
 
-    if not results:
-        print("\n❌ Evaluation failed")
-        return 1
+#     if not results:
+#         print("\n❌ Evaluation failed")
+#         return 1
 
-    print("\n" + "=" * 80)
-    print("BATCH EVALUATION RESULTS")
-    print("=" * 80)
+#     print("\n" + "=" * 80)
+#     print("BATCH EVALUATION RESULTS")
+#     print("=" * 80)
 
-    all_success = True
-    for language, result in results.items():
-        print(f"\n{'=' * 80}")
-        print(f"LANGUAGE: {language.upper()}")
-        print(f"{'=' * 80}")
+#     all_success = True
+#     for language, result in results.items():
+#         print(f"\n{'=' * 80}")
+#         print(f"LANGUAGE: {language.upper()}")
+#         print(f"{'=' * 80}")
 
-        if not result:
-            print(f" {language} evaluation failed")
-            all_success = False
-            continue
+#         if not result:
+#             print(f" {language} evaluation failed")
+#             all_success = False
+#             continue
 
-        metrics = result.get("metrics", {})
-        dep_result = result.get("dependency_resolution", {})
-        docker_result = result.get("docker_testing", {})
+#         metrics = result.get("metrics", {})
+#         dep_result = result.get("dependency_resolution", {})
+#         docker_result = result.get("docker_testing", {})
 
-        print(f"\n⏱TIMING METRICS")
-        print(f"   Blueprint Generation: {metrics.get('blueprint_generation_time', 0):.2f}s")
-        print(f"   Folder Structure: {metrics.get('folder_structure_generation_time', 0):.2f}s")
-        print(f"   File Format: {metrics.get('file_format_generation_time', 0):.2f}s")
-        print(f"   First File: {metrics.get('first_file_generation_time', 0):.2f}s")
-        print(f"   All Files: {metrics.get('all_files_generation_time', 0):.2f}s")
-        print(f"   Dependency Analysis: {metrics.get('dependency_analysis_time', 0):.2f}s")
-        print(f"   Dockerfile Generation: {metrics.get('dockerfile_generation_time', 0):.2f}s")
-        print(f"   Dependency Resolution: {metrics.get('dependency_resolution_time', 0):.2f}s")
-        print(f"   Docker Testing: {metrics.get('docker_testing_time', 0):.2f}s")
-        print(f"   Total: {metrics.get('total_elapsed_time', 0):.2f}s")
+#         print(f"\n⏱TIMING METRICS")
+#         print(f"   Blueprint Generation: {metrics.get('blueprint_generation_time', 0):.2f}s")
+#         print(f"   Folder Structure: {metrics.get('folder_structure_generation_time', 0):.2f}s")
+#         print(f"   File Format: {metrics.get('file_format_generation_time', 0):.2f}s")
+#         print(f"   First File: {metrics.get('first_file_generation_time', 0):.2f}s")
+#         print(f"   All Files: {metrics.get('all_files_generation_time', 0):.2f}s")
+#         print(f"   Dependency Analysis: {metrics.get('dependency_analysis_time', 0):.2f}s")
+#         print(f"   Dockerfile Generation: {metrics.get('dockerfile_generation_time', 0):.2f}s")
+#         print(f"   Dependency Resolution: {metrics.get('dependency_resolution_time', 0):.2f}s")
+#         print(f"   Docker Testing: {metrics.get('docker_testing_time', 0):.2f}s")
+#         print(f"   Total: {metrics.get('total_elapsed_time', 0):.2f}s")
 
-        print(f"\nPROJECT METRICS")
-        print(f"   Total Files Generated: {metrics.get('total_files_generated', 0)}")
+#         print(f"\nPROJECT METRICS")
+#         print(f"   Total Files Generated: {metrics.get('total_files_generated', 0)}")
 
-        print(f"\nDEPENDENCY RESOLUTION")
-        print(f"   Status: {'✅ SUCCESS' if metrics.get('dependency_resolution_success') else '❌ FAILED'}")
-        print(f"   Iterations: {metrics.get('dependency_resolution_iterations', 0)}")
-        print(f"   Remaining Errors: {metrics.get('dependency_remaining_errors_count', 0)}")
+#         print(f"\nDEPENDENCY RESOLUTION")
+#         print(f"   Status: {'✅ SUCCESS' if metrics.get('dependency_resolution_success') else '❌ FAILED'}")
+#         print(f"   Iterations: {metrics.get('dependency_resolution_iterations', 0)}")
+#         print(f"   Remaining Errors: {metrics.get('dependency_remaining_errors_count', 0)}")
 
-        if metrics.get('dependency_errors_by_iteration'):
-            print(f"\n   Errors by Iteration:")
-            for iteration, errors in metrics['dependency_errors_by_iteration'].items():
-                print(f"      Iteration {iteration}: {len(errors)} error(s)")
-                for error in errors[:3]:
-                    print(f"         - {error['file']}: {error['error_type']}")
-                if len(errors) > 3:
-                    print(f"         ... and {len(errors) - 3} more")
+#         if metrics.get('dependency_errors_by_iteration'):
+#             print(f"\n   Errors by Iteration:")
+#             for iteration, errors in metrics['dependency_errors_by_iteration'].items():
+#                 print(f"      Iteration {iteration}: {len(errors)} error(s)")
+#                 for error in errors[:3]:
+#                     print(f"         - {error['file']}: {error['error_type']}")
+#                 if len(errors) > 3:
+#                     print(f"         ... and {len(errors) - 3} more")
 
-        print(f"\n🐳 DOCKER BUILD")
-        print(f"   Status: {'SUCCESS' if metrics.get('docker_build_success') else ' FAILED'}")
-        print(f"   Iterations: {metrics.get('docker_build_iterations', 0)}")
+#         print(f"\n🐳 DOCKER BUILD")
+#         print(f"   Status: {'SUCCESS' if metrics.get('docker_build_success') else ' FAILED'}")
+#         print(f"   Iterations: {metrics.get('docker_build_iterations', 0)}")
 
-        print(f"\n🧪 DOCKER TESTS")
-        print(f"   Status: {' SUCCESS' if metrics.get('docker_tests_success') else ' FAILED'}")
-        print(f"   Iterations: {metrics.get('docker_test_iterations', 0)}")
+#         print(f"\n🧪 DOCKER TESTS")
+#         print(f"   Status: {' SUCCESS' if metrics.get('docker_tests_success') else ' FAILED'}")
+#         print(f"   Iterations: {metrics.get('docker_test_iterations', 0)}")
 
-        print(f"\n{'=' * 80}")
-        if metrics.get('overall_success'):
-            print("EVALUATION: COMPLETE SUCCESS")
-        else:
-            print("EVALUATION: INCOMPLETE")
-            all_success = False
+#         print(f"\n{'=' * 80}")
+#         if metrics.get('overall_success'):
+#             print("EVALUATION: COMPLETE SUCCESS")
+#         else:
+#             print("EVALUATION: INCOMPLETE")
+#             all_success = False
 
-        print(f"\nMetrics saved to: {result.get('metrics_file', 'unknown')}")
-        print(f"Project location: {result.get('project_path', 'unknown')}")
+#         print(f"\nMetrics saved to: {result.get('metrics_file', 'unknown')}")
+#         print(f"Project location: {result.get('project_path', 'unknown')}")
 
-    print("\n" + "=" * 80)
-    print("FINAL BATCH SUMMARY")
-    print("=" * 80)
-    if all_success:
-        print("🎉 ALL LANGUAGES: COMPLETE SUCCESS")
-    else:
-        print("⚠️ SOME LANGUAGES: INCOMPLETE")
-    print("=" * 80)
+#     print("\n" + "=" * 80)
+#     print("FINAL BATCH SUMMARY")
+#     print("=" * 80)
+#     if all_success:
+#         print("🎉 ALL LANGUAGES: COMPLETE SUCCESS")
+#     else:
+#         print("⚠️ SOME LANGUAGES: INCOMPLETE")
+#     print("=" * 80)
 
-    return 0 if all_success else 1
+#     return 0 if all_success else 1
 
 def main():
     # Check if running interactively (no arguments)
@@ -321,8 +361,10 @@ def main():
     gen_parser = subparsers.add_parser("generate", help="Generate a new project")
     gen_parser.add_argument("prompt", nargs="?", help="Project description")
     gen_parser.add_argument("-o", "--output", help="Output directory (default: ./created_projects)")
-    gen_parser.add_argument("-p", "--provider", choices=["google", "openai", "openrouter", "prime_intellect"],
+    gen_parser.add_argument("-p", "--provider", choices=["google", "openai", "vllm", "openrouter", "prime_intellect"],
                             help="Inference provider (default: from providers.json)")
+    gen_parser.add_argument("-l", "--language", choices=["cuda", "others"],
+                            help="Problem language profile: cuda or others (default: asks interactively)")
     gen_parser.set_defaults(func=cmd_generate)
 
     list_parser = subparsers.add_parser("list", help="List generated projects")
@@ -337,31 +379,29 @@ def main():
     setup_parser = subparsers.add_parser("setup", help="Configure API Keys")
     setup_parser.set_defaults(func=cmd_setup)
 
-    eval_parser = subparsers.add_parser("eval", help="Evaluate different frontier models for project generation with Alphastack's Architecture")
-    eval_parser.add_argument(
-        "prompt_number",
-        type=int,
-        choices=range(1, 11),
-        metavar="PROMPT_NUMBER",
-        help="Prompt number (1-10)"
-    )
-    eval_parser.add_argument(
-        "--m", "--model-name",
-        dest="model_name",
-        required=True,
-        choices=[
-            "gemini-2.5-pro",
-            "gpt-5.1-codex-max",
-            "claude-sonnet-4.5",
-            "grok-code-fast-1",
-            "deepseek-v3.2",
-            "qwen-3-coder"
-        ],
-        help="Model name to use for evaluation"
-    )
-    eval_parser.set_defaults(func=cmd_eval)
-
-
+    # eval_parser = subparsers.add_parser("eval", help="Evaluate different frontier models for project generation with Alphastack's Architecture")
+    # eval_parser.add_argument(
+    #     "prompt_number",
+    #     type=int,
+    #     choices=range(1, 11),
+    #     metavar="PROMPT_NUMBER",
+    #     help="Prompt number (1-10)"
+    # )
+    # eval_parser.add_argument(
+    #     "--m", "--model-name",
+    #     dest="model_name",
+    #     required=True,
+    #     choices=[
+    #         "gemini-2.5-pro",
+    #         "gpt-5.1-codex-max",
+    #         "claude-sonnet-4.5",
+    #         "grok-code-fast-1",
+    #         "deepseek-v3.2",
+    #         "qwen-3-coder"
+    #     ],
+    #     help="Model name to use for evaluation"
+    # )
+    # eval_parser.set_defaults(func=cmd_eval)
     args = parser.parse_args()
 
     if not args.command:

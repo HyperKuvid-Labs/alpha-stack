@@ -5,7 +5,12 @@
             "model": "models/gemini-2.5-pro"
         },
         "openai": {
-            "model": "gpt-5-nano-2025-08-07"
+            "model": "gpt-5-nano-2025-08-07",
+            "mode": "openai"
+        },
+        "vllm": {
+            "base_url": "http://localhost:8000/v1",
+            "api_key": "EMPTY"
         },
         "openrouter": {
             "base_url": "https://openrouter.ai/api/v1",

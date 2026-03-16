@@ -15,7 +15,6 @@ from ..utils.error_tracker import ErrorTracker
 from ..utils.tools import ToolHandler
 from ..utils.thread_memory import ThreadMemory
 from ..utils.dependencies import build_dependency_graph_tree
-from .generator import generate_dockerignore_content
 
 
 class PipelineState(BaseModel):
@@ -146,8 +145,8 @@ class DockerExecutor:
 
     def _is_test_command(self, command: str) -> bool:
         test_keywords = [
-            "pytest", "npm test", "yarn test", "jest", 
-            "cargo test", "go test", "rspec", "phpunit", 
+            "pytest", "npm test", "yarn test", "jest",
+            "cargo test", "go test", "rspec", "phpunit",
             "mocha", "vitest", "python -m unittest",
             "test_runner"
         ]
@@ -200,7 +199,7 @@ class DockerExecutor:
                 combined = prev_logs + f"\n\n--- Output of {command} ---\n{timeout_msg}"
             else:
                 combined = f"--- Output of {command} ---\n{timeout_msg}"
-                
+
             self.test_success = False
             self.last_test_logs = combined[-3000:]
             return {
@@ -218,6 +217,80 @@ class DockerExecutor:
             }
 
 
+class ShellScriptExecutor:
+    def __init__(self, project_root: str, on_status=None):
+        self.project_root = project_root
+        self.on_status = on_status
+        self.build_success = True
+        self.test_success = False
+        self.last_build_logs: Optional[str] = "Build step skipped for CUDA shell execution mode"
+        self.last_test_logs: Optional[str] = None
+
+    def _emit(self, event_type: str, message: str):
+        print(f"[{event_type}] {message}")
+        if self.on_status:
+            self.on_status(event_type, message)
+
+    def run(self, command: str = "") -> Dict:
+        if not command:
+            command = "bash ./run_tests.sh"
+
+        try:
+            result = subprocess.run(
+                command,
+                shell=True,
+                cwd=self.project_root,
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+            logs = (result.stdout or "") + "\n" + (result.stderr or "")
+            success = result.returncode == 0
+
+            prev_logs = self.last_test_logs
+            if prev_logs:
+                combined = prev_logs + f"\n\n--- Output of {command} ---\n{logs}"
+            else:
+                combined = f"--- Output of {command} ---\n{logs}"
+
+            self.test_success = success
+            self.last_test_logs = combined[-3000:]
+            self._emit("shell_test", f"Command exited with code {result.returncode}")
+
+            return {
+                "success": success,
+                "logs": logs[-3000:],
+                "exit_code": result.returncode,
+                "test_success": self.test_success,
+                "build_success": self.build_success,
+            }
+        except subprocess.TimeoutExpired:
+            timeout_msg = f"Shell test command timeout (5 minutes): {command}"
+            prev_logs = self.last_test_logs
+            if prev_logs:
+                combined = prev_logs + f"\n\n--- Output of {command} ---\n{timeout_msg}"
+            else:
+                combined = f"--- Output of {command} ---\n{timeout_msg}"
+
+            self.test_success = False
+            self.last_test_logs = combined[-3000:]
+            return {
+                "success": False,
+                "logs": timeout_msg,
+                "exit_code": -1,
+                "test_success": False,
+                "build_success": self.build_success,
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "logs": f"Shell script execution error: {str(e)}",
+                "exit_code": -1,
+                "test_success": self.test_success,
+                "build_success": self.build_success,
+            }
+
+
 class DockerTestingPipeline:
     def __init__(
         self,
@@ -231,6 +304,7 @@ class DockerTestingPipeline:
         on_status=None,
         tool_log_path: Optional[str] = None,
         provider_name: Optional[str] = None,
+        problem_statement_language: str = "others"
     ):
         self.project_root = project_root
         self.software_blueprint = software_blueprint
@@ -243,18 +317,28 @@ class DockerTestingPipeline:
 
         self.provider_name = provider_name or InferenceManager.get_default_provider()
         self.provider = InferenceManager.create_provider(self.provider_name)
+        self.problem_statement_language = problem_statement_language
+        self.is_cuda_mode = self.problem_statement_language.lower() in {"cuda", "cude"}
 
         project_name = os.path.basename(os.path.normpath(project_root))
-        self.image_name = re.sub(r"[^a-z0-9-]", "-", project_name.lower())
+        self.image_name = f"{project_name.lower()}_test_image" if not self.is_cuda_mode else ""
 
         self.error_tracker = error_tracker or ErrorTracker(project_root)
         self.thread_memory = ThreadMemory(token_threshold=25000)
 
-        self.docker_executor = DockerExecutor(
-            project_root=project_root,
-            image_name=self.image_name,
-            on_status=on_status,
-        )
+        self.docker_executor = None
+        self.shell_executor = None
+        if self.is_cuda_mode:
+            self.shell_executor = ShellScriptExecutor(
+                project_root=project_root,
+                on_status=on_status,
+            )
+        else:
+            self.docker_executor = DockerExecutor(
+                project_root=project_root,
+                image_name=self.image_name,
+                on_status=on_status,
+            )
 
         tool_log_path = tool_log_path or os.path.join(
             project_root, ".alpha_stack", "tool_calls.jsonl"
@@ -269,15 +353,22 @@ class DockerTestingPipeline:
             agent_name="planner",
             thread_memory=self.thread_memory,
             docker_executor=self.docker_executor,
+            shell_executor=self.shell_executor,
+            problem_statement_language=self.problem_statement_language,
         )
 
-        self.tool_definitions = InferenceManager.get_planner_tool_definitions()
+        self.tool_definitions = InferenceManager.get_planner_tool_definitions(
+            problem_statement_language=self.problem_statement_language
+        )
         self.tools = self.provider.format_tools(self.tool_definitions)
 
         self.max_sessions = 25
         self.max_rounds_per_session = 15
 
         self.state = PipelineState(max_sessions=self.max_sessions)
+        if self.is_cuda_mode:
+            self.state.build_success = True
+            self.state.last_build_logs = "Build step skipped for CUDA shell execution mode"
 
     def _emit(self, event_type: str, message: str, **kwargs):
         print(f"[{event_type}] {message}")
@@ -313,11 +404,16 @@ class DockerTestingPipeline:
             return False
 
     def _sync_state(self) -> None:
-        """Sync PipelineState from DockerExecutor's current values."""
-        self.state.build_success = self.docker_executor.build_success
-        self.state.test_success = self.docker_executor.test_success
-        self.state.last_build_logs = self.docker_executor.last_build_logs
-        self.state.last_test_logs = self.docker_executor.last_test_logs
+        if self.is_cuda_mode and self.shell_executor:
+            self.state.build_success = self.shell_executor.build_success
+            self.state.test_success = self.shell_executor.test_success
+            self.state.last_build_logs = self.shell_executor.last_build_logs
+            self.state.last_test_logs = self.shell_executor.last_test_logs
+        elif self.docker_executor:
+            self.state.build_success = self.docker_executor.build_success
+            self.state.test_success = self.docker_executor.test_success
+            self.state.last_build_logs = self.docker_executor.last_build_logs
+            self.state.last_test_logs = self.docker_executor.last_test_logs
 
     def _build_planner_prompt(self) -> str:
         self._sync_state()
@@ -331,12 +427,13 @@ class DockerTestingPipeline:
             dependency_graph=dep_graph,
             project_root=self.project_root,
             image_name=self.image_name,
+            execution_mode="shell" if self.is_cuda_mode else "docker",
             state=self.state,
             memory_context=memory_context,
         )
 
     # Tools that must run exclusively (never in parallel with anything)
-    EXCLUSIVE_TOOLS = frozenset({"docker_build", "docker_run", "batch_edit_files", "give_up"})
+    EXCLUSIVE_TOOLS = frozenset({"docker_build", "docker_run", "shell_script_run", "batch_edit_files", "give_up"})
 
     def _run_planner_session(self) -> int:
         """Run one planner session. Returns the number of tool calls made.
@@ -474,10 +571,17 @@ class DockerTestingPipeline:
         return tool_calls_made
 
     def run_testing_pipeline(self) -> Dict:
-        if not os.path.exists(self.dockerfile_path):
+        if not self.is_cuda_mode and not os.path.exists(self.dockerfile_path):
             self._emit("step", "No Dockerfile found, generating...")
             if not self.generate_dockerfile():
                 return self._build_result("Failed to generate Dockerfile")
+
+        if self.is_cuda_mode:
+            shell_script_path = os.path.join(self.project_root, "run_tests.sh")
+            if not os.path.exists(shell_script_path):
+                msg = "CUDA shell mode selected but run_tests.sh was not found"
+                self._emit("error", msg)
+                return self._build_result(msg)
 
         self._emit("step", "Starting planner-driven pipeline...")
 
@@ -535,6 +639,7 @@ def run_docker_testing(
     on_status=None,
     tool_log_path: Optional[str] = None,
     provider_name: Optional[str] = None,
+    problem_statement_language: str = "others"
 ) -> Dict:
     pipeline = DockerTestingPipeline(
         project_root=project_root,
@@ -547,5 +652,6 @@ def run_docker_testing(
         on_status=on_status,
         tool_log_path=tool_log_path,
         provider_name=provider_name,
+        problem_statement_language=problem_statement_language,
     )
     return pipeline.run_testing_pipeline()

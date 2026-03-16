@@ -84,14 +84,14 @@ def generate_file(context, filepath, refined_prompt, tree, file_output_format, p
                 result = FileGenerationResult(**data)
             except (json.JSONDecodeError, ValueError):
                 pass
-            
+
     else:
         # OpenRouter/OpenAI via structured outputs
         messages = [
             {"role": "system", "content": system_instruction},
             {"role": "user", "content": "Generate the file content and metadata description."}
         ]
-        
+
         try:
             client = provider.get_client()
             completion = client.beta.chat.completions.parse(
@@ -109,7 +109,7 @@ def generate_file(context, filepath, refined_prompt, tree, file_output_format, p
                 )
                 raw_content = completion.choices[0].message.content
                 json_str = None
-                
+
                 # Strip markdown blocks
                 import re
                 match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_content, re.DOTALL)
@@ -133,10 +133,10 @@ def generate_file(context, filepath, refined_prompt, tree, file_output_format, p
                     result = FileGenerationResult(**data)
             except Exception as fallback_err:
                 print(f"Error calling structured output API for file generation: {e}. Fallback failed: {fallback_err}")
-                
+
     if result:
         result.file_content = clean_agent_output(result.file_content)
-        
+
     return result
 
 
@@ -317,12 +317,12 @@ class ProjectBlueprint(BaseModel):
     folder_structure: str = Field(description="Raw ASCII string representing the exact directory and file structure tree")
     file_formats: Dict[str, Any] = Field(description="Dictionary mapping precise filepaths from the folder structure to instructions on how each file must be generated")
 
-def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = None) -> Optional[ProjectBlueprint]:
+def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = None, problem_statement_language: Optional[str] = None) -> Optional[ProjectBlueprint]:
     provider_name = provider_name or InferenceManager.get_default_provider()
     provider = InferenceManager.create_provider(provider_name)
     system_info = get_system_info()
-    system_instruction = pm.render_project_blueprint(user_prompt=prompt, system_info=system_info)
-    
+    system_instruction = pm.render_project_blueprint(user_prompt=prompt, system_info=system_info, problem_statement_language=problem_statement_language)
+
     if provider_name == "google":
         from google.genai import types
         from .utils.inference import retry_api_call
@@ -339,20 +339,20 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
         )
         if not response or not response.text:
             return None
-            
+
         try:
             data = json.loads(response.text)
             return ProjectBlueprint(**data)
         except (json.JSONDecodeError, ValueError):
             return None
-            
+
     else:
         # OpenRouter/OpenAI via structured outputs
         messages = [
             {"role": "system", "content": system_instruction},
             {"role": "user", "content": prompt}
         ]
-        
+
         try:
             client = provider.get_client()
             completion = client.beta.chat.completions.parse(
@@ -393,7 +393,7 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
                     return ProjectBlueprint(**data)
             except Exception as fallback_err:
                 print(f"Error calling structured output API: {e}. Fallback failed: {fallback_err}")
-                
+
             return None
 
 
@@ -496,7 +496,8 @@ def generate_tree(resp, project_name="root"):
     return root
 
 
-def generate_project(user_prompt, output_base_dir, on_status=None, provider_name: Optional[str] = None):
+def generate_project(user_prompt, output_base_dir, on_status=None, provider_name: Optional[str] = None, problem_statement_language="others"):
+    # here i'm adding a parameter for problem_statement_language, where i need to seperate cuda from others, as we dont hae to generate docker file for cuda projects, which is more constly, a simple shell file is enough
     from .utils.dependencies import DependencyAnalyzer
     from .docker.testing import run_docker_testing
     from .docker.generator import DockerTestFileGenerator
@@ -511,8 +512,8 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
     provider_name = provider_name or InferenceManager.get_default_provider()
 
     emit("step", "Analyzing structure and creating unified project blueprint...")
-    blueprint = generate_project_blueprint(user_prompt, pm, provider_name)
-    
+    blueprint = generate_project_blueprint(user_prompt, pm, provider_name, problem_statement_language)
+
     if not blueprint:
         emit("error", "Failed to generate project blueprint.")
         return None
@@ -567,10 +568,11 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
             dependency_analyzer=dependency_analyzer,
             pm=pm,
             on_status=on_status,
-            provider=InferenceManager.create_provider(provider_name)
+            provider=InferenceManager.create_provider(provider_name),
+            problem_statement_language=problem_statement_language
         )
 
-        test_gen_results = test_gen.generate_all()
+        test_gen.generate_all()
     except Exception:
         pass
 
@@ -603,7 +605,7 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
             on_status=on_status
         )
 
-        dep_file_results = dep_file_gen.generate_all()
+        dep_file_gen.generate_all()
 
         # Re-analyze project files to include the newly generated dependency files
         dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
@@ -627,6 +629,7 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
         dependency_analyzer=dependency_analyzer,
         on_status=on_status,
         provider_name=provider_name,
+        problem_statement_language=problem_statement_language
     )
 
     for file_path, entries in metadata_dict.items():

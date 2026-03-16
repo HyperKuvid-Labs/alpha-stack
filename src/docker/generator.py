@@ -20,7 +20,7 @@ def extract_file_summaries(metadata_dict: Dict) -> Dict[str, str]:
 
 def extract_external_dependencies(metadata_dict: Dict, dependency_analyzer) -> List[Dict[str, str]]:
     external_deps = set()
-    
+
     for file_path in metadata_dict.keys():
         if os.path.exists(file_path):
             deps = dependency_analyzer.get_dependency_details(file_path)
@@ -29,7 +29,7 @@ def extract_external_dependencies(metadata_dict: Dict, dependency_analyzer) -> L
                     raw_dep = dep.get("raw", "")
                     if raw_dep:
                         external_deps.add(raw_dep)
-    
+
     return [{"raw": dep, "kind": "external"} for dep in sorted(external_deps)]
 
 
@@ -127,7 +127,7 @@ class DockerTestFileGenerator:
                  folder_structure: str, file_output_format: Dict,
                  metadata_dict: Dict, dependency_analyzer,
                  pm: Optional[PromptManager] = None, on_status=None,
-                 provider=None):
+                 provider=None, problem_statement_language: str = "others"):
         self.project_root = project_root
         self.software_blueprint = software_blueprint
         self.folder_structure = folder_structure
@@ -138,11 +138,12 @@ class DockerTestFileGenerator:
         self.error_tracker = ErrorTracker(project_root)
         self.on_status = on_status
         self.provider = provider
-    
+        self.problem_statement_language = problem_statement_language
+
     def _emit(self, event_type: str, message: str, **kwargs):
         if self.on_status:
             self.on_status(event_type, message, **kwargs)
-    
+
     def _extract_metadata_context(self) -> Dict:
         file_summaries = extract_file_summaries(self.metadata_dict)
         external_deps = extract_external_dependencies(self.metadata_dict, self.dependency_analyzer)
@@ -150,11 +151,14 @@ class DockerTestFileGenerator:
             "file_summaries": file_summaries,
             "external_dependencies": external_deps
         }
-    
+
     def generate_test_dockerfile_blueprint(self) -> List[Dict]:
         metadata_context = self._extract_metadata_context()
-        
-        prompt = self.pm.render("test_dockerfile_blueprint.j2",
+        blueprint_file_name = "test_dockerfile_blueprint.j2"
+        if(self.problem_statement_language.lower() == "cuda"):
+            blueprint_file_name = "test_dockerfile_blueprint_cuda.j2"
+
+        prompt = self.pm.render(blueprint_file_name,
             software_blueprint=self.software_blueprint,
             folder_structure=self.folder_structure,
             file_output_format=self.file_output_format,
@@ -162,51 +166,51 @@ class DockerTestFileGenerator:
             external_dependencies=metadata_context["external_dependencies"],
             project_root=self.project_root
         )
-        
+
         if not self.provider:
             raise ValueError("DockerTestFileGenerator requires a provider instance")
 
         messages = [{"role": "user", "content": prompt}]
         response = self.provider.call_model(messages)
         response_text = self.provider.extract_text(response).strip()
-        
+
         json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
         if json_match:
             blueprint = json.loads(json_match.group())
         else:
             blueprint = json.loads(response_text)
-        
+
         if isinstance(blueprint, dict):
             blueprint = [blueprint]
-        
+
         return blueprint
-    
+
     def generate_test_files(self, blueprint: List[Dict]) -> List[str]:
         generated_files = []
         metadata_context = self._extract_metadata_context()
-        
+
         for item in blueprint:
             if item.get("type") != "test_file":
                 continue
-            
+
             target_file = item.get("target_file", "")
             test_file_path = item.get("test_file_path", "")
-            
+
             if not target_file or not test_file_path:
                 continue
-            
+
             abs_test_path = os.path.join(self.project_root, test_file_path)
             os.makedirs(os.path.dirname(abs_test_path), exist_ok=True)
-            
+
             target_metadata = None
             abs_target_file = os.path.abspath(os.path.join(self.project_root, target_file)) if not os.path.isabs(target_file) else target_file
-            
+
             for file_path, entries in self.metadata_dict.items():
                 if os.path.abspath(file_path) == abs_target_file:
                     if entries and isinstance(entries, list):
                         target_metadata = entries[0] if entries else None
                     break
-            
+
             prompt = self.pm.render("test_file_generation.j2",
                 software_blueprint=self.software_blueprint,
                 folder_structure=self.folder_structure,
@@ -217,28 +221,28 @@ class DockerTestFileGenerator:
                 external_dependencies=metadata_context["external_dependencies"],
                 project_root=self.project_root
             )
-            
+
             messages = [{"role": "user", "content": prompt}]
             response = self.provider.call_model(messages)
             test_content = clean_agent_output(self.provider.extract_text(response))
-            
+
             with open(abs_test_path, 'w', encoding='utf-8') as f:
                 f.write(test_content)
-            
+
             if abs_test_path not in self.metadata_dict:
                 self.metadata_dict[abs_test_path] = []
-            
+
             self.metadata_dict[abs_test_path].append({
                 "description": item.get("description", f"Test file for {target_file}")
             })
-            
+
             generated_files.append(abs_test_path)
-        
+
         return generated_files
-    
+
     def generate_dockerfile(self) -> bool:
         metadata_context = self._extract_metadata_context()
-        
+
         prompt = self.pm.render("dockerfile_generation.j2",
             software_blueprint=self.software_blueprint,
             folder_structure=self.folder_structure,
@@ -247,40 +251,78 @@ class DockerTestFileGenerator:
             external_dependencies=metadata_context["external_dependencies"],
             project_root=self.project_root
         )
-        
+
         messages = [{"role": "user", "content": prompt}]
         response = self.provider.call_model(messages)
         dockerfile_content = self.provider.extract_text(response)
-        
+
         if dockerfile_content.startswith('```'):
             lines = dockerfile_content.split('\n')
             if len(lines) > 1:
                 dockerfile_content = '\n'.join(lines[1:])
                 if dockerfile_content.endswith('```'):
                     dockerfile_content = dockerfile_content[:-3].rstrip()
-        
+
         dockerfile_path = os.path.join(self.project_root, "Dockerfile")
         with open(dockerfile_path, 'w', encoding='utf-8') as f:
             f.write(dockerfile_content)
-        
+
         # Generate .dockerignore to speed up builds
         dockerignore_path = os.path.join(self.project_root, ".dockerignore")
         with open(dockerignore_path, 'w', encoding='utf-8') as f:
             f.write(generate_dockerignore_content())
-        
+
         self.error_tracker.log_change(
             file_path=dockerfile_path,
             change_description="Generated Dockerfile and .dockerignore from project metadata",
             error_context="Dockerfile generation phase",
             actions=["generate_dockerfile", "generate_dockerignore"]
         )
-        
+
         return True
-    
+
+    def generate_shell_test_script(self, test_files: List[str]) -> Optional[str]:
+        # this function is to generate the main testing script instead ofdocker file for cuda
+        metadata_context = self._extract_metadata_context()
+
+        prompt = self.pm.render("test_shell_script_generation.j2",
+            software_blueprint=self.software_blueprint,
+            folder_structure=self.folder_structure,
+            file_output_format=self.file_output_format,
+            file_summaries=metadata_context["file_summaries"],
+            external_dependencies=metadata_context["external_dependencies"],
+            test_files=test_files,
+            project_root=self.project_root
+        )
+
+        messages = [{"role": "user", "content": prompt}]
+        response = self.provider.call_model(messages)
+        script_content = self.provider.extract_text(response)
+
+        if script_content.startswith('```'):
+            lines = script_content.split('\n')
+            if len(lines) > 1:
+                script_content = '\n'.join(lines[1:])
+                if script_content.endswith('```'):
+                    script_content = script_content[:-3].rstrip()
+
+        script_path = os.path.join(self.project_root, "run_tests.sh")
+        with open(script_path, 'w', encoding='utf-8') as f:
+            f.write(script_content)
+
+            os.chmod(script_path, 0o755)  # Make it executable
+
+        self.error_tracker.log_change(
+            file_path=script_path,
+            change_description="Generated shell script for running tests from project metadata for CUDA project",
+            error_context="Test shell script generation phase for CUDA project",
+            actions=["generate_test_shell_script"]
+        )
+
     def resolve_test_dependencies(self, test_files: List[str]) -> Dict:
         if not test_files:
             return {"success": True, "resolved": 0}
-        
+
         for test_file in test_files:
             if os.path.exists(test_file):
                 try:
@@ -289,17 +331,17 @@ class DockerTestFileGenerator:
                     self.dependency_analyzer.add_file(test_file, content, self.folder_structure)
                 except Exception:
                     pass
-        
+
         resolved_count = 0
         for test_file in test_files:
             deps = self.dependency_analyzer.get_dependency_details(test_file)
             internal_deps = [d for d in deps if d.get("kind") == "internal" and d.get("path")]
-            
+
             if internal_deps:
                 resolved_count += len(internal_deps)
-        
+
         return {"success": True, "resolved": resolved_count}
-    
+
     def generate_all(self) -> Dict:
         results = {
             "blueprint": None,
@@ -308,24 +350,30 @@ class DockerTestFileGenerator:
             "dependency_resolution": None,
             "success": False
         }
-        
+
         try:
             blueprint = self.generate_test_dockerfile_blueprint()
             results["blueprint"] = blueprint
-            
+
             test_files = self.generate_test_files(blueprint)
             results["test_files"] = test_files
-            
-            dockerfile_success = self.generate_dockerfile()
-            results["dockerfile"] = dockerfile_success
-            
+
+            # dockerfile_success = self.generate_dockerfile()
+            # results["dockerfile"] = dockerfile_success
+            if(self.problem_statement_language.lower() == "cuda"):
+                shell_script_success = self.generate_shell_test_script(test_files)
+                results["test_shell_script"] = shell_script_success
+            else:
+                dockerfile_success = self.generate_dockerfile()
+                results["dockerfile"] = dockerfile_success
+
             dep_results = self.resolve_test_dependencies(test_files)
             results["dependency_resolution"] = dep_results
-            
-            results["success"] = dockerfile_success and len(test_files) > 0
-            
+
+            results["success"] = (shell_script_success if self.problem_statement_language.lower() == "cuda" else dockerfile_success) and len(test_files) > 0
+
         except Exception:
             pass
-        
+
         return results
 

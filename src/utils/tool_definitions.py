@@ -279,6 +279,20 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
             },
         },
         {
+            "name": "shell_script_run",
+            "description": "Run project tests via shell script execution mode (used for CUDA projects). If command is omitted, defaults to 'bash ./run_tests.sh'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "Shell command to execute tests (e.g., 'bash ./run_tests.sh'). Leave empty to use the default.",
+                    }
+                },
+                "required": [],
+            },
+        },
+        {
             "name": "batch_edit_files",
             "description": (
                 "Delegate multiple file-editing tasks to parallel corrector mini-agents. "
@@ -374,6 +388,7 @@ PLANNER_TOOL_NAMES = {
     "get_file_dependents",
     "docker_build",
     "docker_run",
+    "shell_script_run",
     "batch_edit_files",
     "batch_read_files",
     "give_up",
@@ -390,11 +405,15 @@ EXECUTOR_TOOL_NAMES = {
 }
 
 
-def get_planner_tool_definitions() -> List[Dict[str, Any]]:
-    """Get tool definitions filtered for the planner agent."""
-    return [t for t in get_tool_definitions() if t["name"] in PLANNER_TOOL_NAMES]
+def get_planner_tool_definitions(problem_statement_language: str = "others") -> List[Dict[str, Any]]:
+    selected_names = set(PLANNER_TOOL_NAMES)
+    if str(problem_statement_language).lower() in {"cuda", "cude"}:
+        selected_names.discard("docker_build")
+        selected_names.discard("docker_run")
+    else:
+        selected_names.discard("shell_script_run")
+    return [t for t in get_tool_definitions() if t["name"] in selected_names]
 
 
 def get_executor_tool_definitions() -> List[Dict[str, Any]]:
-    """Get tool definitions filtered for the executor agent (file read/write only)."""
     return [t for t in get_tool_definitions() if t["name"] in EXECUTOR_TOOL_NAMES]

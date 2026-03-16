@@ -10,7 +10,6 @@ load_dotenv()
 
 
 def retry_api_call(func, *args, max_retries: int = 10, **kwargs):
-    """Retry API call with exponential backoff"""
     attempt = 1
     while attempt <= max_retries:
         try:
@@ -257,7 +256,7 @@ class GoogleProvider(InferenceProvider):
 
 
 class OpenAICompatibleProvider(InferenceProvider):
-    """Base class for all OpenAI-compatible providers (OpenAI, OpenRouter, Prime Intellect, etc.)"""
+    """Base class for all OpenAI-compatible providers (OpenAI, OpenRouter, vLLM, Prime Intellect, etc.)"""
 
     @abstractmethod
     def get_client(self):
@@ -401,6 +400,52 @@ class PrimeIntellectProvider(OpenAICompatibleProvider):
         return self._client
 
 
+@register_provider("vllm")
+class VLLMProvider(OpenAICompatibleProvider):
+    def get_client(self):
+        if self._client is None:
+            from openai import OpenAI
+
+            api_key = self.api_key or os.getenv("VLLM_API_KEY") or "dummy"
+            base_url = self.config.get("base_url", "http://localhost:8000/v1")
+            self._client = OpenAI(api_key=api_key, base_url=base_url)
+        return self._client
+
+    def call_model(self, messages: List[Dict], tools: List[Dict] = None, **kwargs) -> Any:
+        model = self.model
+        if not model:
+            models_response = retry_api_call(self.get_client().models.list)
+            model_data = getattr(models_response, "data", None) or []
+            if not model_data:
+                raise ValueError(
+                    "vLLM returned no models and no model is configured. "
+                    "Set model under providers.json:model_providers.vllm.model or ensure /v1/models works."
+                )
+            model = model_data[0].id
+
+        call_kwargs = {
+            "model": model,
+            "messages": messages,
+        }
+        if tools:
+            call_kwargs["tools"] = tools
+            call_kwargs["tool_choice"] = "auto"
+
+        for param in ["temperature", "max_tokens", "top_p"]:
+            if param in kwargs:
+                call_kwargs[param] = kwargs[param]
+        if "max_output_tokens" in kwargs and "max_tokens" not in call_kwargs:
+            call_kwargs["max_tokens"] = kwargs["max_output_tokens"]
+
+        response = retry_api_call(self.get_client().chat.completions.create, **call_kwargs)
+        if hasattr(response, "usage") and hasattr(response.usage, "total_tokens"):
+            self.total_tokens_used += response.usage.total_tokens
+        return response
+
+    def extract_text(self, response: Any) -> str:
+        return super().extract_text(response)
+
+
 class InferenceManager:
     """Manager class to handle provider initialization and operations"""
 
@@ -510,11 +555,10 @@ class InferenceManager:
         return get_tool_definitions()
 
     @staticmethod
-    def get_planner_tool_definitions() -> List[Dict[str, Any]]:
-        """Get tool definitions filtered for the planner (read-only + docker + executor)."""
+    def get_planner_tool_definitions(problem_statement_language: str = "others") -> List[Dict[str, Any]]:
         from .tool_definitions import get_planner_tool_definitions
 
-        return get_planner_tool_definitions()
+        return get_planner_tool_definitions(problem_statement_language=problem_statement_language)
 
     @staticmethod
     def get_executor_tool_definitions() -> List[Dict[str, Any]]:

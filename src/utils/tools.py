@@ -8,7 +8,8 @@ class ToolHandler:
     def __init__(self, project_root: str, error_tracker=None, image_name: str = "project-test",
                  dependency_analyzer=None, tool_log_path: Optional[str] = None,
                  agent_name: Optional[str] = None, thread_memory=None,
-                 docker_executor=None):
+                 docker_executor=None, shell_executor=None,
+                 problem_statement_language: str = "others"):
         from .tool_call_log import ToolCallLogger
         self.project_root = project_root
         self.error_tracker = error_tracker
@@ -18,6 +19,9 @@ class ToolHandler:
         self.thread_memory = thread_memory
         self.tool_call_logger = ToolCallLogger(tool_log_path) if tool_log_path else None
         self.docker_executor = docker_executor
+        self.shell_executor = shell_executor
+        self.problem_statement_language = problem_statement_language
+        self.is_cuda_mode = str(problem_statement_language).lower() in {"cuda", "cude"}
 
     def handle_function_call(self, function_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         self._log_tool_call(function_name, args)
@@ -109,6 +113,8 @@ class ToolHandler:
             return self._docker_build(command=args.get("command", ""))
         elif function_name == "docker_run":
             return self._docker_run(command=args.get("command", ""))
+        elif function_name == "shell_script_run":
+            return self._shell_script_run(command=args.get("command", ""))
         elif function_name == "batch_edit_files":
             return self._batch_edit_files(tasks=args.get("tasks", []))
         elif function_name == "batch_read_files":
@@ -119,16 +125,27 @@ class ToolHandler:
             return {"error": f"Unknown function: {function_name}"}
 
     def _docker_build(self, command: str = "") -> Dict[str, Any]:
+        if self.is_cuda_mode:
+            return {"success": False, "error": "docker_build is disabled in CUDA shell execution mode"}
         if not self.docker_executor:
             return {"error": "Docker executor not available"}
         return self.docker_executor.build(command=command)
 
     def _docker_run(self, command: str = "") -> Dict[str, Any]:
+        if self.is_cuda_mode:
+            return {"success": False, "error": "docker_run is disabled in CUDA shell execution mode"}
         if not self.docker_executor:
             return {"error": "Docker executor not available"}
         if not command:
             return {"error": "command is required"}
         return self.docker_executor.run(command=command)
+
+    def _shell_script_run(self, command: str = "") -> Dict[str, Any]:
+        if not self.is_cuda_mode:
+            return {"success": False, "error": "shell_script_run is only available in CUDA shell execution mode"}
+        if not self.shell_executor:
+            return {"success": False, "error": "Shell executor not available"}
+        return self.shell_executor.run(command=command)
 
     def _log_tool_call(self, function_name: str, args: Dict[str, Any]) -> None:
         if not self.tool_call_logger:

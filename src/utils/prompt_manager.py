@@ -14,20 +14,20 @@ def get_prompts_dir() -> str:
     this_file = Path(__file__).resolve()
     package_dir = this_file.parent.parent  # alphastack/utils -> alphastack
     prompts_in_package = package_dir / "prompts"
-    
+
     if prompts_in_package.exists():
         return str(prompts_in_package)
-    
+
     # Method 2: Check current working directory (legacy dev mode)
     cwd_prompts = Path.cwd() / "prompts"
     if cwd_prompts.exists():
         return str(cwd_prompts)
-    
+
     # Method 3: Check alphastack subdirectory of cwd
     cwd_alphastack_prompts = Path.cwd() / "alphastack" / "prompts"
     if cwd_alphastack_prompts.exists():
         return str(cwd_alphastack_prompts)
-    
+
     # Fallback: return the expected path (will fail later with a clear error)
     return str(prompts_in_package)
 
@@ -36,7 +36,7 @@ class PromptManager:
     def __init__(self, templates_dir: str = None):
         if templates_dir is None:
             templates_dir = get_prompts_dir()
-        
+
         self.templates_dir = templates_dir
 
         self.env = Environment(
@@ -46,19 +46,21 @@ class PromptManager:
             lstrip_blocks=True,
             keep_trailing_newline=True
         )
-        
+
         self.env.filters['json_dumps'] = lambda x: json.dumps(x, indent=2)
-    
+
     def render(self, template_name: str, **kwargs) -> str:
         try:
             template = self.env.get_template(template_name)
             return template.render(**kwargs)
         except Exception as e:
             raise ValueError(f"Error rendering template '{template_name}': {str(e)} (Search path: {self.templates_dir})")
-    
-    def render_project_blueprint(self, user_prompt: Optional[str] = None, system_info: Optional[Dict[str, Any]] = None) -> str:
+
+    def render_project_blueprint(self, user_prompt: Optional[str] = None, system_info: Optional[Dict[str, Any]] = None, problem_statement_language: str = "others") -> str:
+        if problem_statement_language.lower() == "cuda":
+            return self.render('project_blueprint_cuda.j2', user_prompt=user_prompt, system_info=system_info)
         return self.render('project_blueprint.j2', user_prompt=user_prompt, system_info=system_info)
-    
+
     def render_file_generation(
         self,
         filepath: str,
@@ -75,6 +77,6 @@ class PromptManager:
             tree=tree,
             file_output_format=file_output_format
         )
-    
+
     def list_templates(self) -> list:
         return self.env.list_templates()
