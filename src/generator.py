@@ -323,6 +323,133 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
     system_info = get_system_info()
     system_instruction = pm.render_project_blueprint(user_prompt=prompt, system_info=system_info, problem_statement_language=problem_statement_language)
 
+    def _extract_json_str(raw_content: str) -> Optional[str]:
+        if not raw_content:
+            return None
+        match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_content, re.DOTALL)
+        if match:
+            return match.group(1)
+
+        start_idx = raw_content.find('{')
+        if start_idx == -1:
+            return None
+
+        depth = 0
+        for i in range(start_idx, len(raw_content)):
+            if raw_content[i] == '{':
+                depth += 1
+            elif raw_content[i] == '}':
+                depth -= 1
+                if depth == 0:
+                    return raw_content[start_idx:i + 1]
+        return None
+
+    def _clean_tree_name(raw_name: Any) -> str:
+        name = str(raw_name or "").strip().strip("/")
+        if not name:
+            return ""
+        if "/" in name:
+            name = name.split("/")[-1]
+        return name.strip()
+
+    def _looks_like_file_contract(node: Any) -> bool:
+        if not isinstance(node, dict):
+            return False
+        contract_keys = {
+            "description",
+            "logic",
+            "implementation",
+            "functions",
+            "function_signatures",
+            "relationships",
+        }
+        if any(key in node for key in contract_keys):
+            return True
+        return False
+
+    def _folder_dict_to_ascii_tree(folder_obj: Dict[str, Any]) -> str:
+        if not isinstance(folder_obj, dict) or not folder_obj:
+            return "project"
+
+        lines = []
+
+        def walk(node: Dict[str, Any], prefix: str = ""):
+            items = list(node.items())
+            for idx, (raw_name, child) in enumerate(items):
+                name = _clean_tree_name(raw_name)
+                if not name:
+                    continue
+
+                is_last = idx == len(items) - 1
+                connector = "└── " if is_last else "├── "
+                lines.append(f"{prefix}{connector}{name}")
+
+                if isinstance(child, dict) and not _looks_like_file_contract(child):
+                    extension = "    " if is_last else "│   "
+                    walk(child, prefix + extension)
+
+        top_level_items = list(folder_obj.items())
+        if len(top_level_items) == 1:
+            root_name = _clean_tree_name(top_level_items[0][0]) or "project"
+            root_child = top_level_items[0][1]
+            if isinstance(root_child, dict):
+                walk(root_child, "")
+            return "\n".join([root_name] + lines) if lines else root_name
+
+        root_name = "project"
+        walk(folder_obj, "")
+        return "\n".join([root_name] + lines) if lines else root_name
+
+    def _extract_file_formats_from_folder_obj(folder_obj: Dict[str, Any]) -> Dict[str, Any]:
+        extracted: Dict[str, Any] = {}
+
+        def walk(node: Any, current_path: str = ""):
+            if not isinstance(node, dict):
+                return
+
+            for raw_name, child in node.items():
+                name = _clean_tree_name(raw_name)
+                if not name:
+                    continue
+
+                next_path = os.path.join(current_path, name).replace("\\", "/") if current_path else name
+                if isinstance(child, dict):
+                    if _looks_like_file_contract(child):
+                        extracted[next_path] = child
+                    else:
+                        walk(child, next_path)
+
+        walk(folder_obj, "")
+        return extracted
+
+    def _normalize_project_blueprint_payload(raw_payload: Any) -> Optional[Dict[str, Any]]:
+        if not isinstance(raw_payload, dict):
+            return None
+
+        software_blueprint_details = raw_payload.get("software_blueprint_details")
+        if not isinstance(software_blueprint_details, dict):
+            software_blueprint_details = {}
+
+        folder_structure = raw_payload.get("folder_structure")
+        file_formats = raw_payload.get("file_formats")
+
+        if isinstance(folder_structure, dict):
+            if not isinstance(file_formats, dict):
+                file_formats = _extract_file_formats_from_folder_obj(folder_structure)
+            folder_structure = _folder_dict_to_ascii_tree(folder_structure)
+
+        if not isinstance(folder_structure, str):
+            folder_structure = "project"
+
+        if not isinstance(file_formats, dict):
+            file_formats = {}
+
+        return {
+            "software_blueprint_details": software_blueprint_details,
+            "folder_structure": folder_structure,
+            "file_formats": file_formats,
+        }
+
     if provider_name == "google":
         from google.genai import types
         from .utils.inference import retry_api_call
@@ -342,11 +469,34 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
 
         try:
             data = json.loads(response.text)
-            return ProjectBlueprint(**data)
-        except (json.JSONDecodeError, ValueError):
+            normalized = _normalize_project_blueprint_payload(data)
+            if not normalized:
+                return None
+            return ProjectBlueprint(**normalized)
+        except (json.JSONDecodeError, ValueError, TypeError):
             return None
 
     else:
+        # vLLM path: use provider abstraction so endpoint routing is consistent
+        # with configured /v1/chat/completions behavior in VLLMProvider.
+        if provider_name == "vllm":
+            messages = [
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": prompt}
+            ]
+            try:
+                response = provider.call_model(messages)
+                raw_content = provider.extract_text(response)
+                json_str = _extract_json_str(raw_content)
+                if json_str:
+                    data = json.loads(json_str)
+                    normalized = _normalize_project_blueprint_payload(data)
+                    if normalized:
+                        return ProjectBlueprint(**normalized)
+            except Exception:
+                return None
+            return None
+
         # OpenRouter/OpenAI via structured outputs
         messages = [
             {"role": "system", "content": system_instruction},
@@ -371,26 +521,12 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
                     messages=messages,
                 )
                 raw_content = completion.choices[0].message.content
-                json_str = None
-                import re
-                match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_content, re.DOTALL)
-                if match:
-                    json_str = match.group(1)
-                else:
-                    start_idx = raw_content.find('{')
-                    if start_idx != -1:
-                        depth = 0
-                        for i in range(start_idx, len(raw_content)):
-                            if raw_content[i] == '{':
-                                depth += 1
-                            elif raw_content[i] == '}':
-                                depth -= 1
-                                if depth == 0:
-                                    json_str = raw_content[start_idx:i+1]
-                                    break
+                json_str = _extract_json_str(raw_content)
                 if json_str:
                     data = json.loads(json_str)
-                    return ProjectBlueprint(**data)
+                    normalized = _normalize_project_blueprint_payload(data)
+                    if normalized:
+                        return ProjectBlueprint(**normalized)
             except Exception as fallback_err:
                 print(f"Error calling structured output API: {e}. Fallback failed: {fallback_err}")
 

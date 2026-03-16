@@ -8,7 +8,7 @@ def get_providers():
         raise FileNotFoundError(f"Provider configuration file '{config_path}' not found.")
     with open(config_path, "r") as f:
         config = json.load(f)
-    return config.get("model_providers", [])
+    return config.get("model_providers", {})
 
 if __name__ == "__main__":
     providers = get_providers()

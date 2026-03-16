@@ -10,6 +10,7 @@
         },
         "vllm": {
             "base_url": "http://localhost:8000/v1",
+            "chat_completions_url": "http://localhost:8000/v1/chat/completions",
             "api_key": "EMPTY"
         },
         "openrouter": {

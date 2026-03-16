@@ -198,6 +198,47 @@ def cmd_setup(args):
         return 1
 
 
+def cmd_blueprint_smoke(args):
+    from .generator import generate_project_blueprint
+    from .utils.prompt_manager import PromptManager
+
+    prompt = args.prompt
+    if not prompt:
+        prompt = input("Enter blueprint prompt: ").strip()
+
+    if not prompt:
+        print("Project description is required!")
+        return 1
+
+    provider_name = getattr(args, "provider", None) or "vllm"
+    problem_statement_language = normalize_problem_statement_language(getattr(args, "language", None)) or "others"
+
+    print("=" * 80)
+    print("ALPHASTACK - Blueprint Smoke Test")
+    print("=" * 80)
+    print(f"Provider: {provider_name}")
+    print(f"Language profile: {problem_statement_language}")
+
+    pm = PromptManager()
+    blueprint = generate_project_blueprint(
+        prompt=prompt,
+        pm=pm,
+        provider_name=provider_name,
+        problem_statement_language=problem_statement_language,
+    )
+    print(f"blueprint: {blueprint}")
+
+    if not blueprint:
+        print("\nBlueprint generation failed")
+        return 1
+
+    print("\nBlueprint generation succeeded")
+    print(f"Top-level keys: {list(blueprint.software_blueprint_details.keys())}")
+    print(f"Folder structure length: {len(blueprint.folder_structure)} chars")
+    print(f"File format entries: {len(blueprint.file_formats)}")
+    return 0
+
+
 def interactive_mode():
     """Launches the interactive TUI mode."""
     try:
@@ -379,6 +420,23 @@ def main():
 
     setup_parser = subparsers.add_parser("setup", help="Configure API Keys")
     setup_parser.set_defaults(func=cmd_setup)
+
+    blueprint_smoke_parser = subparsers.add_parser(
+        "blueprint-smoke",
+        help="Run only software blueprint generation (smoke test)"
+    )
+    blueprint_smoke_parser.add_argument("prompt", nargs="?", help="Project description")
+    blueprint_smoke_parser.add_argument(
+        "-p", "--provider",
+        choices=["google", "openai", "vllm", "openrouter", "prime_intellect"],
+        help="Inference provider (default: vllm)"
+    )
+    blueprint_smoke_parser.add_argument(
+        "-l", "--language",
+        choices=["cuda", "others"],
+        help="Problem language profile: cuda or others (default: others)"
+    )
+    blueprint_smoke_parser.set_defaults(func=cmd_blueprint_smoke)
 
     # eval_parser = subparsers.add_parser("eval", help="Evaluate different frontier models for project generation with Alphastack's Architecture")
     # eval_parser.add_argument(

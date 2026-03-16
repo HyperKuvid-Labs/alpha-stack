@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import requests
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
 from pathlib import Path
@@ -412,39 +413,165 @@ class VLLMProvider(OpenAICompatibleProvider):
             self._client = OpenAI(api_key=api_key, base_url=base_url)
         return self._client
 
-    def call_model(self, messages: List[Dict], tools: List[Dict] = None, **kwargs) -> Any:
-        model = self.model
-        if not model:
-            models_response = retry_api_call(self.get_client().models.list)
-            model_data = getattr(models_response, "data", None) or []
-            if not model_data:
-                raise ValueError(
-                    "vLLM returned no models and no model is configured. "
-                    "Set model under providers.json:model_providers.vllm.model or ensure /v1/models works."
-                )
-            model = model_data[0].id
+    def _get_chat_completions_url(self) -> str:
+        explicit_url = self.config.get("chat_completions_url")
+        if explicit_url:
+            return explicit_url
 
-        call_kwargs = {
+        base_url = str(self.config.get("base_url", "http://localhost:8000")).rstrip("/")
+        if base_url.endswith("/v1"):
+            return f"{base_url}/chat/completions"
+        return f"{base_url}/v1/chat/completions"
+
+    def _get_models_url(self) -> str:
+        base_url = str(self.config.get("base_url", "http://localhost:8000")).rstrip("/")
+        if base_url.endswith("/v1"):
+            return f"{base_url}/models"
+        return f"{base_url}/v1/models"
+
+    def _resolve_model_name(self) -> str:
+        model = self.model
+        if model:
+            return model
+
+        models_url = self._get_models_url()
+        response = retry_api_call(
+            requests.get,
+            models_url,
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json() or {}
+        model_data = data.get("data") or []
+        if not model_data:
+            raise ValueError(
+                "vLLM returned no models and no model is configured. "
+                "Set model under providers.json:model_providers.vllm.model or ensure /v1/models works."
+            )
+        first_model = model_data[0]
+        model_id = first_model.get("id") if isinstance(first_model, dict) else ""
+        if not model_id:
+            raise ValueError(
+                "vLLM returned model metadata without a valid id. "
+                "Set model under providers.json:model_providers.vllm.model explicitly."
+            )
+        return model_id
+
+    def call_model(self, messages: List[Dict], tools: List[Dict] = None, **kwargs) -> Any:
+        model = self._resolve_model_name()
+
+        payload = {
             "model": model,
             "messages": messages,
         }
         if tools:
-            call_kwargs["tools"] = tools
-            call_kwargs["tool_choice"] = "auto"
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
 
         for param in ["temperature", "max_tokens", "top_p"]:
             if param in kwargs:
-                call_kwargs[param] = kwargs[param]
-        if "max_output_tokens" in kwargs and "max_tokens" not in call_kwargs:
-            call_kwargs["max_tokens"] = kwargs["max_output_tokens"]
+                payload[param] = kwargs[param]
+        if "max_output_tokens" in kwargs and "max_tokens" not in payload:
+            payload["max_tokens"] = kwargs["max_output_tokens"]
 
-        response = retry_api_call(self.get_client().chat.completions.create, **call_kwargs)
-        if hasattr(response, "usage") and hasattr(response.usage, "total_tokens"):
-            self.total_tokens_used += response.usage.total_tokens
-        return response
+        headers = {"Content-Type": "application/json"}
+        api_key = self.api_key or os.getenv("VLLM_API_KEY")
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        response = retry_api_call(
+            requests.post,
+            self._get_chat_completions_url(),
+            json=payload,
+            headers=headers,
+            timeout=30,
+        )
+        response.raise_for_status()
+        response_json = response.json()
+
+        usage = response_json.get("usage") if isinstance(response_json, dict) else None
+        if isinstance(usage, dict):
+            total_tokens = usage.get("total_tokens")
+            if isinstance(total_tokens, int):
+                self.total_tokens_used += total_tokens
+
+        return response_json
+
+    def extract_function_calls(self, response: Any) -> List[Dict[str, Any]]:
+        if isinstance(response, dict):
+            function_calls = []
+            choices = response.get("choices") or []
+            if not choices:
+                return function_calls
+
+            message = choices[0].get("message") or {}
+            tool_calls = message.get("tool_calls") or []
+            for tool_call in tool_calls:
+                if tool_call.get("type") != "function":
+                    continue
+                function = tool_call.get("function") or {}
+                args = function.get("arguments", {})
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except json.JSONDecodeError:
+                        args = {}
+                if not isinstance(args, dict):
+                    args = {}
+                function_calls.append(
+                    {
+                        "name": function.get("name", ""),
+                        "args": args,
+                        "id": tool_call.get("id"),
+                    }
+                )
+            return function_calls
+        return super().extract_function_calls(response)
 
     def extract_text(self, response: Any) -> str:
+        if isinstance(response, dict):
+            choices = response.get("choices") or []
+            if not choices:
+                return ""
+
+            message = choices[0].get("message") or {}
+            content = message.get("content")
+            if isinstance(content, list):
+                parts = []
+                for part in content:
+                    if isinstance(part, dict):
+                        parts.append(part.get("text", ""))
+                    else:
+                        parts.append(str(part))
+                content = "\n".join(parts)
+
+            generated_text = (
+                content
+                or message.get("reasoning")
+                or message.get("reasoning_content")
+                or choices[0].get("text")
+                or ""
+            )
+            return generated_text.strip()
         return super().extract_text(response)
+
+    def accumulate_messages(
+        self, messages: List, response: Any, function_responses: List
+    ) -> None:
+        if isinstance(response, dict):
+            choices = response.get("choices") or []
+            if choices:
+                assistant_msg = choices[0].get("message") or {}
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": assistant_msg.get("content") or "",
+                        "tool_calls": assistant_msg.get("tool_calls") or [],
+                    }
+                )
+            messages.extend(function_responses)
+            return
+        super().accumulate_messages(messages, response, function_responses)
 
 
 class InferenceManager:
@@ -521,7 +648,15 @@ class InferenceManager:
 
     @staticmethod
     def get_provider_config(provider_name: str) -> Dict[str, Any]:
-        return get_providers()
+        all_providers = get_providers()
+        if not isinstance(all_providers, dict):
+            raise ValueError("Invalid providers.json format: 'model_providers' must be an object")
+        if provider_name not in all_providers:
+            raise ValueError(
+                f"Unknown provider in providers.json: {provider_name}. "
+                f"Available: {list(all_providers.keys())}"
+            )
+        return all_providers[provider_name]
 
     @staticmethod
     def create_provider(provider_name: str) -> InferenceProvider:
