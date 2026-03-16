@@ -189,6 +189,8 @@ class DockerTestFileGenerator:
         generated_files = []
         metadata_context = self._extract_metadata_context()
 
+        print(f"Received blueprint for test file generation: {json.dumps(blueprint, indent=2)}")
+
         for item in blueprint:
             if item.get("type") != "test_file":
                 continue
@@ -229,6 +231,8 @@ class DockerTestFileGenerator:
             with open(abs_test_path, 'w', encoding='utf-8') as f:
                 f.write(test_content)
 
+            print(f"Generated test file at '{abs_test_path}' for target file '{target_file}' with metadata '{target_metadata}'")
+
             if abs_test_path not in self.metadata_dict:
                 self.metadata_dict[abs_test_path] = []
 
@@ -241,6 +245,7 @@ class DockerTestFileGenerator:
         return generated_files
 
     def generate_dockerfile(self) -> bool:
+        print("Starting Dockerfile generation...")
         metadata_context = self._extract_metadata_context()
 
         prompt = self.pm.render("dockerfile_generation.j2",
@@ -272,6 +277,8 @@ class DockerTestFileGenerator:
         with open(dockerignore_path, 'w', encoding='utf-8') as f:
             f.write(generate_dockerignore_content())
 
+        print(f"Generated Dockerfile at '{dockerfile_path}' with content:\n{dockerfile_content}")
+
         self.error_tracker.log_change(
             file_path=dockerfile_path,
             change_description="Generated Dockerfile and .dockerignore from project metadata",
@@ -283,6 +290,7 @@ class DockerTestFileGenerator:
 
     def generate_shell_test_script(self, test_files: List[str]) -> Optional[str]:
         # this function is to generate the main testing script instead ofdocker file for cuda
+        print("Starting shell script generation for CUDA tests...")
         metadata_context = self._extract_metadata_context()
 
         prompt = self.pm.render("test_shell_script_generation.j2",
@@ -312,6 +320,8 @@ class DockerTestFileGenerator:
 
             os.chmod(script_path, 0o755)  # Make it executable
 
+        print(f"Generated test shell script at '{script_path}' with content:\n{script_content}")
+
         self.error_tracker.log_change(
             file_path=script_path,
             change_description="Generated shell script for running tests from project metadata for CUDA project",
@@ -320,6 +330,7 @@ class DockerTestFileGenerator:
         )
 
     def resolve_test_dependencies(self, test_files: List[str]) -> Dict:
+        print("Starting test dependency resolution...")
         if not test_files:
             return {"success": True, "resolved": 0}
 

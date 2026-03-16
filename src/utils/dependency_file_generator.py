@@ -108,6 +108,8 @@ class DependencyFileGenerator:
         content = clean_agent_output(content)
         generated_files = self._save_dependency_files(content)
 
+        print(f"Dependency file generation completed. Generated files: {generated_files}")
+
         results["generated_files"] = generated_files
         return results
 

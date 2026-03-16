@@ -337,35 +337,24 @@ class StatusDisplay:
 
         width = max(76, console.size.width - 6)
 
-        layout = Layout()
-        layout.split_column(
-            Layout(
-                Align.center(
-                    Panel(
-                        status_content,
-                        border_style=NEON_PRIMARY,
-                        padding=(1, 2),
-                        width=width,
-                        title="[bold white] PIPELINE STATUS [/bold white]",
-                    )
-                ),
-                ratio=2,
+        combined_group = Group(
+            Panel(
+                status_content,
+                border_style=NEON_PRIMARY,
+                padding=(1, 2),
+                width=width,
+                title="[bold white] PIPELINE STATUS [/bold white]",
             ),
-            Layout(
-                Align.center(
-                    Panel(
-                        logs_text,
-                        border_style=NEON_INFO,
-                        padding=(1, 2),
-                        width=width,
-                        title="[bold white] LIVE LOGS [/bold white]",
-                    )
-                ),
-                ratio=3,
-            ),
+            Panel(
+                logs_text,
+                border_style=NEON_INFO,
+                padding=(1, 2),
+                width=width,
+                title="[bold white] LIVE LOGS [/bold white]",
+            )
         )
 
-        return layout
+        return Align.center(combined_group)
 
     def _mark_current_phase_complete(self):
         if self.current_phase and self.current_phase != "Preparing pipeline...":

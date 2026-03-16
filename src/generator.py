@@ -63,7 +63,94 @@ def generate_file(context, filepath, refined_prompt, tree, file_output_format, p
         file_output_format=file_output_format
     )
 
+    print(f"Generating file '{filepath}' with context '{context}' using provider '{provider_name}'...")
+
     result = None
+
+    def _extract_json_objects(text: str) -> list[str]:
+        objects = []
+        start = None
+        depth = 0
+        in_string = False
+        escaped = False
+
+        for idx, char in enumerate(text):
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == '\\':
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                continue
+
+            if char == '"':
+                in_string = True
+                continue
+
+            if char == '{':
+                if depth == 0:
+                    start = idx
+                depth += 1
+            elif char == '}' and depth > 0:
+                depth -= 1
+                if depth == 0 and start is not None:
+                    objects.append(text[start:idx + 1])
+                    start = None
+
+        return objects
+
+    def _parse_file_generation_result(raw_content: Optional[str]) -> Optional[FileGenerationResult]:
+        if not raw_content:
+            return None
+
+        candidate_texts = []
+        fenced_blocks = re.findall(r'```(?:json)?\s*([\s\S]*?)\s*```', raw_content, flags=re.IGNORECASE)
+        candidate_texts.extend(fenced_blocks)
+        candidate_texts.append(raw_content)
+
+        parsed_objects = []
+        for candidate in candidate_texts:
+            for obj_str in _extract_json_objects(candidate):
+                try:
+                    parsed = json.loads(obj_str)
+                    if isinstance(parsed, dict):
+                        parsed_objects.append(parsed)
+                except Exception:
+                    continue
+
+        if not parsed_objects:
+            return None
+
+        file_content = None
+        metadata_description = None
+
+        for obj in parsed_objects:
+            if file_content is None and isinstance(obj.get("file_content"), str) and obj.get("file_content").strip():
+                file_content = obj.get("file_content")
+
+            if metadata_description is None and isinstance(obj.get("metadata_description"), str) and obj.get("metadata_description").strip():
+                metadata_description = obj.get("metadata_description")
+
+            if metadata_description is None and isinstance(obj.get("primer_content"), str) and obj.get("primer_content").strip():
+                metadata_description = obj.get("primer_content")
+
+            if file_content and metadata_description:
+                break
+
+        if not file_content:
+            return None
+
+        if not metadata_description:
+            metadata_description = "Auto-generated file content."
+
+        try:
+            return FileGenerationResult(
+                file_content=file_content,
+                metadata_description=metadata_description,
+            )
+        except Exception:
+            return None
 
     if provider_name == "google":
         from google.genai import types
@@ -84,7 +171,21 @@ def generate_file(context, filepath, refined_prompt, tree, file_output_format, p
                 data = json.loads(response.text)
                 result = FileGenerationResult(**data)
             except (json.JSONDecodeError, ValueError):
-                pass
+                result = _parse_file_generation_result(response.text)
+
+    elif provider_name == "vllm":
+        messages = [
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": "Generate the file content and metadata description."}
+        ]
+
+        try:
+            response = provider.call_model(messages)
+            raw_content = provider.extract_text(response)
+            print(f"Raw response from vLLM for file generation: {raw_content}")
+            result = _parse_file_generation_result(raw_content)
+        except Exception as e:
+            print(f"Error calling vLLM API for file generation: {e}")
 
     else:
         # OpenRouter/OpenAI via structured outputs
@@ -109,34 +210,14 @@ def generate_file(context, filepath, refined_prompt, tree, file_output_format, p
                     messages=messages,
                 )
                 raw_content = completion.choices[0].message.content
-                json_str = None
-
-                # Strip markdown blocks
-                import re
-                match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_content, re.DOTALL)
-                if match:
-                    json_str = match.group(1)
-                else:
-                    # Generic scraping
-                    start_idx = raw_content.find('{')
-                    if start_idx != -1:
-                        depth = 0
-                        for i in range(start_idx, len(raw_content)):
-                            if raw_content[i] == '{':
-                                depth += 1
-                            elif raw_content[i] == '}':
-                                depth -= 1
-                                if depth == 0:
-                                    json_str = raw_content[start_idx:i+1]
-                                    break
-                if json_str:
-                    data = json.loads(json_str)
-                    result = FileGenerationResult(**data)
+                result = _parse_file_generation_result(raw_content)
             except Exception as fallback_err:
                 print(f"Error calling structured output API for file generation: {e}. Fallback failed: {fallback_err}")
 
     if result:
         result.file_content = clean_agent_output(result.file_content)
+
+    print(f"Generated content for '{filepath}':\n{result.file_content if result else 'No content generated.'}")
 
     return result
 
@@ -870,6 +951,7 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
         )
 
         # Extract all external dependencies from all files in the project
+        print("Extracting external dependencies from project files...")
         external_dependencies = extract_all_external_dependencies(dependency_analyzer, project_root_path)
 
         # Generate dependency files using the coding agent

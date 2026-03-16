@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alphastack"
-version = "0.1.14"
+version = "0.1.18"
 description = "AI-powered project generator with Docker testing"
 readme = "README.md"
 requires-python = ">=3.9"
