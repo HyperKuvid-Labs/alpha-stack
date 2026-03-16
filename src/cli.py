@@ -212,7 +212,7 @@ def interactive_mode():
     display_logo()
 
     try:
-        user_prompt, output_dir, problem_statement_language = get_user_input()
+        user_prompt, output_dir, problem_statement_language, provider_name = get_user_input()
     except KeyboardInterrupt:
         print("\n Exiting...")
         return 0
@@ -230,6 +230,7 @@ def interactive_mode():
             user_prompt,
             output_dir,
             on_status=tui_status_handler,
+            provider_name=provider_name,
             problem_statement_language=problem_statement_language,
         )
 

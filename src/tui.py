@@ -1,6 +1,8 @@
 import os
 import sys
 import time
+import json
+from pathlib import Path
 
 import pyfiglet
 from prompt_toolkit import prompt
@@ -21,14 +23,15 @@ from .config import get_api_key, set_api_key
 # Initialize Rich Console
 console = Console()
 
-# Neon Noir Palette
-NEON_PRIMARY = "#FF2E88"
-NEON_ACCENT = "#FFB3D9"
-NEON_INFO = "#7EE7FF"
-NEON_SUCCESS = "#5CFFB5"
-NEON_WARNING = "#FFD166"
-NEON_ERROR = "#FF6B81"
-NEON_MUTED = "#9AA4BF"
+# Tokyo Night Palette (using original Neon Noir variable names)
+
+NEON_PRIMARY  = "#BB9AF7"    # Signature Tokyo Night purple – vibrant accent / main highlight
+NEON_ACCENT   = "#C0CAF5"    # Soft periwinkle / light foreground blue-purple
+NEON_INFO     = "#7AA2F7"    # Bright info/link blue
+NEON_SUCCESS  = "#9ECE6A"    # Fresh neon green for success/positive
+NEON_WARNING  = "#E0AF68"    # Warm amber/gold for warnings
+NEON_ERROR    = "#F7768E"    # Vivid coral-red / error pinkish-red
+NEON_MUTED    = "#565F89"    # Cool muted indigo-gray (perfect for secondary/quiet text)
 
 PROMPT_STYLE = PromptStyle.from_dict(
     {
@@ -53,6 +56,34 @@ def _section_panel(title, subtitle=None):
     if subtitle:
         body.append(f"\n{subtitle}", style=NEON_MUTED)
     return Panel(body, border_style=NEON_PRIMARY, padding=(0, 2))
+
+
+def _load_provider_options():
+    config_path = Path(__file__).with_name("providers.json")
+    fallback_options = ["google", "openai", "vllm", "openrouter", "prime_intellect"]
+    fallback_default = "google"
+
+    try:
+        with open(config_path, "r") as f:
+            config = json.load(f)
+
+        model_providers = config.get("model_providers", {})
+        provider_options = [
+            name.strip().lower()
+            for name in model_providers.keys()
+            if isinstance(name, str) and name.strip()
+        ]
+
+        if not provider_options:
+            return fallback_options, fallback_default
+
+        default_provider = str(config.get("default_provider", "")).strip().lower()
+        if default_provider not in provider_options:
+            default_provider = provider_options[0]
+
+        return provider_options, default_provider
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return fallback_options, fallback_default
 
 
 def display_logo():
@@ -116,13 +147,33 @@ def get_user_input():
     console.print(Align.center(Text("Use ↑/↓ for history. Keep prompts concise and specific.", style=NEON_MUTED)))
     console.print(Rule(style=NEON_PRIMARY))
 
-    existing_key = get_api_key()
-    if existing_key:
-        change = _styled_input("Update API key? (y/N) >").lower()
-        if change == "y":
-            setup_api_key()
+    provider_options, default_provider = _load_provider_options()
+    provider_options_text = "/".join(provider_options)
+
+    # ask for the provider before api key step
+    while True:
+        provider_input = _styled_input(
+            f"Select provider ({provider_options_text}) [{default_provider}] >"
+        ).lower()
+        provider = provider_input or default_provider
+        if provider in provider_options:
+            break
+        console.print(
+            f"[{NEON_WARNING}]Please choose one of: {provider_options_text}.[/{NEON_WARNING}]"
+        )
+
+    if provider in {"google", "openai", "openrouter", "prime_intellect"}:
+        existing_key = get_api_key()
+        if existing_key:
+            change = _styled_input("Update API key? (y/N) >").lower()
+            if change == "y":
+                setup_api_key()
+        else:
+            pass
     else:
-        setup_api_key()
+        console.print(
+            f"[{NEON_MUTED}]Provider '{provider}' selected. Ensure {provider.upper()}_API_KEY is set if required.[/{NEON_MUTED}]"
+        )
 
     history_file = os.path.expanduser("~/.alphastack_history")
 
@@ -176,7 +227,7 @@ def get_user_input():
 
     console.print()
     console.print(Align.center(Text("Configuration locked. Spinning up generation...", style=NEON_INFO)))
-    return user_prompt, output_dir, problem_statement_language
+    return user_prompt, output_dir, problem_statement_language, provider
 
 
 class StatusDisplay:
