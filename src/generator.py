@@ -183,7 +183,7 @@ def generate_file(context, filepath, refined_prompt, tree, file_output_format, p
             response = provider.call_model(messages)
             raw_content = provider.extract_text(response)
             # print(f"Raw response from vLLM for file generation: {raw_content}")
-            result = _parse_file_generation_result(raw_content)
+            # result = _parse_file_generation_result(raw_content)
             print(f"Parsed file generation result from vLLM: {result}")
         except Exception as e:
             print(f"Error calling vLLM API for file generation: {e}")
