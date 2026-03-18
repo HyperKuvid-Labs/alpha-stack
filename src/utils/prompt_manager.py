@@ -80,7 +80,8 @@ class PromptManager:
         context: str,
         refined_prompt: str,
         tree: str,
-        file_output_format: str
+        file_output_format: str,
+        file_description: str
     ) -> str:
         return self.render(
             'file_generation.j2',
@@ -88,7 +89,40 @@ class PromptManager:
             context=context,
             refined_prompt=refined_prompt,
             tree=tree,
-            file_output_format=file_output_format
+            file_output_format=file_output_format,
+            file_description=file_description
+        )
+
+    def render_file_metadata(
+            self,
+            filepath: str,
+            context: str,
+            refined_prompt: str,
+            tree: str,
+            file_output_format: str,
+            file_content: str
+    ):
+        return self.render(
+            'metadata_generation.j2',
+            filepath=filepath,
+            context=context,
+            refined_prompt=refined_prompt,
+            tree=tree,
+            file_output_format=file_output_format,
+            file_content=file_content
+        )
+
+    def render_file_descriptor(
+            self,
+            software_blueprint,
+            folder_structure,
+            file_name
+    ):
+        return self.render(
+            'file_descriptor.j2',
+            software_bluprint_details=software_blueprint,
+            folder_structure=folder_structure,
+            file_name=file_name
         )
 
     def list_templates(self) -> list:

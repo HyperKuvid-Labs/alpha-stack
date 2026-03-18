@@ -17,11 +17,14 @@ from queue import Queue, Empty
 class TreeNode:
     def __init__(self, value):
         self.value = value
+        self.description = ""
         self.children = []
         self.is_file = False
         self.error_traces = []
+
     def add_child(self, child_node):
         self.children.append(child_node)
+
 DEPENDENCY_FILES_TO_SKIP = {
     'requirements.txt', 'requirements-dev.txt', 'requirements-test.txt',
     'Pipfile', 'Pipfile.lock', 'pyproject.toml', 'poetry.lock', 'setup.py', 'setup.cfg',
@@ -36,6 +39,8 @@ DEPENDENCY_FILES_TO_SKIP = {
     'CMakeLists.txt', 'conanfile.txt', 'vcpkg.json',
     'rebar.config', 'rebar.lock',
 }
+
+languages = ["python", "cpp", "java", "javascript", "typescript", "go", "rust", "ruby", "php", "csharp", "dart", "kotlin", "swift", "scala", "elixir", "haskell", "clojure", "lua", "bash", "sh", "shell", "zsh", "powershell", "ps1"]
 
 def should_generate_content(filepath):
     ext = os.path.splitext(filepath)[1].lower()
@@ -52,7 +57,172 @@ class FileGenerationResult(BaseModel):
     metadata_description: str = Field(description="A 1-2 sentence description of what the file does")
 
 
-def generate_file(context, filepath, refined_prompt, tree, file_output_format, pm, provider_name: Optional[str] = None) -> Optional[FileGenerationResult]:
+class FileDescriptorResult(BaseModel):
+    file_description: str = Field(description="A precise, 1-2 sentence technical description of the file's purpose and functionality")
+    language: str = Field(description="Programming language used in the file")
+
+
+def _parse_file_descriptor_result(raw_content: Optional[str]) -> Optional[FileDescriptorResult]:
+    if not raw_content:
+        return None
+
+    text = raw_content.strip()
+
+    fence_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text, re.IGNORECASE)
+    if fence_match:
+        text = fence_match.group(1).strip()
+
+    try:
+        parsed = json.loads(text)
+        return FileDescriptorResult(**parsed)
+    except Exception:
+        pass
+
+    json_obj_match = re.search(r'\{[\s\S]*\}', text)
+    if json_obj_match:
+        json_candidate = json_obj_match.group(0).strip()
+        try:
+            parsed = json.loads(json_candidate)
+            return FileDescriptorResult(**parsed)
+        except Exception:
+            pass
+
+    return None
+
+
+def generate_file_descriptor(
+    file_name: str,
+    software_blueprint: Dict[str, Any],
+    folder_structure: str,
+    pm,
+    provider_name: Optional[str] = None,
+) -> Optional[FileDescriptorResult]:
+    provider_name = provider_name or InferenceManager.get_default_provider()
+    provider = InferenceManager.create_provider(provider_name)
+
+    system_instruction = pm.render_file_descriptor(
+        software_blueprint=software_blueprint,
+        folder_structure=folder_structure,
+        file_name=file_name,
+    )
+
+    if provider_name == "google":
+        from .utils.inference import retry_api_call
+
+        try:
+            client = provider.get_client()
+            response = retry_api_call(
+                client.models.generate_content,
+                model=provider.model,
+                contents="Return only the descriptor JSON.",
+                config=types.GenerateContentConfig(
+                    systemInstruction=system_instruction,
+                    response_mime_type="application/json",
+                    response_schema=FileDescriptorResult,
+                ),
+            )
+            if response and response.text:
+                try:
+                    data = json.loads(response.text)
+                    return FileDescriptorResult(**data)
+                except Exception:
+                    return _parse_file_descriptor_result(response.text)
+        except Exception:
+            return None
+        return None
+
+    messages = [
+        {"role": "system", "content": system_instruction},
+        {"role": "user", "content": "Return only the descriptor JSON with file_description and language."},
+    ]
+
+    if provider_name == "vllm":
+        try:
+            response = provider.call_model(messages)
+            raw_content = provider.extract_text(response)
+            return _parse_file_descriptor_result(raw_content)
+        except Exception:
+            return None
+
+    try:
+        client = provider.get_client()
+        completion = client.beta.chat.completions.parse(
+            model=provider.model,
+            messages=messages,
+            response_format=FileDescriptorResult,
+        )
+        return completion.choices[0].message.parsed
+    except Exception:
+        try:
+            completion = client.chat.completions.create(
+                model=provider.model,
+                messages=messages,
+            )
+            raw_content = completion.choices[0].message.content
+            return _parse_file_descriptor_result(raw_content)
+        except Exception:
+            return None
+
+
+def fill_description_for_files(
+    root,
+    software_blueprint,
+    folder_structure,
+    file_format,
+    pm=None,
+    provider_name: Optional[str] = None,
+):
+    if root is None:
+        return
+
+    if pm is None:
+        pm = PromptManager()
+
+    provider_name = provider_name or InferenceManager.get_default_provider()
+
+    def _infer_file_path(node_path: str) -> str:
+        normalized = node_path.replace("\\", "/")
+        normalized = normalized.strip("/")
+
+        if isinstance(file_format, dict) and normalized in file_format:
+            return normalized
+
+        if isinstance(file_format, dict):
+            for key in file_format.keys():
+                key_norm = str(key).replace("\\", "/").strip("/")
+                if key_norm.endswith(f"/{normalized}"):
+                    return key_norm
+
+        return normalized
+
+    def _walk(node, current_path: str = ""):
+        node_name = (node.value or "").strip()
+        next_path = os.path.join(current_path, node_name).replace("\\", "/") if node_name else current_path
+
+        if node.is_file:
+            file_path = _infer_file_path(next_path)
+
+            descriptor = generate_file_descriptor(
+                file_name=file_path,
+                software_blueprint=software_blueprint,
+                folder_structure=folder_structure,
+                pm=pm,
+                provider_name=provider_name,
+            )
+
+            if descriptor and descriptor.file_description:
+                node.description = descriptor.file_description.strip()
+            else:
+                node.description = f"Implements functionality for {node_name or file_path}."
+            return
+
+        for child in node.children:
+            _walk(child, next_path)
+
+    _walk(root, "")
+
+
+def generate_file(context, filepath, refined_prompt, tree, file_output_format, pm, provider_name: Optional[str] = None, file_description: Optional[str] = None) -> Optional[FileGenerationResult]:
     provider_name = provider_name or InferenceManager.get_default_provider()
     provider = InferenceManager.create_provider(provider_name)
     system_instruction = pm.render_file_generation(
@@ -60,97 +230,47 @@ def generate_file(context, filepath, refined_prompt, tree, file_output_format, p
         context=context,
         refined_prompt=refined_prompt,
         tree=tree,
-        file_output_format=file_output_format
+        file_output_format=file_output_format,
+        file_description=file_description
     )
+
+    # so i have seperated out the file generation and metadata geneation seperately, now it needs to be done sequentially
 
     # print(f"Generating file '{filepath}' with context '{context}' using provider '{provider_name}'...")
 
     result = None
 
-    def _extract_json_objects(text: str) -> list[str]:
-        objects = []
-        start = None
-        depth = 0
-        in_string = False
-        escaped = False
-
-        for idx, char in enumerate(text):
-            if in_string:
-                if escaped:
-                    escaped = False
-                elif char == '\\':
-                    escaped = True
-                elif char == '"':
-                    in_string = False
-                continue
-
-            if char == '"':
-                in_string = True
-                continue
-
-            if char == '{':
-                if depth == 0:
-                    start = idx
-                depth += 1
-            elif char == '}' and depth > 0:
-                depth -= 1
-                if depth == 0 and start is not None:
-                    objects.append(text[start:idx + 1])
-                    start = None
-
-        return objects
-
     def _parse_file_generation_result(raw_content: Optional[str]) -> Optional[FileGenerationResult]:
         if not raw_content:
+            print(f"no content generated for {filepath}")
             return None
 
-        candidate_texts = []
-        fenced_blocks = re.findall(r'```(?:json)?\s*([\s\S]*?)\s*```', raw_content, flags=re.IGNORECASE)
-        candidate_texts.extend(fenced_blocks)
-        candidate_texts.append(raw_content)
+        # Extract fenced code first. Prefer a block with a known language, but
+        # gracefully fall back to the first non-empty fenced block.
+        fence_pattern = re.compile(r'```\s*(?P<lang>[A-Za-z0-9_+\-]*)[^\n]*\n(?P<code>[\s\S]*?)```', re.IGNORECASE)
+        blocks = list(fence_pattern.finditer(raw_content))
 
-        parsed_objects = []
-        for candidate in candidate_texts:
-            for obj_str in _extract_json_objects(candidate):
-                try:
-                    parsed = json.loads(obj_str)
-                    if isinstance(parsed, dict):
-                        parsed_objects.append(parsed)
-                except Exception:
-                    continue
+        extracted_content = ""
+        if blocks:
+            normalized_languages = {lang.lower() for lang in languages}
+            preferred_block = None
 
-        if not parsed_objects:
-            return None
+            for block in blocks:
+                block_lang = (block.group("lang") or "").strip().lower()
+                if block_lang in normalized_languages:
+                    preferred_block = block
+                    break
 
-        file_content = None
-        metadata_description = None
+            if preferred_block is None:
+                preferred_block = next((block for block in blocks if block.group("code").strip()), blocks[0])
 
-        for obj in parsed_objects:
-            if file_content is None and isinstance(obj.get("file_content"), str) and obj.get("file_content").strip():
-                file_content = obj.get("file_content")
+            extracted_content = preferred_block.group("code").strip()
+        else:
+            # Fallback: if no markdown fence exists, try to capture from a shebang onward.
+            shebang_match = re.search(r'(?m)^#![^\n]*\n[\s\S]*$', raw_content)
+            extracted_content = (shebang_match.group(0) if shebang_match else raw_content).strip()
 
-            if metadata_description is None and isinstance(obj.get("metadata_description"), str) and obj.get("metadata_description").strip():
-                metadata_description = obj.get("metadata_description")
-
-            if metadata_description is None and isinstance(obj.get("primer_content"), str) and obj.get("primer_content").strip():
-                metadata_description = obj.get("primer_content")
-
-            if file_content and metadata_description:
-                break
-
-        if not file_content:
-            return None
-
-        if not metadata_description:
-            metadata_description = "Auto-generated file content."
-
-        try:
-            return FileGenerationResult(
-                file_content=file_content,
-                metadata_description=metadata_description,
-            )
-        except Exception:
-            return None
+        return extracted_content
 
     if provider_name == "google":
         from google.genai import types
@@ -176,17 +296,35 @@ def generate_file(context, filepath, refined_prompt, tree, file_output_format, p
     elif provider_name == "vllm":
         messages = [
             {"role": "system", "content": system_instruction},
-            {"role": "user", "content": "Generate the file content and metadata description."}
+            {"role": "user", "content": "Generate the file content."}
+        ]
+        response = provider.call_model(messages)
+        raw_content = provider.extract_text(response)
+        # print(f"Raw response from vLLM for file generation: {raw_content}")
+        file_code_result = _parse_file_generation_result(raw_content)
+
+        system_instruction_metadata = pm.render_file_metadata(
+            filepath=filepath,
+            context=context,
+            refined_prompt=refined_prompt,
+            tree=tree,
+            file_output_format=file_output_format,
+            file_content=file_code_result
+        )
+
+        messages = [
+            {"role": "system", "content": system_instruction_metadata},
+            {"role": "user", "content": "Generate only the metadata description for this file."}
         ]
 
-        try:
-            response = provider.call_model(messages)
-            raw_content = provider.extract_text(response)
-            # print(f"Raw response from vLLM for file generation: {raw_content}")
-            # result = _parse_file_generation_result(raw_content)
-            print(f"Parsed file generation result from vLLM: {result}")
-        except Exception as e:
-            print(f"Error calling vLLM API for file generation: {e}")
+        metadata_resp = provider.call_model(messages)
+        metadata_description = provider.extract_text(metadata_resp).strip()
+
+        result = FileGenerationResult(
+            file_content=file_code_result,
+            metadata_description=metadata_description
+        )
+        print(f"Parsed file generation result from vLLM: {result}")
 
     else:
         # OpenRouter/OpenAI via structured outputs
@@ -281,7 +419,7 @@ def dfs_tree_and_gen(root, refined_prompt, tree_structure, project_name, current
             return process_file(
                 node, full_path, context, refined_prompt, tree_structure,
                 json_file_name, file_output_format, metadata_dict,
-                dependency_analyzer, lock, pm, on_status, provider_name
+                dependency_analyzer, lock, pm, on_status, provider_name, node.description
             )
         else:
             return process_directory(node, full_path, context, work_queue, work_output_base_dir, lock, root_val, on_status)
@@ -342,8 +480,7 @@ def dfs_tree_and_gen(root, refined_prompt, tree_structure, project_name, current
 
 
 def process_file(node, full_path, context, refined_prompt, tree_structure,
-                json_file_name, file_output_format, metadata_dict,
-                dependency_analyzer, lock, pm, on_status=None, provider_name: Optional[str] = None):
+                json_file_name, file_output_format, metadata_dict, file_description,dependency_analyzer, lock, pm, on_status=None, provider_name: Optional[str] = None):
     try:
         parent_dir = os.path.dirname(full_path)
         if parent_dir:
@@ -363,7 +500,8 @@ def process_file(node, full_path, context, refined_prompt, tree_structure,
                     tree=tree_structure,
                     file_output_format=file_output_format,
                     pm=pm,
-                    provider_name=provider_name
+                    provider_name=provider_name,
+                    file_description=file_description
                 )
 
                 if result:
@@ -379,6 +517,8 @@ def process_file(node, full_path, context, refined_prompt, tree_structure,
 
             content = result.file_content
             metadata = result.metadata_description
+
+            print(f"Generated content for '{full_path}' (length {len(content)} chars). Metadata: {metadata}")
 
             with lock:
                 with open(full_path, 'w') as f:
@@ -462,7 +602,137 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
                 depth -= 1
                 if depth == 0:
                     return raw_content[start_idx:i + 1]
+        print(f"processed raw content is: {raw_content}")
         return None
+
+    def _extract_balanced_json_segment(text: str, opening_idx: int, open_char: str, close_char: str) -> Optional[str]:
+        if not isinstance(text, str) or opening_idx < 0 or opening_idx >= len(text):
+            return None
+
+        depth = 0
+        in_string = False
+        escape = False
+
+        for i in range(opening_idx, len(text)):
+            ch = text[i]
+
+            if in_string:
+                if escape:
+                    escape = False
+                elif ch == '\\':
+                    escape = True
+                elif ch == '"':
+                    in_string = False
+                continue
+
+            if ch == '"':
+                in_string = True
+                continue
+
+            if ch == open_char:
+                depth += 1
+            elif ch == close_char:
+                depth -= 1
+                if depth == 0:
+                    return text[opening_idx:i + 1]
+
+        return None
+
+    def _repair_common_json_issues(raw_json: str) -> str:
+        if not isinstance(raw_json, str):
+            return ""
+
+        repaired = raw_json
+        repaired = re.sub(r';\s*(?=[}\]])', '', repaired)
+        repaired = re.sub(r',\s*(?=[}\]])', '', repaired)
+        return repaired
+
+    def _extract_key_as_json_segment(raw_text: str, key: str, opening_char: str = '{') -> Optional[str]:
+        if not isinstance(raw_text, str):
+            return None
+
+        key_pattern = re.compile(rf'"{re.escape(key)}"\s*:\s*')
+        key_match = key_pattern.search(raw_text)
+        if not key_match:
+            return None
+
+        idx = key_match.end()
+        while idx < len(raw_text) and raw_text[idx].isspace():
+            idx += 1
+
+        if idx >= len(raw_text) or raw_text[idx] != opening_char:
+            return None
+
+        closing_char = '}' if opening_char == '{' else ']'
+        return _extract_balanced_json_segment(raw_text, idx, opening_char, closing_char)
+
+    def _extract_key_string_value(raw_text: str, key: str) -> Optional[str]:
+        if not isinstance(raw_text, str):
+            return None
+
+        pattern = re.compile(rf'"{re.escape(key)}"\s*:\s*"((?:\\.|[^"\\])*)"', re.DOTALL)
+        match = pattern.search(raw_text)
+        if not match:
+            return None
+
+        try:
+            return json.loads(f'"{match.group(1)}"')
+        except Exception:
+            return match.group(1)
+
+    def _parse_blueprint_from_raw(raw_content: Optional[str]) -> Optional[Dict[str, Any]]:
+        if not isinstance(raw_content, str) or not raw_content.strip():
+            return None
+
+        json_str = _extract_json_str(raw_content)
+        if json_str:
+            parse_candidates = [json_str, _repair_common_json_issues(json_str)]
+            for candidate in parse_candidates:
+                try:
+                    parsed = json.loads(candidate)
+                    normalized = _normalize_project_blueprint_payload(parsed)
+                    if normalized:
+                        return normalized
+                except Exception:
+                    continue
+
+        software_blueprint_details: Dict[str, Any] = {}
+        folder_structure: Optional[str] = None
+        file_formats: Dict[str, Any] = {}
+
+        details_segment = _extract_key_as_json_segment(raw_content, "software_blueprint_details", opening_char='{')
+        if details_segment:
+            try:
+                software_blueprint_details = json.loads(_repair_common_json_issues(details_segment))
+            except Exception:
+                software_blueprint_details = {}
+
+        folder_structure = _extract_key_string_value(raw_content, "folder_structure")
+
+        file_formats_segment = _extract_key_as_json_segment(raw_content, "file_formats", opening_char='{')
+        if file_formats_segment:
+            repaired_segment = _repair_common_json_issues(file_formats_segment)
+            try:
+                parsed_formats = json.loads(repaired_segment)
+                if isinstance(parsed_formats, dict):
+                    file_formats = parsed_formats
+            except Exception:
+                kv_pairs = re.findall(r'"([^"]+)"\s*:\s*"((?:\\.|[^"\\])*)"', repaired_segment, re.DOTALL)
+                for file_path, fmt in kv_pairs:
+                    try:
+                        file_formats[file_path] = json.loads(f'"{fmt}"')
+                    except Exception:
+                        file_formats[file_path] = fmt
+
+        if not software_blueprint_details and not folder_structure and not file_formats:
+            return None
+
+        payload = {
+            "software_blueprint_details": software_blueprint_details,
+            "folder_structure": folder_structure or "project",
+            "file_formats": file_formats,
+        }
+        return _normalize_project_blueprint_payload(payload)
 
     def _is_valid_ascii_tree(tree_text: Any) -> bool:
         if not isinstance(tree_text, str):
@@ -600,6 +870,7 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
             return None
 
         software_blueprint_details = raw_payload.get("software_blueprint_details")
+        # print(f"Raw software_blueprint_details: {software_blueprint_details}")
         if not isinstance(software_blueprint_details, dict):
             software_blueprint_details = {}
 
@@ -730,17 +1001,14 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
             ]
             try:
                 response = provider.call_model(messages)
-                print(f"Raw response from vLLM: {response}")
+                # print(f"Raw response from vLLM: {response}\n")
                 raw_content = provider.extract_text(response)
-                json_str = _extract_json_str(raw_content)
-                if json_str:
-                    data = json.loads(json_str)
-                    normalized = _normalize_project_blueprint_payload(data)
-                    if normalized:
-                        repaired_tree = _generate_folder_structure_only(normalized)
-                        if repaired_tree:
-                            normalized["folder_structure"] = repaired_tree
-                        return ProjectBlueprint(**normalized)
+                normalized = _parse_blueprint_from_raw(raw_content)
+                if normalized:
+                    repaired_tree = _generate_folder_structure_only(normalized)
+                    if repaired_tree:
+                        normalized["folder_structure"] = repaired_tree
+                    return ProjectBlueprint(**normalized)
             except Exception:
                 return _recover_minimal_blueprint_from_raw(raw_content if 'raw_content' in locals() else "")
             return _recover_minimal_blueprint_from_raw(raw_content)
@@ -895,6 +1163,16 @@ def generate_tree(resp, project_name="root"):
     mark_files_and_dirs(root)
     return root
 
+def check_file_descriptions(node):
+    if node.is_file and (not node.description or not node.description.strip()):
+        print(f"File '{node.value}' is missing a description.")
+        return "failed"
+
+    for child in node.children:
+        if not check_file_descriptions(child):
+            continue
+
+    return "success"
 
 def generate_project(user_prompt, output_base_dir, on_status=None, provider_name: Optional[str] = None, problem_statement_language="others"):
     # here i'm adding a parameter for problem_statement_language, where i need to seperate cuda from others, as we dont hae to generate docker file for cuda projects, which is more constly, a simple shell file is enough
@@ -918,7 +1196,7 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
         emit("error", "Failed to generate project blueprint. Provider returned no valid structured output.")
         return None
 
-    print("completed blueprint generation")
+    # print("completed blueprint generation")
 
     software_blueprint = blueprint.software_blueprint_details
     folder_struc = blueprint.folder_structure
@@ -926,15 +1204,31 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
     file_format = blueprint.file_formats
     file_output_format = file_format
 
-    emit("step", "Building project tree and generating files...")
+    emit("step", "Building project tree")
     folder_tree = generate_tree(folder_struc, project_name="")
+
+    emit("step", "Filling description for each file in the structure")
+    fill_description_for_files(
+        folder_tree,
+        software_blueprint,
+        folder_struc,
+        file_format,
+        pm=pm,
+        provider_name=provider_name,
+    )
+    file_desc_success = check_file_descriptions(folder_tree)
+    emit("log", f"file descriptions for the tree has been {file_desc_success}")
     dependency_analyzer = DependencyAnalyzer()
     os.makedirs(output_base_dir, exist_ok=True)
+    with open(os.path.join(output_base_dir, "software_blueprint.txt"), 'w') as f:
+        f.write(f"Software Blueprint Details:\n{json.dumps(software_blueprint, indent=4)}\n\n")
+        f.write(f"Folder Structure:\n{folder_struc}\n\n")
+        f.write(f"File Generation Instructions:\n{json.dumps(file_format, indent=4)}\n")
     json_file_name = os.path.join(output_base_dir, "projects_metadata.json")
     metadata_dict = {}
     start_time = time.time()
 
-    emit("step", "Starting file generation with parallel workers...")
+    emit("step", "Starting file generations based on the generated blueprint...")
     dfs_tree_and_gen(
         root=folder_tree,
         refined_prompt=software_blueprint,

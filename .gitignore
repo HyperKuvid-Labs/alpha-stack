@@ -26,3 +26,4 @@ open_router.ipynb
 test.py
 /test_output
 /testing
+/test_cuda

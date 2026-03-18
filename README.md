@@ -113,7 +113,39 @@ alphastack clean
 
 # Clean without confirmation
 alphastack clean -f
+
+# Start ANSI streaming backend for the React terminal UI
+alphastack terminal-backend --host 127.0.0.1 --port 8765
+
+# One-command launcher (backend + React terminal UI)
+alphastack terminal
 ```
+
+### Claude-style web terminal
+
+Single command:
+
+```bash
+alphastack terminal
+```
+
+Manual mode:
+
+1. Start backend stream server:
+
+```bash
+alphastack terminal-backend --host 127.0.0.1 --port 8765
+```
+
+2. Start website app in another terminal:
+
+```bash
+cd website
+npm install
+NEXT_PUBLIC_TERMINAL_BACKEND_URL=http://127.0.0.1:8765 npm run dev
+```
+
+3. Open `http://localhost:3000/terminal`.
 
 ## Source layout
 

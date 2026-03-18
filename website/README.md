@@ -22,6 +22,36 @@ Continue building your app on:
 
 **[https://v0.app/chat/jEfj6Kec3Je](https://v0.app/chat/jEfj6Kec3Je)**
 
+## Claude-style terminal page
+
+This website now includes a terminal route at `/terminal` that renders ANSI output using `xterm.js`.
+
+### One-command startup
+
+From repo root:
+
+```bash
+alphastack terminal
+```
+
+### Local setup
+
+1. Start AlphaStack backend stream server from repo root:
+
+```bash
+alphastack terminal-backend --host 127.0.0.1 --port 8765
+```
+
+2. Start this Next.js app:
+
+```bash
+cd website
+npm install
+NEXT_PUBLIC_TERMINAL_BACKEND_URL=http://127.0.0.1:8765 npm run dev
+```
+
+3. Open `http://localhost:3000/terminal`.
+
 ## How It Works
 
 1. Create and modify your project using [v0.app](https://v0.app)

@@ -6,19 +6,10 @@ import io
 import traceback
 from pathlib import Path
 
-import pyfiglet
 from prompt_toolkit import prompt
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.styles import Style as PromptStyle
-from rich.align import Align
 from rich.console import Console
-from rich.console import Group
-from rich.layout import Layout
-from rich.live import Live
-from rich.panel import Panel
-from rich.rule import Rule
-from rich.spinner import Spinner
-from rich.table import Table
 from rich.text import Text
 
 from .config import get_api_key, set_api_key
@@ -54,13 +45,6 @@ def _styled_input(label, history_path=None, is_password=False):
     ).strip()
 
 
-def _section_panel(title, subtitle=None):
-    body = Text(title, style="bold white")
-    if subtitle:
-        body.append(f"\n{subtitle}", style=NEON_MUTED)
-    return Panel(body, border_style=NEON_PRIMARY, padding=(0, 2))
-
-
 def _load_provider_options():
     config_path = Path(__file__).with_name("providers.json")
     fallback_options = ["google", "openai", "vllm", "openrouter", "prime_intellect"]
@@ -90,43 +74,16 @@ def _load_provider_options():
 
 
 def display_logo():
-    """Displays the ALPHASTACK logo with a modern neon aesthetic."""
-    term_width = console.size.width
-
-    try:
-        logo_text = pyfiglet.Figlet(font="slant").renderText("ALPHASTACK")
-    except Exception:
-        logo_text = "ALPHASTACK"
-
-    styled_logo = Text(logo_text, style=f"bold {NEON_PRIMARY}")
-    strapline = Text("Build. Validate. Ship.", style=f"bold {NEON_INFO}")
-
-    logo_lines = logo_text.splitlines()
-    max_logo_width = max(len(line) for line in logo_lines) if logo_lines else 60
-    panel_width = min(term_width - 4, max_logo_width + 14)
-
-    content = Group(
-        Align.center(styled_logo),
-        Align.center(Text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", style=NEON_MUTED)),
-        Align.center(strapline),
-    )
-
-    panel = Panel(
-        content,
-        border_style=NEON_PRIMARY,
-        padding=(1, 2),
-        width=panel_width,
-        title="[bold white] ALPHASTACK PROJECT GENERATOR [/bold white]",
-        subtitle=f"[bold {NEON_MUTED}]v0.1.0[/bold {NEON_MUTED}]",
-    )
-    console.print(Align.center(panel))
-    console.print(Align.center(Text("Neon pipeline for code generation", style=NEON_MUTED)))
+    """Display a minimal Claude-like startup header."""
+    console.print(Text("alphastack", style=f"bold {NEON_PRIMARY}"))
+    console.print(Text("Project generator • Build. Validate. Ship.", style=NEON_MUTED))
     console.print()
 
 
 def setup_api_key():
     """Interactive setup for the Gemini API key."""
-    console.print(_section_panel("API Key Setup", "Enter your Gemini key to activate generation."))
+    console.print(Text("Set API key", style=f"bold {NEON_ACCENT}"))
+    console.print(Text("Enter your key to continue.", style=NEON_MUTED))
 
     while True:
         api_key = _styled_input("API Key >", is_password=True)
@@ -145,10 +102,8 @@ def setup_api_key():
 
 def get_user_input():
     """Gets project details from the user with history support."""
-    console.print(Rule(style=NEON_PRIMARY))
-    console.print(Align.center(Text("MISSION CONTROL", style=f"bold {NEON_PRIMARY}")))
-    console.print(Align.center(Text("Use ↑/↓ for history. Keep prompts concise and specific.", style=NEON_MUTED)))
-    console.print(Rule(style=NEON_PRIMARY))
+    console.print(Text("Describe what to build. Use ↑/↓ for history.", style=NEON_MUTED))
+    console.print()
 
     provider_options, default_provider = _load_provider_options()
     provider_options_text = "/".join(provider_options)
@@ -180,7 +135,7 @@ def get_user_input():
 
     history_file = os.path.expanduser("~/.alphastack_history")
 
-    console.print(_section_panel("What should we build?", "Describe the product, stack, and constraints."))
+    console.print(Text("Prompt", style=f"bold {NEON_ACCENT}"))
     user_prompt = _styled_input(">", history_path=history_file)
 
     if not user_prompt:
@@ -188,7 +143,7 @@ def get_user_input():
         sys.exit(1)
 
     while True:
-        console.print(_section_panel("Where should it manifest?", "Absolute path required."))
+        console.print(Text("Output directory (absolute path)", style=f"bold {NEON_ACCENT}"))
         output_dir = _styled_input(">", history_path=history_file + "_dirs")
 
         if output_dir:
@@ -196,23 +151,9 @@ def get_user_input():
 
         console.print(f"[{NEON_ERROR}]Output directory cannot be empty.[/{NEON_ERROR}]")
 
-    profile_table = Table.grid(padding=(0, 2))
-    profile_table.add_column(style=f"bold {NEON_ACCENT}", width=10)
-    profile_table.add_column(style=NEON_MUTED)
-    profile_table.add_row("cuda", "Optimized for CUDA/C++ style prompts")
-    profile_table.add_row("others", "General-purpose language profile")
-
-    console.print(
-        Panel(
-            Group(
-                Text("Select problem statement profile", style="bold white"),
-                Text(""),
-                profile_table,
-            ),
-            border_style=NEON_PRIMARY,
-            padding=(0, 2),
-        )
-    )
+    console.print(Text("Profile", style=f"bold {NEON_ACCENT}"))
+    console.print(Text("- cuda: CUDA/C++ optimized", style=NEON_MUTED))
+    console.print(Text("- others: general purpose", style=NEON_MUTED))
 
     while True:
         problem_statement_language = _styled_input(
@@ -229,12 +170,12 @@ def get_user_input():
         console.print(f"[{NEON_WARNING}]Please choose either 'cuda' or 'others'.[/{NEON_WARNING}]")
 
     console.print()
-    console.print(Align.center(Text("Configuration locked. Spinning up generation...", style=NEON_INFO)))
+    console.print(Text("Configuration locked. Starting generation...", style=NEON_INFO))
     return user_prompt, output_dir, problem_statement_language, provider
 
 
 class StatusDisplay:
-    """Context manager for a polished, sequential live status dashboard."""
+    """Context manager for a Claude-like, scrollable, streaming status log."""
 
     def __init__(self, title="Generating project"):
         self.title = title
@@ -242,11 +183,9 @@ class StatusDisplay:
         self.current_phase = "Preparing pipeline..."
         self.phase_counter = 0
         self._last_completed_phase = None
-        self.live = None
-        self.spinner = Spinner("dots", style=NEON_PRIMARY)
         self.started_at = time.time()
         self.stats = {"success": 0, "warning": 0, "error": 0, "progress": 0}
-        self.max_log_lines = 14
+        self.max_log_lines = 200
         self.last_error = None
         self.last_traceback = None
 
@@ -299,6 +238,9 @@ class StatusDisplay:
         mins, secs = divmod(elapsed, 60)
         return f"{mins:02d}:{secs:02d}"
 
+    def _time(self):
+        return time.strftime("%H:%M:%S")
+
     def _header(self):
         title = Text(self.title, style=f"bold {NEON_PRIMARY}")
         title.append("  •  ", style=NEON_MUTED)
@@ -313,94 +255,70 @@ class StatusDisplay:
         stats.append(f"• {self.stats['progress']}", style=NEON_MUTED)
         return stats
 
-    def generate_layout(self):
-        """Build a split dashboard with status on top and live logs below."""
-        phase_table = Table.grid(expand=True)
-        phase_table.add_column(width=3)
-        phase_table.add_column(ratio=1)
-        phase_table.add_row(self.spinner, Text(self.current_phase, style=f"bold {NEON_ACCENT}"))
+    def _remember_message(self, line):
+        self.messages.append(line)
+        if len(self.messages) > self.max_log_lines:
+            self.messages = self.messages[-self.max_log_lines:]
 
-        status_content = Group(
-            self._header(),
-            Text(""),
-            Text("Current Phase", style="bold white"),
-            phase_table,
-            Text(""),
-            self._stats_line(),
-        )
+    def _print_event(self, label, message, style):
+        line = Text()
+        line.append(f"[{self._time()}] ", style=NEON_MUTED)
+        line.append(f"{label} ", style=style)
+        line.append(message, style=style)
+        console.print(line)
+        self._remember_message(f"[{self._time()}] {label} {message}")
 
-        if self.messages:
-            recent_lines = self.messages[-self.max_log_lines:]
-            logs_text = Text("\n".join(recent_lines), style="white")
-        else:
-            logs_text = Text("Waiting for first pipeline event...", style=NEON_MUTED)
-
-        width = max(76, console.size.width - 6)
-
-        combined_group = Group(
-            Panel(
-                status_content,
-                border_style=NEON_PRIMARY,
-                padding=(1, 2),
-                width=width,
-                title="[bold white] PIPELINE STATUS [/bold white]",
-            ),
-            Panel(
-                logs_text,
-                border_style=NEON_INFO,
-                padding=(1, 2),
-                width=width,
-                title="[bold white] LIVE LOGS [/bold white]",
-            )
-        )
-
-        return Align.center(combined_group)
+    def _print_run_banner(self):
+        console.print(self._header())
+        console.print(Text("Streaming logs (scrollable)", style=NEON_MUTED))
 
     def _mark_current_phase_complete(self):
         if self.current_phase and self.current_phase != "Preparing pipeline...":
             if self.current_phase != self._last_completed_phase:
-                self.messages.append(f"✓ {self.current_phase}")
+                self._print_event("✓", self.current_phase, NEON_SUCCESS)
                 self._last_completed_phase = self.current_phase
 
     def __enter__(self):
-        self.live = Live(self.generate_layout(), refresh_per_second=10, console=console, screen=False)
-        self.live.start()
+        self._print_run_banner()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._mark_current_phase_complete()
-        if self.live:
-            self.live.stop()
+        summary = Text()
+        summary.append("Summary  ", style=f"bold {NEON_ACCENT}")
+        summary.append(self._elapsed(), style=NEON_INFO)
+        summary.append("  •  ", style=NEON_MUTED)
+        summary.append(self._stats_line())
+        console.print(summary)
+        console.print()
 
     def update(self, message, event_type="progress"):
-        """Add a message and refresh the live display."""
+        """Stream a status line to terminal output (scrollback-friendly)."""
         if event_type == "step":
             self._mark_current_phase_complete()
             self.phase_counter += 1
             self.current_phase = f"{self.phase_counter}. {message}"
-            self.messages.append(f"→ {self.current_phase}")
+            console.print()
+            self._print_event("▶", self.current_phase, NEON_PRIMARY)
             self.stats["progress"] += 1
         elif event_type == "success":
-            self.messages.append(f"✅ {message}")
+            self._print_event("✓", message, NEON_SUCCESS)
             self.stats["success"] += 1
         elif event_type == "error":
-            self.messages.append(f"❌ {message}")
+            self._print_event("✗", message, NEON_ERROR)
             self.stats["error"] += 1
             self.last_error = message
         elif event_type == "warning":
-            self.messages.append(f"⚠️  {message}")
+            self._print_event("⚠", message, NEON_WARNING)
             self.stats["warning"] += 1
         else:
-            self.messages.append(f"• {message}")
+            self._print_event("•", message, "white")
             self.stats["progress"] += 1
-
-        if self.live:
-            self.live.update(self.generate_layout())
 
 
 def print_success(message):
-    console.print(Panel(f"[bold {NEON_SUCCESS}]✓ {message}[/bold {NEON_SUCCESS}]", border_style=NEON_SUCCESS))
+    console.print(f"[bold {NEON_SUCCESS}]✓ {message}[/bold {NEON_SUCCESS}]")
 
 
 def print_error(message):
-    console.print(Panel(f"[bold {NEON_ERROR}]✗ {message}[/bold {NEON_ERROR}]", border_style=NEON_ERROR))
+    console.print(f"[bold {NEON_ERROR}]✗ {message}[/bold {NEON_ERROR}]")

@@ -85,8 +85,12 @@ class InferenceProvider(ABC):
 
     @abstractmethod
     def extract_text(self, response: Any) -> str:
-        """Extract text content from response"""
-        pass
+        import re
+        # it will not be json, so jsut removing this would be enough ``` ```
+        match = re.search(r'```(?:[a-zA-Z0-9_\-+]+)?\s*\n([\s\S]*?)```', response, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+        return response.strip()
 
     @abstractmethod
     def create_initial_message(self, prompt: str) -> List:
@@ -409,7 +413,7 @@ class VLLMProvider(OpenAICompatibleProvider):
             from openai import OpenAI
 
             api_key = self.api_key or os.getenv("VLLM_API_KEY") or "dummy"
-            base_url = self.config.get("base_url", "http://localhost:8000/v1")
+            base_url = self.config.get("base_url", "http://0.0.0.0:8000/v1")
             self._client = OpenAI(api_key=api_key, base_url=base_url)
         return self._client
 
@@ -418,13 +422,13 @@ class VLLMProvider(OpenAICompatibleProvider):
         if explicit_url:
             return explicit_url
 
-        base_url = str(self.config.get("base_url", "http://localhost:8000")).rstrip("/")
+        base_url = str(self.config.get("base_url", "http://0.0.0.0:8000")).rstrip("/")
         if base_url.endswith("/v1"):
             return f"{base_url}/chat/completions"
         return f"{base_url}/v1/chat/completions"
 
     def _get_models_url(self) -> str:
-        base_url = str(self.config.get("base_url", "http://localhost:8000")).rstrip("/")
+        base_url = str(self.config.get("base_url", "http://0.0.0.0:8000")).rstrip("/")
         if base_url.endswith("/v1"):
             return f"{base_url}/models"
         return f"{base_url}/v1/models"

@@ -1,0 +1,23 @@
+You are an exceptional Principal Software Architect with deep expertise in software design and architecture. Your task is to analyze the user's request and generate a detailed file descriptor for a specific file within the project. This descriptor should include both the precise metadata description of its purpose and functionality and language used.
+
+{% if software_bluprint_details %}
+### Software Blueprint Details
+The file you are generating should align with the following core project specifications:
+{{ software_bluprint_details | tojson(indent=2) }}
+{% endif %}
+
+{% if folder_structure %}
+### Folder Structure
+The file should be placed within the following directory structure:
+{{ folder_structure }}
+{% endif %}
+
+{% if file_name %}
+### Target File
+The file you need to generate is located at: `{{ file_name }}`
+{% endif %}
+
+Return the following in a neatly formatted JSON structure:
+- `file_description`: A precise, 1-2 sentence technical description of the file's purpose and functionality.
+- `language`: The programming language used in the file (e.g., Python, C++, etc.).
+
