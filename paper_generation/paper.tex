@@ -1,0 +1,67 @@
+\documentclass[11pt, a4paper]{article}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{float}
+
+\geometry{margin=1in}
+
+\title{\textbf{AlphaStack: AI-powered Project Generator for Complete Codebases}}
+\author{AlphaStack Team}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section*{Abstract}
+This paper presents AlphaStack, a novel approach to autonomous code generation using a multi-agent system with iterative self-healing and comprehensive validation. AlphaStack transforms natural language descriptions into complete, production-ready codebases with Docker configurations and automated testing across diverse programming paradigms. It systematically bridges the gap between language models' raw code-generation capabilities and the reliable creation of full software projects.
+
+\section{Introduction}
+As large language models (LLMs) continue to advance, their capability to generate code snippets has been well-documented. However, building an entire project---including structure, file interconnectivity, build configurations, and tests---remains a substantial challenge. AlphaStack is an AI-driven code generation and validation system that accepts a natural language prompt and fully generates a working software project. Furthermore, it autonomously runs, debugs using an AI Planner Agent, and verifies the generated codebase by running tests inside isolated Docker containers.
+
+\section{Methodology}
+The methodology behind AlphaStack is rooted in a structured pipeline and an agentic loop designed to autonomously catch and resolve software errors.
+
+\subsection{7-Phase Generator Pipeline}
+The core generation process follows a strict 7-phase sequential pipeline:
+\begin{enumerate}
+    \item \textbf{Software Blueprint}: Analyzes the user prompt and generates a software blueprint defining all files, module roles, and language settings.
+    \item \textbf{File Generation}: Calls the LLM to independently generate actual code for each file based on the blueprint.
+    \item \textbf{Dockerfile Generation}: Generates a production Dockerfile appropriate for the project language and structure.
+    \item \textbf{Dependency Analysis}: Runs static analysis to build an internal dependency graph across all files.
+    \item \textbf{Dep File Generation}: Generates dependency files (e.g., \texttt{requirements.txt}, \texttt{package.json}, \texttt{Cargo.toml}).
+    \item \textbf{Dep Resolution}: Validates the generated dependency files to ensure accuracy.
+    \item \textbf{Docker Testing Pipeline}: Initiates the testing phase and hands control to the AI Planner Agent loop.
+\end{enumerate}
+
+\subsection{AI Planner Agent Loop}
+After the initial generation, AlphaStack enters an iterative self-healing loop handled by the Docker Testing Pipeline and the AI Planner Agent. The planner reads the real-time pipeline state, project structure, and tool memory to formulate fixes. It issues tool calls to modify files or interact with the Docker executor (via the \texttt{docker\_test} tool). The loop continuously builds and tests the project up to a specified iteration limit, exiting successfully only when both the build and tests pass.
+
+\section{Architecture Diagram}
+The architecture of AlphaStack seamlessly integrates the top-level pipeline with the lower-level execution and verification mechanisms. A visual representation of the data flow and system overview is shown in Figure~\ref{fig:architecture}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{architecture_diagram.png}
+    \caption{System overview and data flow of AlphaStack}
+    \label{fig:architecture}
+\end{figure}
+
+\section{Results}
+AlphaStack has been evaluated on a comprehensive suite of programming challenges. Figure~\ref{fig:results} presents tentative results comparing model performance across the HumanEval and MDDP datasets. Models evaluated include GPT-5.2, GLM-5, MiniMax-m2.5, and Claude Sonnet 4.6.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{results_graph.png}
+    \caption{Tentative model performance on HumanEval and MDDP Datasets}
+    \label{fig:results}
+\end{figure}
+
+\section{Conclusion}
+AlphaStack demonstrates a powerful framework for generating end-to-end software applications from natural language. By coupling a rigorous 7-phase generation pipeline with a dynamic, self-healing AI Planner Agent, the system can reliably construct, test, and repair production-ready codebases. Future work will expand the evaluation framework and incorporate more advanced debugging heuristics.
+
+\section*{Supplementary Material}
+Additional information, including the evaluation datasets (e.g., the 40 challenges across CUDA, Go, Rust, and TypeScript) and extensive logs from the testing pipeline, is available within the open-source repository at \url{https://github.com/HyperKuvid-Labs/alpha-stack}.
+
+\end{document}
