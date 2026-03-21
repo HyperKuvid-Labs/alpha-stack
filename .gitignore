@@ -26,4 +26,6 @@ open_router.ipynb
 test.py
 /test_output
 /testing
-experiment/
+experiment/paper_generation/*.aux
+paper_generation/*.log
+paper_generation/*.out
