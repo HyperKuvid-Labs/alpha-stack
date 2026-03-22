@@ -1,0 +1,71 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+
+\geometry{margin=1in}
+
+\title{AlphaStack: Autonomous Software Project Generation via Multi-Agent Systems and Docker Validation}
+\author{AlphaStack Development Team}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+AlphaStack is an AI-driven code generation and validation system that fully generates a working software project from a natural language prompt. This paper introduces a comprehensive 7-phase generation pipeline that orchestrates the creation of source code, dependency files, and Dockerfiles. Furthermore, we present an AI Planner Agent loop that autonomously runs, debugs, and verifies the generated projects within Docker containers. Experimental evaluations on the HumanEval and MDDP benchmarks using state-of-the-art Large Language Models (LLMs) demonstrate the efficacy and robustness of our approach.
+\end{abstract}
+
+\section{Introduction}
+Recent advancements in Large Language Models (LLMs) have significantly enhanced code generation capabilities. However, converting natural language instructions into complete, executable, and robust software projects remains a formidable challenge. Existing solutions often lack proper dependency management, structural coherence, and runtime validation.
+
+To address these limitations, we propose AlphaStack, an end-to-end framework designed for comprehensive software project generation. AlphaStack goes beyond simple code snippet creation by defining an explicit multi-phase architecture that models a typical software engineering lifecycle—including blueprinting, code generation, dependency resolution, and iterative debugging in isolated Docker environments.
+
+\section{Methodology}
+Our methodology is grounded in a 7-phase generation pipeline, which systematically constructs the software project:
+\begin{enumerate}
+    \item \textbf{Phase 1: Software Blueprint.} The system translates user prompts into a structured JSON blueprint, defining module roles and dependencies.
+    \item \textbf{Phase 2: File Generation.} Code for each file is synthesized independently based on the blueprint specifications.
+    \item \textbf{Phase 3: Dockerfile Generation.} A language-appropriate Dockerfile is created to encapsulate the project environment.
+    \item \textbf{Phase 4: Dependency Analysis.} Static import graph construction allows for accurate inter-file dependency mapping.
+    \item \textbf{Phase 5: Dep File Generation.} Proper package manager files (e.g., \texttt{requirements.txt}, \texttt{package.json}) are synthesized.
+    \item \textbf{Phase 6: Dep Resolution.} Consistency checks and validations are applied to the defined dependencies.
+    \item \textbf{Phase 7: Docker Testing Pipeline.} The project is deployed into an AI Planner Agent loop for iterative testing and debugging.
+\end{enumerate}
+
+The AI Planner Agent iteratively attempts to build and run the code via a custom \texttt{docker\_test} tool. If compilation or runtime errors are detected, error logs are relayed back to the agent for self-correction.
+
+\section{Architecture Diagram}
+Figure \ref{fig:architecture} illustrates the high-level system architecture of AlphaStack, detailing the 7-phase pipeline and the AI Planner Agent loop.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{architecture.png}
+    \caption{AlphaStack System Architecture diagram demonstrating the pipeline from CLI input to final validated project.}
+    \label{fig:architecture}
+\end{figure}
+
+\section{Results}
+We evaluated AlphaStack's generation performance across two significant benchmarks: HumanEval (measuring core algorithmic capabilities) and a newly proposed multi-file dataset, MDDP. The evaluation was conducted using several leading LLMs. The comparative Pass@1 scores are presented in Figure \ref{fig:results}.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{results_graph.png}
+    \caption{Comparative performance (Pass@1) of gpt-5.2, glm-5, minimaxm2.5, and claude sonnet 4.6 on MDDP and HumanEval benchmarks.}
+    \label{fig:results}
+\end{figure}
+
+Our tentative results show that claude sonnet 4.6 and gpt-5.2 lead the performance metrics on both benchmarks. Notably, the introduction of our Docker-based iterative debugging pipeline (Phase 7) contributes to an elevated success rate on the complex MDDP tasks compared to single-pass generation baselines.
+
+\section{Conclusion}
+AlphaStack represents a significant step towards fully autonomous software engineering. By structuring the generation process into a systematic pipeline and incorporating real-world testing environments via Docker, the system is capable of producing complete, reliable software artifacts. Future work will explore expanding the agent toolsets and optimizing the resolution of complex dependency conflicts.
+
+\section*{Supplementary Material}
+Additional supplementary material, including detailed prompts and comprehensive breakdown of the failure modes encountered during the evaluation, can be found in the associated GitHub repository.
+
+\end{document}
