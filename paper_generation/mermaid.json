@@ -1,0 +1,6 @@
+{
+  "code": "graph TD\n    A[User Input] --> B(Phase 1: Software Blueprint)\n    B --> C(Phase 2: Code Generation)\n    C --> D(Phase 3: Dockerfile Generation)\n    D --> E(Phase 4+5: Dependency Analysis & Files)\n    E --> F(Phase 7: Docker Testing Pipeline)\n    F --> G{Success?}\n    G -- Yes --> H[Final Codebase]\n    G -- No --> I[Planner Agent]\n    I --> J[Corrector Sub-Agent]\n    J --> F\n",
+  "mermaid": {
+    "theme": "default"
+  }
+}
