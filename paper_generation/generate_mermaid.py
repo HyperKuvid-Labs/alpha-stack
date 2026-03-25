@@ -1,0 +1,40 @@
+import base64
+import requests
+import json
+
+mermaid_code = """
+graph LR
+    A[Natural Language Input] --> B[AI Analysis & Blueprint]
+    B --> C[Multi-File Code Generation]
+    C --> D[Dependency Resolution]
+    D --> E[Docker Configuration]
+    E --> F[Build Validation]
+    F --> G{Build Success?}
+    G -->|No| H[Planning Agent]
+    H --> I[Correction Agent]
+    I --> F
+    G -->|Yes| J[Test Execution]
+    J --> K{Tests Pass?}
+    K -->|No| H
+    K -->|Yes| L[Production-Ready Project]
+
+    style A fill:#4A90E2,stroke:#2E5C8A,stroke-width:2px,color:#fff
+    style B fill:#9B59B6,stroke:#6C3483,stroke-width:2px,color:#fff
+    style C fill:#E67E22,stroke:#A04000,stroke-width:2px,color:#fff
+    style D fill:#3498DB,stroke:#1F618D,stroke-width:2px,color:#fff
+    style E fill:#1ABC9C,stroke:#117A65,stroke-width:2px,color:#fff
+    style F fill:#E74C3C,stroke:#922B21,stroke-width:2px,color:#fff
+    style L fill:#27AE60,stroke:#186A3B,stroke-width:2px,color:#fff
+"""
+
+encoded_code = base64.urlsafe_b64encode(mermaid_code.encode('utf-8')).decode('utf-8').rstrip('=')
+url = f"https://mermaid.ink/img/{encoded_code}?type=png"
+
+response = requests.get(url)
+if response.status_code == 200:
+    with open('paper_generation/architecture.png', 'wb') as f:
+        f.write(response.content)
+    print("Successfully generated architecture.png")
+else:
+    print(f"Failed to generate architecture.png. Status code: {response.status_code}")
+    print(response.text)
