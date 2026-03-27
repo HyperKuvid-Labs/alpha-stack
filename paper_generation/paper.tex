@@ -1,0 +1,71 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{geometry}
+\geometry{margin=1in}
+
+\title{\textbf{AlphaStack: Autonomous Project Generation and Iterative Self-Healing via Multi-Agent Systems}}
+\author{AlphaStack Research Team}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+As software complexity scales, there is a growing need for automated systems that can transition seamlessly from natural language specifications to production-ready codebases. We introduce AlphaStack, a novel approach to autonomous code generation utilizing multi-agent systems with iterative self-healing. By bridging Large Language Models (LLMs) with robust validation paradigms such as automated Docker containment and automated testing pipelines, AlphaStack addresses common failures in existing code generation methods—such as syntax errors, dependency conflicts, and hallucinated APIs. Our comprehensive evaluation framework across multiple programming paradigms demonstrates the efficacy of the iterative self-healing agent loop against several state-of-the-art models on the HumanEval and MDDP benchmarks.
+\end{abstract}
+
+\section{Introduction}
+The evolution of Large Language Models (LLMs) has catalyzed significant advances in code generation. Yet, existing systems often struggle to produce complete, multi-file codebases that compile, pass tests, and run reliably. AlphaStack tackles this challenge by employing an intelligent multi-agent architecture. The system orchestrates a Planning Agent and a Correction Agent to sequentially generate, analyze, and repair code based on localized validation feedback.
+
+This paper outlines the core mechanisms of AlphaStack, exploring its 7-phase generation pipeline, its Docker-based validation layer, and the iterative self-healing loop that corrects build and test failures in real-time.
+
+\section{Methodology}
+The AlphaStack methodology revolves around a 7-phase generation pipeline followed by an AI Planner Agent loop. The pipeline systematically translates natural language input into a complete project structure:
+
+\begin{enumerate}
+    \item \textbf{Software Blueprint:} Translates the user prompt into a defined file structure and module plan.
+    \item \textbf{File Generation:} Generates code for each file independently based on the blueprint.
+    \item \textbf{Dockerfile Generation:} Constructs a language-appropriate Dockerfile for isolated testing.
+    \item \textbf{Dependency Analysis:} Analyzes static imports to construct an internal dependency graph.
+    \item \textbf{Dep File Generation:} Creates language-specific package manifests (e.g., \texttt{requirements.txt}, \texttt{package.json}).
+    \item \textbf{Dep Resolution:} Validates dependencies.
+    \item \textbf{Docker Testing Pipeline:} Initializes the agent loop to build, run, and iteratively fix the code until successful compilation and passing tests.
+\end{enumerate}
+
+During the testing pipeline, the AI Planner Agent observes error logs, formulates strategies, and calls upon tool-augmented Corrector Sub-Agents to modify files safely without breaking the overall system.
+
+\section{Architecture Diagram}
+The architecture of AlphaStack delineates the flow from the initial natural language prompt through the multi-phase generation pipeline and into the iterative self-healing loop. The process heavily relies on isolated container execution to validate the project's integrity continuously.
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.8\textwidth]{architecture.png}
+    \caption{AlphaStack Generation Pipeline and AI Planner Agent Loop}
+    \label{fig:architecture}
+\end{figure}
+
+\section{Results}
+We evaluate the performance of the AlphaStack framework combined with several leading state-of-the-art language models: GPT-5.2, GLM-5, MiniMax-M2.5, and Claude Sonnet 4.6. The assessment spans the HumanEval benchmark (for algorithmic correctness) and the custom MDDP benchmark (for complex, multi-file software engineering tasks).
+
+Figure~\ref{fig:results} illustrates the comparative results. The results indicate that the self-healing iteration loop significantly elevates the performance floor, enabling even traditionally weaker models to iteratively arrive at correct, passing code.
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.8\textwidth]{results_chart.png}
+    \caption{Model Performance on HumanEval and MDDP Benchmarks utilizing the AlphaStack iterative pipeline.}
+    \label{fig:results}
+\end{figure}
+
+\section{Conclusion}
+AlphaStack presents a robust, multi-agent architecture capable of generating, validating, and iteratively repairing complete software projects from natural language descriptions. By tightly coupling LLM generation with Docker-based execution and testing, the system effectively mitigates common failure modes in autonomous coding. Future work will focus on expanding the context window optimizations for massive codebases and refining the sub-agent tooling for highly specialized domains such as embedded systems.
+
+\section{Supplementary Material}
+Further details regarding the 40 Programming Challenges across CUDA, Go, Rust, and TypeScript, as well as the complete prompt templates and inference management configurations, can be found in the project repository under the \texttt{eval} and \texttt{src/prompts} directories.
+
+\end{document}

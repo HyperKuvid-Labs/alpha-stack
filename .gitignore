@@ -27,3 +27,6 @@ test.py
 /test_output
 /testing
 experiment/
+*.aux
+*.log
+*.out
