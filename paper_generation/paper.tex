@@ -1,0 +1,68 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+
+\title{AlphaStack: Autonomous Code Generation and Validation \\ via Intelligent Multi-Agent Architecture}
+\author{The AlphaStack Team}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We introduce AlphaStack, a novel approach to autonomous code generation using multi-agent systems with iterative self-healing and comprehensive validation across diverse programming paradigms. AlphaStack transforms natural language descriptions into complete, production-ready codebases with Docker configurations and automated testing. By utilizing a Planning Agent for error analysis and a Correction Agent for applying fixes, AlphaStack automatically detects and resolves dependency conflicts, build errors, and test failures within a secure, sandboxed environment. We evaluate our approach on 40 carefully designed programming challenges spanning multiple languages and complexity tiers, demonstrating its robustness and efficacy on standard benchmarks including HumanEval and MDDP.
+\end{abstract}
+
+\section{Introduction}
+Developing production-ready software systems involves complex workflows including blueprint generation, writing source code, resolving dependencies, and ensuring reliability through comprehensive testing. While recent advancements in Large Language Models (LLMs) have substantially improved code generation capabilities, producing fully functional, robust repositories from natural language prompts remains a formidable challenge.
+
+AlphaStack bridges this gap by introducing an intelligent multi-agent architecture designed to autonomously generate and validate software projects. Key features include intelligent dependency resolution, Docker-based validation, and iterative self-healing. This paper details the system's architecture, generation pipeline, and presents evaluation results highlighting its capability to function as a fully autonomous software engineering agent.
+
+\section{Methodology}
+The AlphaStack generator pipeline is structured into seven distinct phases to sequentially build a complete software project:
+\begin{enumerate}
+    \item \textbf{Software Blueprint:} Analyzes user requirements and generates a comprehensive software architecture blueprint.
+    \item \textbf{File Generation:} Creates necessary project files, including source code, configuration files, and documentation.
+    \item \textbf{Dockerfile Generation:} Generates a robust Dockerfile tailored to the project's requirements.
+    \item \textbf{Dependency Analysis:} Analyzes dependencies statically to determine module relationships.
+    \item \textbf{Dependency File Generation:} Creates language-specific dependency configuration files (e.g., \texttt{requirements.txt}, \texttt{package.json}, \texttt{Cargo.toml}).
+    \item \textbf{Dependency Resolution:} Validates and resolves the generated dependency files.
+    \item \textbf{Docker Testing Pipeline:} Executes Docker-based builds and test environments. Build and test results are fed into an AI Planner Agent loop for iterative self-healing.
+\end{enumerate}
+
+When errors occur during the testing phase, AlphaStack employs an AI Planner Agent to analyze logs and devise fix strategies. A Correction Agent then safely implements these fixes, maintaining a tight feedback loop until the system builds successfully and all tests pass.
+
+\section{Architecture Diagram}
+The following diagram illustrates the workflow and core components of AlphaStack's generation and validation pipeline.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{architecture.png}
+    \caption{AlphaStack System Architecture}
+    \label{fig:architecture}
+\end{figure}
+
+\section{Results}
+AlphaStack was evaluated against standard competitive programming benchmarks including HumanEval and MDDP. We assessed the performance of several leading foundational models operating within the AlphaStack multi-agent framework.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{results.png}
+    \caption{Evaluation Results on HumanEval and MDDP using various models}
+    \label{fig:results}
+\end{figure}
+
+As shown in Figure~\ref{fig:results}, the Claude Sonnet 4.6 and GPT-5.2 models exhibited the highest success rates, solving complex multi-file scenarios effectively. The system successfully managed and auto-corrected errors dynamically, reducing the iteration count required to reach a fully passing test suite.
+
+\section{Conclusion}
+AlphaStack presents a significant advancement in autonomous software generation by integrating multi-agent reasoning with Docker-based environmental validation. By enabling iterative self-healing across both compilation and test execution phases, AlphaStack reliably transforms high-level language inputs into functional, validated codebases. Future work will focus on expanding support for distributed systems and integrating advanced security vulnerability detection agents.
+
+\section*{Supplementary Material}
+Further details regarding the 40 programming evaluation challenges, which cover CUDA, Go, Rust, and TypeScript across four difficulty tiers, can be found in the repository under \texttt{src/prompts/eval/}.
+
+\end{document}
