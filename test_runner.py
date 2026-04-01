@@ -22,15 +22,33 @@ from src.testing.testing import run_testing_pipeline
 # 
 # Set your test prompt here
 TEST_PROMPT = """
-Create a Python library called 'cachebox' — a decorator-based function cache with TTL support.
+Build a simple JSON serializer supporting basic types.
 
-Requirements:
-1. A `@cachebox.cache(ttl=seconds, maxsize=int)` decorator that memoizes function results.
-2. Support LRU eviction when maxsize is reached, and automatic expiry after TTL.
-3. A `cachebox.stats()` function returning hits, misses, and evictions per cached function.
-4. A `cachebox.clear(func)` to manually invalidate a specific function's cache.
-5. Thread-safe — must work correctly under concurrent access.
-6. Tech stack: pure Python (no external deps), pytest for tests, pyproject.toml for packaging.
+Traits:
+
+Serialize trait with serialize(&self, serializer: &mut Serializer).
+
+Implement for primitives, String, Vec<T>, Option<T>, and structs (via derive macro or manual impl).
+Output format:
+
+JSON (objects, arrays, strings, numbers, null).
+Features:
+
+Support generics: Vec<T: Serialize>.
+
+Handle recursive structures (nested objects).
+Optional:
+
+Write a simple derive macro #[derive(Serialize)] for structs.
+Tests:
+
+Serialize primitive types.
+
+Nested structures.
+
+Round-trip with a JSON parser (use serde_json for validation only).
+
+
 """
 
 # Output directory for generated projec"

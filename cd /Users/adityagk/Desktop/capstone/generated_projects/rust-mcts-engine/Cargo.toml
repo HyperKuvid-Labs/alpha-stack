@@ -1,0 +1,14 @@
+[package]
+name = "rust-mcts-engine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Random number generation
+rand = "0.8.5"
+
+# Threading and Parallelism
+rayon = "1.8.0"
+
+# Optimized Synchronization Primitives
+parking_lot = "0.12.1"
