@@ -1,0 +1,61 @@
+\documentclass[11pt]{article}
+
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+
+\title{AlphaStack: Autonomous Project Generation through Multi-Agent Collaboration and Self-Healing}
+\author{HyperKuvid-Labs}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We present AlphaStack, an AI-powered project generator that transforms natural language descriptions into complete, production-ready codebases. By utilizing a multi-agent architecture composed of Planning and Correction agents, AlphaStack iteratively detects and resolves errors through self-healing. Comprehensive validation across multiple programming paradigms is achieved via an automated Docker testing pipeline. We evaluate AlphaStack on the HumanEval and MDDP benchmarks across various state-of-the-art Large Language Models.
+\end{abstract}
+
+\section{Introduction}
+Automated code generation has seen rapid advancements, moving from single-file completions to repository-level scaffolding. However, maintaining structural integrity and guaranteeing correct execution remain substantial challenges. AlphaStack introduces an autonomous approach to code generation using a multi-agent system combined with sandboxed execution. By iteratively evaluating generated code in Docker environments, our system systematically detects failures, plans repairs, and applies corrections.
+
+\section{Methodology}
+The AlphaStack pipeline consists of seven sequential phases: Software Blueprint generation, File Generation, Dockerfile Generation, Dependency Analysis, Dependency File Generation, Dependency Resolution, and a Docker Testing Pipeline.
+
+The multi-agent loop incorporates:
+\begin{itemize}
+    \item \textbf{Planning Agent}: Extracts error logs and formulates comprehensive strategies utilizing tool-augmented reasoning.
+    \item \textbf{Correction Agent}: Synthesizes context-aware code modifications, resolving syntax errors, missing dependencies, or runtime failures based on the Planner's blueprint.
+\end{itemize}
+These agents operate cyclically until the project successfully builds and passes all associated tests within an isolated environment.
+
+\section{Architecture Diagram}
+The following diagram illustrates the core components and execution flow of the AlphaStack pipeline:
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{architecture.png}
+    \caption{AlphaStack Pipeline Architecture}
+    \label{fig:architecture}
+\end{figure}
+
+\section{Results}
+We evaluate the performance of AlphaStack on the HumanEval and MDDP benchmarks using several leading models, including GPT-5.2, GLM-5, MiniMax-m2.5, and Claude Sonnet 4.6. The results, as depicted in Figure \ref{fig:results}, indicate high pass rates across both benchmarks.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{results_graph.png}
+    \caption{Model Performance on HumanEval and MDDP Benchmarks}
+    \label{fig:results}
+\end{figure}
+
+\section{Conclusion}
+AlphaStack provides a robust framework for autonomous project generation. The integration of multi-agent self-correction with Docker-based validation ensures the production of highly reliable code. Future work will focus on expanding the scope of supported languages and enhancing the intelligence of the Planning Agent in handling complex architectural refactoring.
+
+\section*{Supplementary Material}
+The source code, evaluation datasets, and complete benchmark instructions are available in the public repository. Detailed instructions for running the test suite can be found in the README.
+
+\end{document}
