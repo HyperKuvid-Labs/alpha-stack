@@ -1,0 +1,59 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{geometry}
+\geometry{margin=1in}
+\usepackage{hyperref}
+\usepackage{float}
+
+\title{AlphaStack: Autonomous Code Generation via Multi-Agent Systems and Iterative Self-Healing}
+\author{AlphaStack Team}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This paper presents AlphaStack, a novel multi-agent system designed for autonomous code generation. By combining a Planning Agent for error analysis with a Correction Agent for code modifications, AlphaStack addresses common pitfalls in automated software engineering. Furthermore, the system is backed by a robust Docker-based validation environment that ensures generated codebases are isolated, tested, and correct. We evaluate the performance of AlphaStack and compare various state-of-the-art models on multiple programming challenges, establishing its efficacy in transforming natural language requirements into production-ready software systems.
+\end{abstract}
+
+\section{Introduction}
+The capability of AI to generate software from natural language descriptions has grown tremendously. However, generating multi-file, production-ready codebases complete with tests and configuration files remains challenging. AlphaStack tackles these challenges using an iterative self-healing approach where multi-agent components cooperate. It continuously identifies issues, crafts fixes, and validates via an isolated Docker environment until tests pass or the iteration limit is reached.
+
+\section{Methodology}
+Our approach employs a Multi-Agent Architecture consisting of:
+\begin{itemize}
+    \item \textbf{Planning Agent:} Analyzes structural issues, build errors, and dependency conflicts. It uses tool-augmented reasoning to construct step-by-step fix strategies.
+    \item \textbf{Correction Agent:} Executes the planned fixes with a deep understanding of the language syntax, ensuring modifications are syntactically sound.
+\end{itemize}
+The validation pipeline uses Docker to isolate the environment, controlling resources while building the project and running its test suite. This guarantees that generated software functions correctly outside the generation environment.
+
+\section{Architecture Diagram}
+The following diagram illustrates the iterative self-healing pipeline within AlphaStack:
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{architecture.png}
+    \caption{AlphaStack Generation and Validation Pipeline}
+    \label{fig:architecture}
+\end{figure}
+
+\section{Results}
+We evaluated various large language models using standard benchmarks such as HumanEval and MDDP. The evaluation reveals competitive performance across multiple sophisticated models when integrated with the AlphaStack pipeline.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{results.png}
+    \caption{Performance comparison of multiple models (GPT-5.2, GLM-5, MiniMax-m2.5, Claude Sonnet 4.6) on HumanEval and MDDP.}
+    \label{fig:results}
+\end{figure}
+
+\section{Conclusion}
+AlphaStack provides a robust and autonomous solution for end-to-end software development. Its separation of concerns into multi-agent roles paired with thorough Docker-based validation sets a new standard in automated code generation. Future work will focus on expanding language support and tackling more complex architectural challenges.
+
+\section*{Supplementary Material}
+Further details about the 40 programming challenges and the Docker validation configurations can be found in the AlphaStack repository under \texttt{src/prompts/eval/}.
+
+\end{document}
