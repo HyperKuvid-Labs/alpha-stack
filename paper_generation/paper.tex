@@ -1,0 +1,44 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{amsmath}
+
+\title{AlphaStack: AI-powered project generator}
+\author{HyperKuvid Labs}
+
+\begin{document}
+
+\maketitle
+
+\section{Abstract}
+This paper presents AlphaStack, a novel approach to autonomous code generation using multi-agent systems with iterative self-healing and comprehensive validation across diverse programming paradigms. It transforms natural language descriptions into complete, production-ready codebases with Docker configurations and automated testing.
+
+\section{Introduction}
+Modern software development involves boilerplate code, setup, and configuration. We introduce AlphaStack, a multi-agent framework that uses planning and correction agents. This autonomous multi-agent framework addresses key challenges in AI-assisted software development through separation of planning and correction concerns.
+
+\section{Methodology}
+The AlphaStack pipeline involves several phases. First, Blueprint Generation analyzes requirements and creates a software architecture. Next, it generates multi-file code configurations. Docker integration allows for automated environment creation and isolated build testing.
+
+\section{Architecture Diagram}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{architecture.png}
+    \caption{AlphaStack Architecture Diagram}
+    \label{fig:architecture}
+\end{figure}
+
+\section{Results}
+We evaluated our methodology on HumanEval and MDDP datasets across various modern language models: GPT-5.2, GLM-5, MiniMax-m2.5, and Claude Sonnet 4.6.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{results.png}
+    \caption{Tentative evaluation results on HumanEval and MDDP}
+    \label{fig:results}
+\end{figure}
+
+\section{Conclusion}
+AlphaStack successfully demonstrates iterative self-healing and autonomous code generation capabilities. By employing Docker-based validation and separated agent roles, the system achieves robust code generation in complex scenarios. Future work will expand programming language support and evaluation challenges.
+
+\end{document}
