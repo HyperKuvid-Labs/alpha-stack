@@ -42,6 +42,20 @@ DEPENDENCY_FILES_TO_SKIP = {
 
 languages = ["python", "cpp", "java", "javascript", "typescript", "go", "rust", "ruby", "php", "csharp", "dart", "kotlin", "swift", "scala", "elixir", "haskell", "clojure", "lua", "bash", "sh", "shell", "zsh", "powershell", "ps1"]
 
+KNOWN_EXTENSIONLESS_FILENAMES = {
+    "Dockerfile",
+    "Makefile",
+    "GNUmakefile",
+    "README",
+    "LICENSE",
+    "Procfile",
+    "Rakefile",
+    "Gemfile",
+    "Pipfile",
+    "Vagrantfile",
+    "Jenkinsfile",
+}
+
 def should_generate_content(filepath):
     ext = os.path.splitext(filepath)[1].lower()
     filename = os.path.basename(filepath)
@@ -417,9 +431,20 @@ def dfs_tree_and_gen(root, refined_prompt, tree_structure, project_name, current
 
         if node.is_file:
             return process_file(
-                node, full_path, context, refined_prompt, tree_structure,
-                json_file_name, file_output_format, metadata_dict,
-                dependency_analyzer, lock, pm, on_status, provider_name, node.description
+                node=node,
+                full_path=full_path,
+                context=context,
+                refined_prompt=refined_prompt,
+                tree_structure=tree_structure,
+                json_file_name=json_file_name,
+                file_output_format=file_output_format,
+                metadata_dict=metadata_dict,
+                file_description=node.description,
+                dependency_analyzer=dependency_analyzer,
+                lock=lock,
+                pm=pm,
+                on_status=on_status,
+                provider_name=provider_name,
             )
         else:
             return process_directory(node, full_path, context, work_queue, work_output_base_dir, lock, root_val, on_status)
@@ -488,8 +513,10 @@ def process_file(node, full_path, context, refined_prompt, tree_structure,
                 if not os.path.exists(parent_dir):
                     os.makedirs(parent_dir, exist_ok=True)
 
+        print(f"Processing file '{full_path}' with context '{context}' and file description '{file_description}'...")
+
         if should_generate_content(full_path):
-            max_attempts = 3 if provider_name == "vllm" else 1
+            max_attempts = 5 if provider_name == "vllm" else 1
             result = None
 
             for attempt in range(1, max_attempts + 1):
@@ -1052,14 +1079,6 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
 
 
 def generate_tree(resp, project_name="root"):
-    def _looks_like_file_node(name: str) -> bool:
-        base_name = (name or "").strip().rstrip('/')
-        if not base_name:
-            return False
-        if base_name.startswith('.'):
-            return len(base_name) > 1 and '.' in base_name[1:]
-        return '.' in base_name
-
     content = resp.strip().replace('```', '').strip()
     lines = content.split('\n')
     tree_line_pattern = re.compile(r'^(?:[│|]\s*)*(?:├──\s*|└──\s*|\|--\s*|\+--\s*|`--\s*|\|___\s*)?([^│├└|+#\n]+?)(?:/)?(?:\s*#.*)?$', re.IGNORECASE)
@@ -1133,12 +1152,12 @@ def generate_tree(resp, project_name="root"):
             continue
 
         node = TreeNode(name)
-        node.is_file = _looks_like_file_node(name)
+        node.is_file = _is_valid_file_node_name(name)
 
         parent_index = min(max(indent, 0), len(stack) - 1)
         parent_node = stack[parent_index] if stack else root
 
-        while parent_index > 0 and _looks_like_file_node(parent_node.value):
+        while parent_index > 0 and _is_valid_file_node_name(parent_node.value):
             parent_index -= 1
             parent_node = stack[parent_index]
 
@@ -1149,7 +1168,7 @@ def generate_tree(resp, project_name="root"):
             stack.append(node)
 
     def mark_files_and_dirs(node):
-        if _looks_like_file_node(node.value):
+        if _is_valid_file_node_name(node.value):
             node.is_file = True
             return
 
@@ -1173,6 +1192,46 @@ def check_file_descriptions(node):
             continue
 
     return "success"
+
+
+def _is_valid_file_node_name(file_name: str) -> bool:
+    name = (file_name or "").strip()
+    if not name:
+        return False
+
+    if name in KNOWN_EXTENSIONLESS_FILENAMES:
+        return True
+
+    if name.startswith('.') and len(name) > 1:
+        return True
+
+    _, ext = os.path.splitext(name)
+    if not ext:
+        return False
+
+    if ext == '.':
+        return False
+
+    return True
+
+
+def find_invalid_file_nodes(root):
+    invalid_nodes = []
+
+    def _walk(node, current_path=""):
+        node_name = (node.value or "").strip()
+        next_path = os.path.join(current_path, node_name).replace("\\", "/") if node_name else current_path
+
+        if node.is_file and not _is_valid_file_node_name(node_name):
+            invalid_nodes.append(next_path or node_name)
+
+        for child in node.children:
+            _walk(child, next_path)
+
+    if root:
+        _walk(root, "")
+
+    return invalid_nodes
 
 def generate_project(user_prompt, output_base_dir, on_status=None, provider_name: Optional[str] = None, problem_statement_language="others"):
     # here i'm adding a parameter for problem_statement_language, where i need to seperate cuda from others, as we dont hae to generate docker file for cuda projects, which is more constly, a simple shell file is enough
@@ -1205,7 +1264,44 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
     file_output_format = file_format
 
     emit("step", "Building project tree")
-    folder_tree = generate_tree(folder_struc, project_name="")
+
+    max_tree_regeneration_attempts = 3
+    regeneration_attempt = 0
+    folder_tree = None
+
+    while regeneration_attempt < max_tree_regeneration_attempts:
+        folder_tree = generate_tree(folder_struc, project_name="")
+        invalid_file_nodes = find_invalid_file_nodes(folder_tree)
+
+        if not invalid_file_nodes:
+            break
+
+        regeneration_attempt += 1
+        preview_paths = ", ".join(invalid_file_nodes[:5])
+        suffix = "" if len(invalid_file_nodes) <= 5 else ", ..."
+        emit(
+            "warning",
+            (
+                f"Detected {len(invalid_file_nodes)} invalid file node(s) without a valid extension "
+                f"(attempt {regeneration_attempt}/{max_tree_regeneration_attempts}): {preview_paths}{suffix}"
+            ),
+        )
+
+        if regeneration_attempt >= max_tree_regeneration_attempts:
+            emit("error", "Unable to recover a valid folder structure after regeneration attempts.")
+            return None
+
+        emit("step", "Regenerating project blueprint due to invalid file nodes in folder structure...")
+        regenerated_blueprint = generate_project_blueprint(user_prompt, pm, provider_name, problem_statement_language)
+        if not regenerated_blueprint:
+            emit("error", "Failed to regenerate project blueprint after invalid file node detection.")
+            return None
+
+        software_blueprint = regenerated_blueprint.software_blueprint_details
+        folder_struc = regenerated_blueprint.folder_structure
+        file_format = regenerated_blueprint.file_formats
+        file_output_format = file_format
+        emit("log", f"Regenerated folder structure:\n{folder_struc}")
 
     emit("step", "Filling description for each file in the structure")
     fill_description_for_files(
