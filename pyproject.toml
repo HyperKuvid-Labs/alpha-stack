@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alphastack"
-version = "0.1.31"
+version = "0.1.32"
 description = "AI-powered project generator with Docker testing"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -34,6 +34,7 @@ dependencies = [
     "pydantic>=2.0",
     "tree-sitter-languages>=1.10.0",
     "tree-sitter>=0.21.0,<0.22",
+    "dgat>=0.1.0",
 ]
 
 [project.optional-dependencies]

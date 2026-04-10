@@ -251,6 +251,86 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
             },
         },
         {
+            "name": "dgat_describe_file",
+            "description": "Get AI-generated description of what a file does. Use this FIRST to understand any file before reading its content.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Relative path to the file from project root (e.g., 'src/main.py')",
+                    }
+                },
+                "required": ["file_path"],
+            },
+        },
+        {
+            "name": "dgat_get_dependencies",
+            "description": "Get the list of files that the given file depends on (imports). Uses DGAT's dependency graph.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Relative path to the file from project root (e.g., 'src/main.py')",
+                    }
+                },
+                "required": ["file_path"],
+            },
+        },
+        {
+            "name": "dgat_get_dependents",
+            "description": "Get the list of files that depend on (import) the given file. Uses DGAT's dependency graph.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Relative path to the file from project root (e.g., 'src/main.py')",
+                    }
+                },
+                "required": ["file_path"],
+            },
+        },
+        {
+            "name": "dgat_search_files",
+            "description": "Search files by name or description. Use this to find relevant files when you don't know the exact path.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query (file name or description text)",
+                    }
+                },
+                "required": ["query"],
+            },
+        },
+        {
+            "name": "dgat_get_blueprint",
+            "description": "Get the full architectural blueprint of the project. This is a synthesized overview of the entire codebase.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+        {
+            "name": "dgat_get_file_tree",
+            "description": "Get the complete file tree with all descriptions. Use this to understand the project structure.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+        {
+            "name": "dgat_update",
+            "description": "Run incremental DGAT update after making file changes. This re-analyzes only the changed files.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+        {
             "name": "docker_build",
             "description": "Build the Docker image. You provide the full docker build command. If omitted, defaults to 'docker build --progress=plain -t <image_name> .'",
             "parameters": {
@@ -392,6 +472,13 @@ PLANNER_TOOL_NAMES = {
     "batch_edit_files",
     "batch_read_files",
     "give_up",
+    "dgat_describe_file",
+    "dgat_get_dependencies",
+    "dgat_get_dependents",
+    "dgat_search_files",
+    "dgat_get_blueprint",
+    "dgat_get_file_tree",
+    "dgat_update",
 }
 
 # Tools the executor is allowed to use (file read/write only — no docker, no recursion)
@@ -402,10 +489,15 @@ EXECUTOR_TOOL_NAMES = {
     "run_shell_command",
     "get_file_dependencies",
     "get_file_dependents",
+    "dgat_describe_file",
+    "dgat_get_dependencies",
+    "dgat_get_dependents",
 }
 
 
-def get_planner_tool_definitions(problem_statement_language: str = "others") -> List[Dict[str, Any]]:
+def get_planner_tool_definitions(
+    problem_statement_language: str = "others",
+) -> List[Dict[str, Any]]:
     selected_names = set(PLANNER_TOOL_NAMES)
     if str(problem_statement_language).lower() in {"cuda", "cude"}:
         selected_names.discard("docker_build")

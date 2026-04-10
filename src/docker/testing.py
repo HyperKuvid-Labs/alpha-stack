@@ -15,10 +15,12 @@ from ..utils.error_tracker import ErrorTracker
 from ..utils.tools import ToolHandler
 from ..utils.thread_memory import ThreadMemory
 from ..utils.dependencies import build_dependency_graph_tree
+from ..utils.dgat_wrapper import DGATManager, build_project_structure_tree
 
 
 class PipelineState(BaseModel):
     """Single source of truth for the planner agent's pipeline progress."""
+
     build_success: bool = False
     test_success: bool = False
     session: int = 0
@@ -50,7 +52,7 @@ class DockerExecutor:
     def build(self, command: str = "") -> Dict:
         """Run a docker build command. Agent provides the full command."""
         if not command:
-            command = f"docker build --progress=plain -t {self.image_name} ." # ask to regenerate
+            command = f"docker build --progress=plain -t {self.image_name} ."  # ask to regenerate
 
         try:
             env = os.environ.copy()
@@ -145,10 +147,18 @@ class DockerExecutor:
 
     def _is_test_command(self, command: str) -> bool:
         test_keywords = [
-            "pytest", "npm test", "yarn test", "jest",
-            "cargo test", "go test", "rspec", "phpunit",
-            "mocha", "vitest", "python -m unittest",
-            "test_runner"
+            "pytest",
+            "npm test",
+            "yarn test",
+            "jest",
+            "cargo test",
+            "go test",
+            "rspec",
+            "phpunit",
+            "mocha",
+            "vitest",
+            "python -m unittest",
+            "test_runner",
         ]
         cmd_lower = command.lower()
         return any(keyword in cmd_lower for keyword in test_keywords)
@@ -223,7 +233,9 @@ class ShellScriptExecutor:
         self.on_status = on_status
         self.build_success = True
         self.test_success = False
-        self.last_build_logs: Optional[str] = "Build step skipped for CUDA shell execution mode"
+        self.last_build_logs: Optional[str] = (
+            "Build step skipped for CUDA shell execution mode"
+        )
         self.last_test_logs: Optional[str] = None
 
     def _emit(self, event_type: str, message: str):
@@ -301,10 +313,11 @@ class DockerTestingPipeline:
         pm: Optional[PromptManager] = None,
         error_tracker: Optional[ErrorTracker] = None,
         dependency_analyzer=None,
+        dgat_manager=None,
         on_status=None,
         tool_log_path: Optional[str] = None,
         provider_name: Optional[str] = None,
-        problem_statement_language: str = "others"
+        problem_statement_language: str = "others",
     ):
         self.project_root = project_root
         self.software_blueprint = software_blueprint
@@ -313,6 +326,7 @@ class DockerTestingPipeline:
         self.pm = pm or PromptManager(templates_dir="prompts")
         self.dockerfile_path = os.path.join(project_root, "Dockerfile")
         self.dependency_analyzer = dependency_analyzer
+        self.dgat_manager = dgat_manager
         self.on_status = on_status
 
         self.provider_name = provider_name or InferenceManager.get_default_provider()
@@ -321,7 +335,9 @@ class DockerTestingPipeline:
         self.is_cuda_mode = self.problem_statement_language.lower() in {"cuda", "cude"}
 
         project_name = os.path.basename(os.path.normpath(project_root))
-        self.image_name = f"{project_name.lower()}_test_image" if not self.is_cuda_mode else ""
+        self.image_name = (
+            f"{project_name.lower()}_test_image" if not self.is_cuda_mode else ""
+        )
 
         self.error_tracker = error_tracker or ErrorTracker(project_root)
         self.thread_memory = ThreadMemory(token_threshold=25000)
@@ -349,6 +365,7 @@ class DockerTestingPipeline:
             self.error_tracker,
             image_name=self.image_name,
             dependency_analyzer=self.dependency_analyzer,
+            dgat_manager=self.dgat_manager,
             tool_log_path=tool_log_path,
             agent_name="planner",
             thread_memory=self.thread_memory,
@@ -368,7 +385,9 @@ class DockerTestingPipeline:
         self.state = PipelineState(max_sessions=self.max_sessions)
         if self.is_cuda_mode:
             self.state.build_success = True
-            self.state.last_build_logs = "Build step skipped for CUDA shell execution mode"
+            self.state.last_build_logs = (
+                "Build step skipped for CUDA shell execution mode"
+            )
 
     def _emit(self, event_type: str, message: str, **kwargs):
         print(f"[{event_type}] {message}")
@@ -376,7 +395,9 @@ class DockerTestingPipeline:
             self.on_status(event_type, message, **kwargs)
 
     def _build_dependency_graph(self) -> str:
-        if self.dependency_analyzer:
+        if self.dgat_manager:
+            return self.dgat_manager.get_file_tree()
+        elif self.dependency_analyzer:
             return build_dependency_graph_tree(
                 self.project_root, self.dependency_analyzer
             )
@@ -433,7 +454,15 @@ class DockerTestingPipeline:
         )
 
     # Tools that must run exclusively (never in parallel with anything)
-    EXCLUSIVE_TOOLS = frozenset({"docker_build", "docker_run", "shell_script_run", "batch_edit_files", "give_up"})
+    EXCLUSIVE_TOOLS = frozenset(
+        {
+            "docker_build",
+            "docker_run",
+            "shell_script_run",
+            "batch_edit_files",
+            "give_up",
+        }
+    )
 
     def _run_planner_session(self) -> int:
         """Run one planner session. Returns the number of tool calls made.
@@ -493,7 +522,9 @@ class DockerTestingPipeline:
                     func_args = fc.get("args", {})
 
                     self._emit("tool_call", f"{func_name}({list(func_args.keys())})")
-                    result = self.tool_handler.handle_function_call(func_name, func_args)
+                    result = self.tool_handler.handle_function_call(
+                        func_name, func_args
+                    )
                     tool_calls_made += 1
 
                     if isinstance(result, dict) and result.get("gave_up"):
@@ -512,8 +543,12 @@ class DockerTestingPipeline:
                         func_name = fc["name"]
                         func_args = fc.get("args", {})
 
-                        self._emit("tool_call", f"{func_name}({list(func_args.keys())})")
-                        result = self.tool_handler.handle_function_call(func_name, func_args)
+                        self._emit(
+                            "tool_call", f"{func_name}({list(func_args.keys())})"
+                        )
+                        result = self.tool_handler.handle_function_call(
+                            func_name, func_args
+                        )
                         tool_calls_made += 1
 
                         if isinstance(result, dict) and result.get("gave_up"):
@@ -554,9 +589,7 @@ class DockerTestingPipeline:
                                 results_by_id[fc_index[id(fc_done)]] = func_response
 
             # ── reassemble responses in original order ────────────────
-            function_responses = [
-                results_by_id[i] for i in range(len(function_calls))
-            ]
+            function_responses = [results_by_id[i] for i in range(len(function_calls))]
 
             self.provider.accumulate_messages(messages, response, function_responses)
 
@@ -636,10 +669,11 @@ def run_docker_testing(
     pm=None,
     error_tracker=None,
     dependency_analyzer=None,
+    dgat_manager=None,
     on_status=None,
     tool_log_path: Optional[str] = None,
     provider_name: Optional[str] = None,
-    problem_statement_language: str = "others"
+    problem_statement_language: str = "others",
 ) -> Dict:
     pipeline = DockerTestingPipeline(
         project_root=project_root,
@@ -649,6 +683,7 @@ def run_docker_testing(
         pm=pm,
         error_tracker=error_tracker,
         dependency_analyzer=dependency_analyzer,
+        dgat_manager=dgat_manager,
         on_status=on_status,
         tool_log_path=tool_log_path,
         provider_name=provider_name,

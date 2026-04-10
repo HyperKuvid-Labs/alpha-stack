@@ -5,16 +5,27 @@ from typing import Dict, Any, Optional
 
 
 class ToolHandler:
-    def __init__(self, project_root: str, error_tracker=None, image_name: str = "project-test",
-                 dependency_analyzer=None, tool_log_path: Optional[str] = None,
-                 agent_name: Optional[str] = None, thread_memory=None,
-                 docker_executor=None, shell_executor=None,
-                 problem_statement_language: str = "others"):
+    def __init__(
+        self,
+        project_root: str,
+        error_tracker=None,
+        image_name: str = "project-test",
+        dependency_analyzer=None,
+        tool_log_path: Optional[str] = None,
+        agent_name: Optional[str] = None,
+        thread_memory=None,
+        docker_executor=None,
+        shell_executor=None,
+        problem_statement_language: str = "others",
+        dgat_manager=None,
+    ):
         from .tool_call_log import ToolCallLogger
+
         self.project_root = project_root
         self.error_tracker = error_tracker
         self.image_name = image_name
         self.dependency_analyzer = dependency_analyzer
+        self.dgat_manager = dgat_manager
         self.agent_name = agent_name
         self.thread_memory = thread_memory
         self.tool_call_logger = ToolCallLogger(tool_log_path) if tool_log_path else None
@@ -23,7 +34,9 @@ class ToolHandler:
         self.problem_statement_language = problem_statement_language
         self.is_cuda_mode = str(problem_statement_language).lower() in {"cuda", "cude"}
 
-    def handle_function_call(self, function_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    def handle_function_call(
+        self, function_name: str, args: Dict[str, Any]
+    ) -> Dict[str, Any]:
         self._log_tool_call(function_name, args)
         print(f"[tool_call] {function_name} args={list(args.keys())}")
         result = self._execute_tool(function_name, args)
@@ -36,79 +49,105 @@ class ToolHandler:
             return self._get_file_code(
                 args.get("file_path"),
                 start_line=args.get("start_line"),
-                end_line=args.get("end_line")
+                end_line=args.get("end_line"),
             )
         elif function_name == "update_file_code":
             file_path = args.get("file_path", "")
             new_content = (
-                args.get("new_content") or
-                args.get("content") or
-                args.get("file_content") or
-                args.get("code") or
-                ""
+                args.get("new_content")
+                or args.get("content")
+                or args.get("file_content")
+                or args.get("code")
+                or ""
             )
-            change_description = args.get("change_description", args.get("description", ""))
+            change_description = args.get(
+                "change_description", args.get("description", "")
+            )
             if not new_content:
                 return {
                     "success": False,
-                    "error": "No content provided. Expected 'new_content', 'content', 'file_content', or 'code' parameter."
+                    "error": "No content provided. Expected 'new_content', 'content', 'file_content', or 'code' parameter.",
                 }
             return self._update_file_code(file_path, new_content, change_description)
         elif function_name == "log_change":
             return self._log_change(
-                args["file_path"],
-                args["change_description"],
-                args["error_context"]
+                args["file_path"], args["change_description"], args["error_context"]
             )
         elif function_name == "regenerate_file":
             return self._regenerate_file(
-                file_path=args.get("file_path", ""),
-                context=args.get("context", "")
+                file_path=args.get("file_path", ""), context=args.get("context", "")
             )
         elif function_name == "create_directory":
             return self._create_directory(
-                args.get("directory_path", ""),
-                args.get("create_parents", True)
+                args.get("directory_path", ""), args.get("create_parents", True)
             )
         elif function_name == "delete_file":
             return self._delete_file(args.get("file_path", ""))
         elif function_name == "get_error_history":
             return self._get_error_history(
                 error_id=args.get("error_id"),
-                limit=int(args.get("limit", 20)) if args.get("limit") is not None else 20,
-                offset=int(args.get("offset", 0)) if args.get("offset") is not None else 0,
-                include_logs=bool(args.get("include_logs", False))
+                limit=int(args.get("limit", 20))
+                if args.get("limit") is not None
+                else 20,
+                offset=int(args.get("offset", 0))
+                if args.get("offset") is not None
+                else 0,
+                include_logs=bool(args.get("include_logs", False)),
             )
         elif function_name == "get_action_history":
             return self._get_action_history(
-                limit=int(args.get("limit", 20)) if args.get("limit") is not None else 20,
-                offset=int(args.get("offset", 0)) if args.get("offset") is not None else 0,
-                task_id=args.get("task_id")
+                limit=int(args.get("limit", 20))
+                if args.get("limit") is not None
+                else 20,
+                offset=int(args.get("offset", 0))
+                if args.get("offset") is not None
+                else 0,
+                task_id=args.get("task_id"),
             )
         elif function_name == "log_action":
             return self._log_action(
                 task_id=args.get("task_id"),
                 action_type=args.get("action_type", ""),
-                message=args.get("message", "")
+                message=args.get("message", ""),
             )
         elif function_name == "run_shell_command":
             return self._run_shell_command(
                 command=args.get("command", ""),
-                timeout_sec=int(args.get("timeout_sec", 5)) if args.get("timeout_sec") is not None else 5
+                timeout_sec=int(args.get("timeout_sec", 5))
+                if args.get("timeout_sec") is not None
+                else 5,
             )
         elif function_name == "patch_file":
             return self._patch_file(
                 file_path=args.get("file_path", ""),
                 fix_type=args.get("fix_type", ""),
                 description=args.get("description", ""),
-                line_start=int(args["line_start"]) if args.get("line_start") is not None else None,
-                line_end=int(args["line_end"]) if args.get("line_end") is not None else None,
-                new_content=args.get("new_content")
+                line_start=int(args["line_start"])
+                if args.get("line_start") is not None
+                else None,
+                line_end=int(args["line_end"])
+                if args.get("line_end") is not None
+                else None,
+                new_content=args.get("new_content"),
             )
         elif function_name == "get_file_dependencies":
             return self._get_file_dependencies(args.get("file_path", ""))
         elif function_name == "get_file_dependents":
             return self._get_file_dependents(args.get("file_path", ""))
+        elif function_name == "dgat_describe_file":
+            return self._dgat_describe_file(args.get("file_path", ""))
+        elif function_name == "dgat_get_dependencies":
+            return self._dgat_get_dependencies(args.get("file_path", ""))
+        elif function_name == "dgat_get_dependents":
+            return self._dgat_get_dependents(args.get("file_path", ""))
+        elif function_name == "dgat_search_files":
+            return self._dgat_search_files(args.get("query", ""))
+        elif function_name == "dgat_get_blueprint":
+            return self._dgat_get_blueprint()
+        elif function_name == "dgat_get_file_tree":
+            return self._dgat_get_file_tree()
+        elif function_name == "dgat_update":
+            return self._dgat_update()
         elif function_name == "docker_build":
             return self._docker_build(command=args.get("command", ""))
         elif function_name == "docker_run":
@@ -126,14 +165,20 @@ class ToolHandler:
 
     def _docker_build(self, command: str = "") -> Dict[str, Any]:
         if self.is_cuda_mode:
-            return {"success": False, "error": "docker_build is disabled in CUDA shell execution mode"}
+            return {
+                "success": False,
+                "error": "docker_build is disabled in CUDA shell execution mode",
+            }
         if not self.docker_executor:
             return {"error": "Docker executor not available"}
         return self.docker_executor.build(command=command)
 
     def _docker_run(self, command: str = "") -> Dict[str, Any]:
         if self.is_cuda_mode:
-            return {"success": False, "error": "docker_run is disabled in CUDA shell execution mode"}
+            return {
+                "success": False,
+                "error": "docker_run is disabled in CUDA shell execution mode",
+            }
         if not self.docker_executor:
             return {"error": "Docker executor not available"}
         if not command:
@@ -142,7 +187,10 @@ class ToolHandler:
 
     def _shell_script_run(self, command: str = "") -> Dict[str, Any]:
         if not self.is_cuda_mode:
-            return {"success": False, "error": "shell_script_run is only available in CUDA shell execution mode"}
+            return {
+                "success": False,
+                "error": "shell_script_run is only available in CUDA shell execution mode",
+            }
         if not self.shell_executor:
             return {"success": False, "error": "Shell executor not available"}
         return self.shell_executor.run(command=command)
@@ -162,10 +210,12 @@ class ToolHandler:
             "success": False,
             "gave_up": True,
             "reason": reason,
-            "message": "Session terminated because the agent gave up."
+            "message": "Session terminated because the agent gave up.",
         }
 
-    def _log_to_thread_memory(self, function_name: str, args: Dict[str, Any], result: Dict[str, Any]) -> None:
+    def _log_to_thread_memory(
+        self, function_name: str, args: Dict[str, Any], result: Dict[str, Any]
+    ) -> None:
         if not self.thread_memory:
             return
         try:
@@ -177,7 +227,7 @@ class ToolHandler:
                 tool_name=function_name,
                 arguments=args,
                 result=result,
-                success=success
+                success=success,
             )
         except Exception:
             pass
@@ -196,7 +246,9 @@ class ToolHandler:
         except Exception:
             print(f"[tool_result] {function_name} -> <unavailable>")
 
-    def _get_file_code(self, file_path: str, start_line: int = None, end_line: int = None) -> Dict[str, Any]:
+    def _get_file_code(
+        self, file_path: str, start_line: int = None, end_line: int = None
+    ) -> Dict[str, Any]:
         if not file_path:
             return {"error": "file_path is required"}
 
@@ -205,7 +257,7 @@ class ToolHandler:
             return {"error": f"File not found: {file_path}"}
 
         try:
-            with open(full_path, 'r', encoding='utf-8') as f:
+            with open(full_path, "r", encoding="utf-8") as f:
                 lines = f.readlines()
 
             total_lines = len(lines)
@@ -214,14 +266,14 @@ class ToolHandler:
                 end = min(int(end_line or total_lines), total_lines)
                 if start > end:
                     return {"error": "start_line must be <= end_line"}
-                content = "".join(lines[start - 1:end])
+                content = "".join(lines[start - 1 : end])
                 return {
                     "success": True,
                     "file_path": file_path,
                     "content": content,
                     "start_line": start,
                     "end_line": end,
-                    "total_lines": total_lines
+                    "total_lines": total_lines,
                 }
 
             content = "".join(lines)
@@ -229,47 +281,67 @@ class ToolHandler:
                 "success": True,
                 "file_path": file_path,
                 "content": content,
-                "total_lines": total_lines
+                "total_lines": total_lines,
             }
         except Exception as e:
             return {"error": f"Error reading file: {str(e)}"}
 
-    def _log_change(self, file_path: str, change_description: str, error_context: str) -> Dict[str, Any]:
+    def _log_change(
+        self, file_path: str, change_description: str, error_context: str
+    ) -> Dict[str, Any]:
         if self.error_tracker:
             full_path = os.path.join(self.project_root, file_path)
             self.error_tracker.log_change(
                 file_path=full_path,
                 change_description=change_description,
-                error_context=error_context
+                error_context=error_context,
             )
             return {"success": True, "message": "Change logged successfully"}
         else:
             return {"success": True, "message": "Change logged (no tracker available)"}
 
-    def _get_error_history(self, error_id: str = None, limit: int = 20, offset: int = 0, include_logs: bool = False) -> Dict[str, Any]:
+    def _get_error_history(
+        self,
+        error_id: str = None,
+        limit: int = 20,
+        offset: int = 0,
+        include_logs: bool = False,
+    ) -> Dict[str, Any]:
         if not self.error_tracker:
             return {"error": "No error tracker available"}
-        return self.error_tracker.get_error_history(error_id=error_id, limit=limit, offset=offset, include_logs=include_logs)
+        return self.error_tracker.get_error_history(
+            error_id=error_id, limit=limit, offset=offset, include_logs=include_logs
+        )
 
-    def _get_action_history(self, limit: int = 20, offset: int = 0, task_id: str = None) -> Dict[str, Any]:
+    def _get_action_history(
+        self, limit: int = 20, offset: int = 0, task_id: str = None
+    ) -> Dict[str, Any]:
         if not self.error_tracker:
             return {"error": "No error tracker available"}
-        return self.error_tracker.get_action_history(limit=limit, offset=offset, task_id=task_id)
+        return self.error_tracker.get_action_history(
+            limit=limit, offset=offset, task_id=task_id
+        )
 
-    def _log_action(self, task_id: str, action_type: str, message: str) -> Dict[str, Any]:
+    def _log_action(
+        self, task_id: str, action_type: str, message: str
+    ) -> Dict[str, Any]:
         if not self.error_tracker:
             return {"success": False, "error": "No error tracker available"}
-        return self.error_tracker.log_action(task_id=task_id, action_type=action_type, message=message)
+        return self.error_tracker.log_action(
+            task_id=task_id, action_type=action_type, message=message
+        )
 
     def _regenerate_file(self, file_path: str, context: str) -> Dict[str, Any]:
         return {
             "success": False,
             "error": "File regeneration requires blueprint context. Use update_file_code with content generated from blueprint.",
             "file_path": file_path,
-            "context": context
+            "context": context,
         }
 
-    def _update_file_code(self, file_path: str, new_content: str, change_description: str) -> Dict[str, Any]:
+    def _update_file_code(
+        self, file_path: str, new_content: str, change_description: str
+    ) -> Dict[str, Any]:
         from .helpers import clean_agent_output
 
         if not file_path:
@@ -282,7 +354,7 @@ class ToolHandler:
         old_content = None
         if os.path.exists(full_path):
             try:
-                with open(full_path, 'r', encoding='utf-8') as f:
+                with open(full_path, "r", encoding="utf-8") as f:
                     old_content = f.read()
             except Exception:
                 pass
@@ -292,20 +364,28 @@ class ToolHandler:
             if dir_path and not os.path.exists(dir_path):
                 os.makedirs(dir_path, exist_ok=True)
 
-            with open(full_path, 'w', encoding='utf-8') as f:
+            with open(full_path, "w", encoding="utf-8") as f:
                 f.write(new_content)
+
+            if self.dgat_manager:
+                try:
+                    self.dgat_manager.update()
+                except Exception as e:
+                    print(f"[dgat] Update after file write failed: {e}")
 
             return {
                 "success": True,
                 "file_path": file_path,
                 "message": f"File updated successfully: {change_description}",
                 "old_content": old_content,
-                "new_content": new_content
+                "new_content": new_content,
             }
         except Exception as e:
             return {"error": f"Error updating file: {str(e)}"}
 
-    def _create_directory(self, directory_path: str, create_parents: bool = True) -> Dict[str, Any]:
+    def _create_directory(
+        self, directory_path: str, create_parents: bool = True
+    ) -> Dict[str, Any]:
         if not directory_path:
             return {"error": "directory_path is required"}
 
@@ -316,10 +396,12 @@ class ToolHandler:
                 return {
                     "success": True,
                     "directory_path": directory_path,
-                    "message": "Directory already exists"
+                    "message": "Directory already exists",
                 }
             else:
-                return {"error": f"Path exists but is not a directory: {directory_path}"}
+                return {
+                    "error": f"Path exists but is not a directory: {directory_path}"
+                }
 
         try:
             if create_parents:
@@ -327,13 +409,12 @@ class ToolHandler:
             else:
                 parent = os.path.dirname(full_path)
                 if not os.path.exists(parent):
-                    return {"error": f"Parent directory does not exist: {os.path.dirname(directory_path)}"}
+                    return {
+                        "error": f"Parent directory does not exist: {os.path.dirname(directory_path)}"
+                    }
                 os.mkdir(full_path)
 
-            return {
-                "success": True,
-                "directory_path": directory_path
-            }
+            return {"success": True, "directory_path": directory_path}
         except Exception as e:
             return {"error": f"Error creating directory: {str(e)}"}
 
@@ -351,10 +432,7 @@ class ToolHandler:
 
         try:
             os.remove(full_path)
-            return {
-                "success": True,
-                "file_path": file_path
-            }
+            return {"success": True, "file_path": file_path}
         except Exception as e:
             return {"error": f"Error deleting file: {str(e)}"}
 
@@ -370,14 +448,14 @@ class ToolHandler:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 timeout=timeout_sec,
-                text=True
+                text=True,
             )
             return {
                 "success": True,
                 "command": command,
                 "exit_code": completed.returncode,
                 "stdout": completed.stdout,
-                "stderr": completed.stderr
+                "stderr": completed.stderr,
             }
         except subprocess.TimeoutExpired:
             return {"error": f"Command timed out after {timeout_sec}s"}
@@ -395,8 +473,15 @@ class ToolHandler:
     ) -> Dict[str, Any]:
         if not file_path:
             return {"error": "file_path is required"}
-        if fix_type not in ("full_rewrite", "delete_lines", "replace_lines", "insert_after_line"):
-            return {"error": f"Unknown fix_type '{fix_type}'. Must be one of: full_rewrite, delete_lines, replace_lines, insert_after_line"}
+        if fix_type not in (
+            "full_rewrite",
+            "delete_lines",
+            "replace_lines",
+            "insert_after_line",
+        ):
+            return {
+                "error": f"Unknown fix_type '{fix_type}'. Must be one of: full_rewrite, delete_lines, replace_lines, insert_after_line"
+            }
 
         full_path = os.path.join(self.project_root, file_path)
         if not os.path.exists(full_path):
@@ -413,7 +498,7 @@ class ToolHandler:
         if fix_type != "full_rewrite" and line_start is not None:
             start_idx = line_start - 1
             end_idx = (line_end or line_start) - 1
-            old_snippet = "".join(lines[start_idx: end_idx + 1]).strip() or "(none)"
+            old_snippet = "".join(lines[start_idx : end_idx + 1]).strip() or "(none)"
 
         new_snippet = (new_content or "(delete)").strip()
 
@@ -427,20 +512,20 @@ class ToolHandler:
         elif fix_type == "delete_lines":
             start = max(0, (line_start or 1) - 1)
             end = max(start, min((line_end or line_start or 1) - 1, n - 1))
-            patched_lines = lines[:start] + lines[end + 1:]
+            patched_lines = lines[:start] + lines[end + 1 :]
         elif fix_type == "replace_lines":
             start = max(0, (line_start or 1) - 1)
             end = max(start, min((line_end or line_start or 1) - 1, n - 1))
             replacement = new_content or ""
             if not replacement.endswith("\n"):
                 replacement += "\n"
-            patched_lines = lines[:start] + [replacement] + lines[end + 1:]
+            patched_lines = lines[:start] + [replacement] + lines[end + 1 :]
         elif fix_type == "insert_after_line":
             end = max(0, min((line_end or line_start or 1) - 1, n - 1))
             insertion = new_content or ""
             if not insertion.endswith("\n"):
                 insertion += "\n"
-            patched_lines = lines[:end + 1] + [insertion] + lines[end + 1:]
+            patched_lines = lines[: end + 1] + [insertion] + lines[end + 1 :]
         else:
             patched_lines = lines
 
@@ -449,6 +534,12 @@ class ToolHandler:
                 f.write("".join(patched_lines))
         except Exception as e:
             return {"error": f"Error writing patched file: {str(e)}"}
+
+        if self.dgat_manager:
+            try:
+                self.dgat_manager.update()
+            except Exception as e:
+                print(f"[dgat] Update after patch failed: {e}")
 
         return {
             "success": True,
@@ -481,8 +572,62 @@ class ToolHandler:
         rel_deps = [os.path.relpath(p, self.project_root) for p in deps]
         return {"success": True, "file_path": file_path, "dependents": rel_deps}
 
+    def _dgat_describe_file(self, file_path: str) -> Dict[str, Any]:
+        if not self.dgat_manager:
+            return {"error": "DGAT manager not available"}
+        if not file_path:
+            return {"error": "file_path is required"}
+        description = self.dgat_manager.get_file_description(file_path)
+        return {"success": True, "file_path": file_path, "description": description}
+
+    def _dgat_get_dependencies(self, file_path: str) -> Dict[str, Any]:
+        if not self.dgat_manager:
+            return {"error": "DGAT manager not available"}
+        if not file_path:
+            return {"error": "file_path is required"}
+        deps = self.dgat_manager.get_dependencies(file_path)
+        return {"success": True, "file_path": file_path, "dependencies": deps}
+
+    def _dgat_get_dependents(self, file_path: str) -> Dict[str, Any]:
+        if not self.dgat_manager:
+            return {"error": "DGAT manager not available"}
+        if not file_path:
+            return {"error": "file_path is required"}
+        dependents = self.dgat_manager.get_dependents(file_path)
+        return {"success": True, "file_path": file_path, "dependents": dependents}
+
+    def _dgat_search_files(self, query: str) -> Dict[str, Any]:
+        if not self.dgat_manager:
+            return {"error": "DGAT manager not available"}
+        if not query:
+            return {"error": "query is required"}
+        results = self.dgat_manager.search_files(query)
+        return {"success": True, "query": query, "results": results}
+
+    def _dgat_get_blueprint(self) -> Dict[str, Any]:
+        if not self.dgat_manager:
+            return {"error": "DGAT manager not available"}
+        blueprint = self.dgat_manager.get_blueprint()
+        return {"success": True, "blueprint": blueprint}
+
+    def _dgat_get_file_tree(self) -> Dict[str, Any]:
+        if not self.dgat_manager:
+            return {"error": "DGAT manager not available"}
+        tree = self.dgat_manager.get_file_tree()
+        return {"success": True, "file_tree": tree}
+
+    def _dgat_update(self) -> Dict[str, Any]:
+        if not self.dgat_manager:
+            return {"error": "DGAT manager not available"}
+        success = self.dgat_manager.update()
+        return {
+            "success": success,
+            "message": "DGAT update completed" if success else "DGAT update failed",
+        }
+
     def _batch_edit_files(self, tasks: list) -> Dict[str, Any]:
         from .corrector_tool import batch_edit_files
+
         return batch_edit_files(tasks, self)
 
     def _batch_read_files(self, file_paths: list) -> Dict[str, Any]:
@@ -513,9 +658,7 @@ class ToolHandler:
 
         results = []
         with ThreadPoolExecutor(max_workers=min(len(unique_paths), 8)) as pool:
-            future_to_path = {
-                pool.submit(_read_one, fp): fp for fp in unique_paths
-            }
+            future_to_path = {pool.submit(_read_one, fp): fp for fp in unique_paths}
             for future in as_completed(future_to_path):
                 try:
                     result = future.result()
@@ -538,4 +681,3 @@ class ToolHandler:
             "failed": failed,
             "results": results,
         }
-

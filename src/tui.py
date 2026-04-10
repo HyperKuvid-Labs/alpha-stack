@@ -12,20 +12,22 @@ from prompt_toolkit.styles import Style as PromptStyle
 from rich.console import Console
 from rich.text import Text
 
-from .config import get_api_key, set_api_key
+from .config import get_api_key, set_api_key, get_provider_api_key, set_provider_api_key
 
 # Initialize Rich Console
 console = Console(file=sys.__stdout__)
 
 # Tokyo Night Palette (using original Neon Noir variable names)
 
-NEON_PRIMARY  = "#BB9AF7"    # Signature Tokyo Night purple – vibrant accent / main highlight
-NEON_ACCENT   = "#C0CAF5"    # Soft periwinkle / light foreground blue-purple
-NEON_INFO     = "#7AA2F7"    # Bright info/link blue
-NEON_SUCCESS  = "#9ECE6A"    # Fresh neon green for success/positive
-NEON_WARNING  = "#E0AF68"    # Warm amber/gold for warnings
-NEON_ERROR    = "#F7768E"    # Vivid coral-red / error pinkish-red
-NEON_MUTED    = "#565F89"    # Cool muted indigo-gray (perfect for secondary/quiet text)
+NEON_PRIMARY = (
+    "#BB9AF7"  # Signature Tokyo Night purple – vibrant accent / main highlight
+)
+NEON_ACCENT = "#C0CAF5"  # Soft periwinkle / light foreground blue-purple
+NEON_INFO = "#7AA2F7"  # Bright info/link blue
+NEON_SUCCESS = "#9ECE6A"  # Fresh neon green for success/positive
+NEON_WARNING = "#E0AF68"  # Warm amber/gold for warnings
+NEON_ERROR = "#F7768E"  # Vivid coral-red / error pinkish-red
+NEON_MUTED = "#565F89"  # Cool muted indigo-gray (perfect for secondary/quiet text)
 
 PROMPT_STYLE = PromptStyle.from_dict(
     {
@@ -80,8 +82,8 @@ def display_logo():
     console.print()
 
 
-def setup_api_key():
-    """Interactive setup for the Gemini API key."""
+def setup_api_key(provider: str = "google"):
+    """Interactive setup for the API key for a specific provider."""
     console.print(Text("Set API key", style=f"bold {NEON_ACCENT}"))
     console.print(Text("Enter your key to continue.", style=NEON_MUTED))
 
@@ -89,12 +91,16 @@ def setup_api_key():
         api_key = _styled_input("API Key >", is_password=True)
 
         if api_key:
-            if set_api_key(api_key):
-                console.print(f"\n[bold {NEON_SUCCESS}]✓ API Key securely stored.[/bold {NEON_SUCCESS}]")
+            if set_provider_api_key(provider, api_key):
+                console.print(
+                    f"\n[bold {NEON_SUCCESS}]✓ API Key securely stored.[/bold {NEON_SUCCESS}]"
+                )
                 time.sleep(0.6)
                 return
 
-            console.print(f"\n[bold {NEON_ERROR}]✗ Failed to save configuration.[/bold {NEON_ERROR}]")
+            console.print(
+                f"\n[bold {NEON_ERROR}]✗ Failed to save configuration.[/bold {NEON_ERROR}]"
+            )
             return
 
         console.print(f"[{NEON_ERROR}]API Key cannot be empty.[/{NEON_ERROR}]")
@@ -102,7 +108,9 @@ def setup_api_key():
 
 def get_user_input():
     """Gets project details from the user with history support."""
-    console.print(Text("Describe what to build. Use ↑/↓ for history.", style=NEON_MUTED))
+    console.print(
+        Text("Describe what to build. Use ↑/↓ for history.", style=NEON_MUTED)
+    )
     console.print()
 
     provider_options, default_provider = _load_provider_options()
@@ -121,17 +129,15 @@ def get_user_input():
         )
 
     if provider in {"google", "openai", "openrouter", "prime_intellect"}:
-        existing_key = get_api_key()
+        existing_key = get_provider_api_key(provider)
         if existing_key:
             change = _styled_input("Update API key? (y/N) >").lower()
             if change == "y":
-                setup_api_key()
+                setup_api_key(provider)
         else:
-            setup_api_key()
+            setup_api_key(provider)
     else:
-        console.print(
-            f"[{NEON_MUTED}]Provider '{provider}' selected.[/{NEON_MUTED}]"
-        )
+        console.print(f"[{NEON_MUTED}]Provider '{provider}' selected.[/{NEON_MUTED}]")
 
     history_file = os.path.expanduser("~/.alphastack_history")
 
@@ -139,11 +145,15 @@ def get_user_input():
     user_prompt = _styled_input(">", history_path=history_file)
 
     if not user_prompt:
-        console.print(f"[bold {NEON_ERROR}]✗ A vision is required to proceed.[/bold {NEON_ERROR}]")
+        console.print(
+            f"[bold {NEON_ERROR}]✗ A vision is required to proceed.[/bold {NEON_ERROR}]"
+        )
         sys.exit(1)
 
     while True:
-        console.print(Text("Output directory (absolute path)", style=f"bold {NEON_ACCENT}"))
+        console.print(
+            Text("Output directory (absolute path)", style=f"bold {NEON_ACCENT}")
+        )
         output_dir = _styled_input(">", history_path=history_file + "_dirs")
 
         if output_dir:
@@ -167,7 +177,9 @@ def get_user_input():
         if problem_statement_language in {"cuda", "others"}:
             break
 
-        console.print(f"[{NEON_WARNING}]Please choose either 'cuda' or 'others'.[/{NEON_WARNING}]")
+        console.print(
+            f"[{NEON_WARNING}]Please choose either 'cuda' or 'others'.[/{NEON_WARNING}]"
+        )
 
     console.print()
     console.print(Text("Configuration locked. Starting generation...", style=NEON_INFO))
@@ -258,7 +270,7 @@ class StatusDisplay:
     def _remember_message(self, line):
         self.messages.append(line)
         if len(self.messages) > self.max_log_lines:
-            self.messages = self.messages[-self.max_log_lines:]
+            self.messages = self.messages[-self.max_log_lines :]
 
     def _print_event(self, label, message, style):
         line = Text()

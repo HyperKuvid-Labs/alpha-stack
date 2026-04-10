@@ -7,12 +7,18 @@ import traceback
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 
-from .utils.helpers import get_system_info, clean_agent_output, GENERATABLE_FILES, GENERATABLE_FILENAMES
+from .utils.helpers import (
+    get_system_info,
+    clean_agent_output,
+    GENERATABLE_FILES,
+    GENERATABLE_FILENAMES,
+)
 from .utils.inference import InferenceManager
 from .utils.prompt_manager import PromptManager
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from threading import Lock
 from queue import Queue, Empty
+
 
 class TreeNode:
     def __init__(self, value):
@@ -25,22 +31,72 @@ class TreeNode:
     def add_child(self, child_node):
         self.children.append(child_node)
 
+
 DEPENDENCY_FILES_TO_SKIP = {
-    'requirements.txt', 'requirements-dev.txt', 'requirements-test.txt',
-    'Pipfile', 'Pipfile.lock', 'pyproject.toml', 'poetry.lock', 'setup.py', 'setup.cfg',
-    'package.json', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lockb',
-    'go.mod', 'go.sum',
-    'Cargo.toml', 'Cargo.lock',
-    'pom.xml', 'build.gradle', 'build.gradle.kts', 'settings.gradle', 'gradle.properties',
-    'composer.json', 'composer.lock',
-    'Gemfile', 'Gemfile.lock',
-    'mix.exs', 'mix.lock',
-    'pubspec.yaml', 'pubspec.lock',
-    'CMakeLists.txt', 'conanfile.txt', 'vcpkg.json',
-    'rebar.config', 'rebar.lock',
+    "requirements.txt",
+    "requirements-dev.txt",
+    "requirements-test.txt",
+    "Pipfile",
+    "Pipfile.lock",
+    "pyproject.toml",
+    "poetry.lock",
+    "setup.py",
+    "setup.cfg",
+    "package.json",
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "bun.lockb",
+    "go.mod",
+    "go.sum",
+    "Cargo.toml",
+    "Cargo.lock",
+    "pom.xml",
+    "build.gradle",
+    "build.gradle.kts",
+    "settings.gradle",
+    "gradle.properties",
+    "composer.json",
+    "composer.lock",
+    "Gemfile",
+    "Gemfile.lock",
+    "mix.exs",
+    "mix.lock",
+    "pubspec.yaml",
+    "pubspec.lock",
+    "CMakeLists.txt",
+    "conanfile.txt",
+    "vcpkg.json",
+    "rebar.config",
+    "rebar.lock",
 }
 
-languages = ["python", "cpp", "java", "javascript", "typescript", "go", "rust", "ruby", "php", "csharp", "dart", "kotlin", "swift", "scala", "elixir", "haskell", "clojure", "lua", "bash", "sh", "shell", "zsh", "powershell", "ps1"]
+languages = [
+    "python",
+    "cpp",
+    "java",
+    "javascript",
+    "typescript",
+    "go",
+    "rust",
+    "ruby",
+    "php",
+    "csharp",
+    "dart",
+    "kotlin",
+    "swift",
+    "scala",
+    "elixir",
+    "haskell",
+    "clojure",
+    "lua",
+    "bash",
+    "sh",
+    "shell",
+    "zsh",
+    "powershell",
+    "ps1",
+]
 
 KNOWN_EXTENSIONLESS_FILENAMES = {
     "Dockerfile",
@@ -56,10 +112,21 @@ KNOWN_EXTENSIONLESS_FILENAMES = {
     "Jenkinsfile",
 }
 
+
 def should_generate_content(filepath):
     ext = os.path.splitext(filepath)[1].lower()
     filename = os.path.basename(filepath)
-    skip_names = {"Dockerfile", "docker-compose.yml", "docker-compose.yaml", "ci.yml", "di.yml", "README.md", "README.txt", "README", "LICENSE"}
+    skip_names = {
+        "Dockerfile",
+        "docker-compose.yml",
+        "docker-compose.yaml",
+        "ci.yml",
+        "di.yml",
+        "README.md",
+        "README.txt",
+        "README",
+        "LICENSE",
+    }
     # Skip dependency files during initial generation
     if filename in skip_names or filename in DEPENDENCY_FILES_TO_SKIP:
         return False
@@ -68,21 +135,27 @@ def should_generate_content(filepath):
 
 class FileGenerationResult(BaseModel):
     file_content: str = Field(description="The exact content to be written to the file")
-    metadata_description: str = Field(description="A 1-2 sentence description of what the file does")
+    metadata_description: str = Field(
+        description="A 1-2 sentence description of what the file does"
+    )
 
 
 class FileDescriptorResult(BaseModel):
-    file_description: str = Field(description="A precise, 1-2 sentence technical description of the file's purpose and functionality")
+    file_description: str = Field(
+        description="A precise, 1-2 sentence technical description of the file's purpose and functionality"
+    )
     language: str = Field(description="Programming language used in the file")
 
 
-def _parse_file_descriptor_result(raw_content: Optional[str]) -> Optional[FileDescriptorResult]:
+def _parse_file_descriptor_result(
+    raw_content: Optional[str],
+) -> Optional[FileDescriptorResult]:
     if not raw_content:
         return None
 
     text = raw_content.strip()
 
-    fence_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text, re.IGNORECASE)
+    fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.IGNORECASE)
     if fence_match:
         text = fence_match.group(1).strip()
 
@@ -92,7 +165,7 @@ def _parse_file_descriptor_result(raw_content: Optional[str]) -> Optional[FileDe
     except Exception:
         pass
 
-    json_obj_match = re.search(r'\{[\s\S]*\}', text)
+    json_obj_match = re.search(r"\{[\s\S]*\}", text)
     if json_obj_match:
         json_candidate = json_obj_match.group(0).strip()
         try:
@@ -147,7 +220,10 @@ def generate_file_descriptor(
 
     messages = [
         {"role": "system", "content": system_instruction},
-        {"role": "user", "content": "Return only the descriptor JSON with file_description and language."},
+        {
+            "role": "user",
+            "content": "Return only the descriptor JSON with file_description and language.",
+        },
     ]
 
     if provider_name == "vllm":
@@ -211,7 +287,11 @@ def fill_description_for_files(
 
     def _walk(node, current_path: str = ""):
         node_name = (node.value or "").strip()
-        next_path = os.path.join(current_path, node_name).replace("\\", "/") if node_name else current_path
+        next_path = (
+            os.path.join(current_path, node_name).replace("\\", "/")
+            if node_name
+            else current_path
+        )
 
         if node.is_file:
             file_path = _infer_file_path(next_path)
@@ -227,7 +307,9 @@ def fill_description_for_files(
             if descriptor and descriptor.file_description:
                 node.description = descriptor.file_description.strip()
             else:
-                node.description = f"Implements functionality for {node_name or file_path}."
+                node.description = (
+                    f"Implements functionality for {node_name or file_path}."
+                )
             return
 
         for child in node.children:
@@ -236,7 +318,16 @@ def fill_description_for_files(
     _walk(root, "")
 
 
-def generate_file(context, filepath, refined_prompt, tree, file_output_format, pm, provider_name: Optional[str] = None, file_description: Optional[str] = None) -> Optional[FileGenerationResult]:
+def generate_file(
+    context,
+    filepath,
+    refined_prompt,
+    tree,
+    file_output_format,
+    pm,
+    provider_name: Optional[str] = None,
+    file_description: Optional[str] = None,
+) -> Optional[FileGenerationResult]:
     provider_name = provider_name or InferenceManager.get_default_provider()
     provider = InferenceManager.create_provider(provider_name)
     system_instruction = pm.render_file_generation(
@@ -245,7 +336,7 @@ def generate_file(context, filepath, refined_prompt, tree, file_output_format, p
         refined_prompt=refined_prompt,
         tree=tree,
         file_output_format=file_output_format,
-        file_description=file_description
+        file_description=file_description,
     )
 
     # so i have seperated out the file generation and metadata geneation seperately, now it needs to be done sequentially
@@ -254,14 +345,19 @@ def generate_file(context, filepath, refined_prompt, tree, file_output_format, p
 
     result = None
 
-    def _parse_file_generation_result(raw_content: Optional[str]) -> Optional[FileGenerationResult]:
+    def _parse_file_generation_result(
+        raw_content: Optional[str],
+    ) -> Optional[FileGenerationResult]:
         if not raw_content:
             print(f"no content generated for {filepath}")
             return None
 
         # Extract fenced code first. Prefer a block with a known language, but
         # gracefully fall back to the first non-empty fenced block.
-        fence_pattern = re.compile(r'```\s*(?P<lang>[A-Za-z0-9_+\-]*)[^\n]*\n(?P<code>[\s\S]*?)```', re.IGNORECASE)
+        fence_pattern = re.compile(
+            r"```\s*(?P<lang>[A-Za-z0-9_+\-]*)[^\n]*\n(?P<code>[\s\S]*?)```",
+            re.IGNORECASE,
+        )
         blocks = list(fence_pattern.finditer(raw_content))
 
         extracted_content = ""
@@ -276,19 +372,25 @@ def generate_file(context, filepath, refined_prompt, tree, file_output_format, p
                     break
 
             if preferred_block is None:
-                preferred_block = next((block for block in blocks if block.group("code").strip()), blocks[0])
+                preferred_block = next(
+                    (block for block in blocks if block.group("code").strip()),
+                    blocks[0],
+                )
 
             extracted_content = preferred_block.group("code").strip()
         else:
             # Fallback: if no markdown fence exists, try to capture from a shebang onward.
-            shebang_match = re.search(r'(?m)^#![^\n]*\n[\s\S]*$', raw_content)
-            extracted_content = (shebang_match.group(0) if shebang_match else raw_content).strip()
+            shebang_match = re.search(r"(?m)^#![^\n]*\n[\s\S]*$", raw_content)
+            extracted_content = (
+                shebang_match.group(0) if shebang_match else raw_content
+            ).strip()
 
         return extracted_content
 
     if provider_name == "google":
         from google.genai import types
         from .utils.inference import retry_api_call
+
         client = provider.get_client()
         response = retry_api_call(
             client.models.generate_content,
@@ -298,7 +400,7 @@ def generate_file(context, filepath, refined_prompt, tree, file_output_format, p
                 systemInstruction=system_instruction,
                 response_mime_type="application/json",
                 response_schema=FileGenerationResult,
-            )
+            ),
         )
         if response and response.text:
             try:
@@ -310,7 +412,7 @@ def generate_file(context, filepath, refined_prompt, tree, file_output_format, p
     elif provider_name == "vllm":
         messages = [
             {"role": "system", "content": system_instruction},
-            {"role": "user", "content": "Generate the file content."}
+            {"role": "user", "content": "Generate the file content."},
         ]
         response = provider.call_model(messages)
         raw_content = provider.extract_text(response)
@@ -323,20 +425,22 @@ def generate_file(context, filepath, refined_prompt, tree, file_output_format, p
             refined_prompt=refined_prompt,
             tree=tree,
             file_output_format=file_output_format,
-            file_content=file_code_result
+            file_content=file_code_result,
         )
 
         messages = [
             {"role": "system", "content": system_instruction_metadata},
-            {"role": "user", "content": "Generate only the metadata description for this file."}
+            {
+                "role": "user",
+                "content": "Generate only the metadata description for this file.",
+            },
         ]
 
         metadata_resp = provider.call_model(messages)
         metadata_description = provider.extract_text(metadata_resp).strip()
 
         result = FileGenerationResult(
-            file_content=file_code_result,
-            metadata_description=metadata_description
+            file_content=file_code_result, metadata_description=metadata_description
         )
         print(f"Parsed file generation result from vLLM: {result}")
 
@@ -344,7 +448,10 @@ def generate_file(context, filepath, refined_prompt, tree, file_output_format, p
         # OpenRouter/OpenAI via structured outputs
         messages = [
             {"role": "system", "content": system_instruction},
-            {"role": "user", "content": "Generate the file content and metadata description."}
+            {
+                "role": "user",
+                "content": "Generate the file content and metadata description.",
+            },
         ]
 
         try:
@@ -365,20 +472,37 @@ def generate_file(context, filepath, refined_prompt, tree, file_output_format, p
                 raw_content = completion.choices[0].message.content
                 result = _parse_file_generation_result(raw_content)
             except Exception as fallback_err:
-                print(f"Error calling structured output API for file generation: {e}. Fallback failed: {fallback_err}")
+                print(
+                    f"Error calling structured output API for file generation: {e}. Fallback failed: {fallback_err}"
+                )
 
     if result:
         result.file_content = clean_agent_output(result.file_content)
 
-    print(f"Generated content for '{filepath}':\n{result.file_content if result else 'No content generated.'}")
+    print(
+        f"Generated content for '{filepath}':\n{result.file_content if result else 'No content generated.'}"
+    )
 
     return result
 
 
-def dfs_tree_and_gen(root, refined_prompt, tree_structure, project_name, current_path="",
-                     parent_context="", json_file_name="", metadata_dict=None,
-                     dependency_analyzer=None, file_output_format="", max_workers=20,
-                     output_base_dir="", pm=None, on_status=None, provider_name: Optional[str] = None):
+def dfs_tree_and_gen(
+    root,
+    refined_prompt,
+    tree_structure,
+    project_name,
+    current_path="",
+    parent_context="",
+    json_file_name="",
+    metadata_dict=None,
+    dependency_analyzer=None,
+    file_output_format="",
+    max_workers=20,
+    output_base_dir="",
+    pm=None,
+    on_status=None,
+    provider_name: Optional[str] = None,
+):
     if metadata_dict is None:
         metadata_dict = {}
 
@@ -400,34 +524,40 @@ def dfs_tree_and_gen(root, refined_prompt, tree_structure, project_name, current
         os.makedirs(root_full_path, exist_ok=True)
 
     for child in root.children:
-        work_queue.put({
-            'node': child,
-            'current_path': root_value,
-            'parent_context': parent_context,
-            'is_top_level': False,
-            'output_base_dir': output_base_dir,
-            'root_value': root_value
-        })
+        work_queue.put(
+            {
+                "node": child,
+                "current_path": root_value,
+                "parent_context": parent_context,
+                "is_top_level": False,
+                "output_base_dir": output_base_dir,
+                "root_value": root_value,
+            }
+        )
 
     def process_work_item(work_item):
-        node = work_item['node']
-        current_path = work_item['current_path']
-        parent_context = work_item['parent_context']
-        work_output_base_dir = work_item.get('output_base_dir', output_base_dir)
-        root_val = work_item.get('root_value', root.value if root else "root")
+        node = work_item["node"]
+        current_path = work_item["current_path"]
+        parent_context = work_item["parent_context"]
+        work_output_base_dir = work_item.get("output_base_dir", output_base_dir)
+        root_val = work_item.get("root_value", root.value if root else "root")
 
-        clean_name = node.value.split('#')[0].strip()
-        clean_name = clean_name.replace('(', '').replace(')', '')
-        clean_name = clean_name.replace('uploads will go here, e.g., ', '')
+        clean_name = node.value.split("#")[0].strip()
+        clean_name = clean_name.replace("(", "").replace(")", "")
+        clean_name = clean_name.replace("uploads will go here, e.g., ", "")
 
-        relative_path = os.path.join(current_path, clean_name) if current_path else clean_name
+        relative_path = (
+            os.path.join(current_path, clean_name) if current_path else clean_name
+        )
 
         if work_output_base_dir:
             full_path = os.path.join(work_output_base_dir, relative_path)
         else:
             full_path = relative_path
 
-        context = os.path.join(parent_context, clean_name) if parent_context else clean_name
+        context = (
+            os.path.join(parent_context, clean_name) if parent_context else clean_name
+        )
 
         if node.is_file:
             return process_file(
@@ -447,7 +577,16 @@ def dfs_tree_and_gen(root, refined_prompt, tree_structure, project_name, current
                 provider_name=provider_name,
             )
         else:
-            return process_directory(node, full_path, context, work_queue, work_output_base_dir, lock, root_val, on_status)
+            return process_directory(
+                node,
+                full_path,
+                context,
+                work_queue,
+                work_output_base_dir,
+                lock,
+                root_val,
+                on_status,
+            )
 
     # vLLM generation is intentionally sequential to avoid unstable concurrent model calls.
     if provider_name == "vllm":
@@ -459,8 +598,8 @@ def dfs_tree_and_gen(root, refined_prompt, tree_structure, project_name, current
 
             try:
                 result = process_work_item(work_item)
-                if result and 'children' in result:
-                    for child_work in result['children']:
+                if result and "children" in result:
+                    for child_work in result["children"]:
                         work_queue.put(child_work)
             except Exception as exc:
                 if on_status:
@@ -490,22 +629,41 @@ def dfs_tree_and_gen(root, refined_prompt, tree_structure, project_name, current
                     break
 
             if active_futures:
-                done, not_done = wait(active_futures, timeout=1, return_when=FIRST_COMPLETED)
+                done, not_done = wait(
+                    active_futures, timeout=1, return_when=FIRST_COMPLETED
+                )
                 for future in done:
                     try:
                         result = future.result()
-                        if result and 'children' in result:
-                            for child_work in result['children']:
+                        if result and "children" in result:
+                            for child_work in result["children"]:
                                 work_queue.put(child_work)
                     except Exception as exc:
                         if on_status:
-                            on_status("error", f"Worker failed during parallel generation: {exc}")
+                            on_status(
+                                "error",
+                                f"Worker failed during parallel generation: {exc}",
+                            )
                             on_status("error", traceback.format_exc())
                 active_futures = set(not_done)
 
 
-def process_file(node, full_path, context, refined_prompt, tree_structure,
-                json_file_name, file_output_format, metadata_dict, file_description,dependency_analyzer, lock, pm, on_status=None, provider_name: Optional[str] = None):
+def process_file(
+    node,
+    full_path,
+    context,
+    refined_prompt,
+    tree_structure,
+    json_file_name,
+    file_output_format,
+    metadata_dict,
+    file_description,
+    dependency_analyzer,
+    lock,
+    pm,
+    on_status=None,
+    provider_name: Optional[str] = None,
+):
     try:
         parent_dir = os.path.dirname(full_path)
         if parent_dir:
@@ -513,7 +671,9 @@ def process_file(node, full_path, context, refined_prompt, tree_structure,
                 if not os.path.exists(parent_dir):
                     os.makedirs(parent_dir, exist_ok=True)
 
-        print(f"Processing file '{full_path}' with context '{context}' and file description '{file_description}'...")
+        print(
+            f"Processing file '{full_path}' with context '{context}' and file description '{file_description}'..."
+        )
 
         if should_generate_content(full_path):
             max_attempts = 5 if provider_name == "vllm" else 1
@@ -528,34 +688,40 @@ def process_file(node, full_path, context, refined_prompt, tree_structure,
                     file_output_format=file_output_format,
                     pm=pm,
                     provider_name=provider_name,
-                    file_description=file_description
+                    file_description=file_description,
                 )
 
                 if result:
                     break
 
                 if on_status and attempt < max_attempts:
-                    on_status("warning", f"Empty generation result for '{full_path}' (attempt {attempt}/{max_attempts}). Retrying...")
+                    on_status(
+                        "warning",
+                        f"Empty generation result for '{full_path}' (attempt {attempt}/{max_attempts}). Retrying...",
+                    )
 
             if not result:
                 if on_status:
-                    on_status("error", f"Failed to generate valid content for '{full_path}' after {max_attempts} attempt(s).")
+                    on_status(
+                        "error",
+                        f"Failed to generate valid content for '{full_path}' after {max_attempts} attempt(s).",
+                    )
                 return None
 
             content = result.file_content
             metadata = result.metadata_description
 
-            print(f"Generated content for '{full_path}' (length {len(content)} chars). Metadata: {metadata}")
+            print(
+                f"Generated content for '{full_path}' (length {len(content)} chars). Metadata: {metadata}"
+            )
 
             with lock:
-                with open(full_path, 'w') as f:
+                with open(full_path, "w") as f:
                     f.write(content)
 
                 if full_path not in metadata_dict:
                     metadata_dict[full_path] = []
-                metadata_dict[full_path].append({
-                    "description": metadata
-                })
+                metadata_dict[full_path].append({"description": metadata})
 
     except Exception as exc:
         if on_status:
@@ -565,7 +731,16 @@ def process_file(node, full_path, context, refined_prompt, tree_structure,
     return None
 
 
-def process_directory(node, full_path, context, work_queue, output_base_dir="", lock=None, root_value="", on_status=None):
+def process_directory(
+    node,
+    full_path,
+    context,
+    work_queue,
+    output_base_dir="",
+    lock=None,
+    root_value="",
+    on_status=None,
+):
     try:
         if lock:
             with lock:
@@ -582,16 +757,16 @@ def process_directory(node, full_path, context, work_queue, output_base_dir="", 
         children_work = []
         for child in node.children:
             child_work = {
-                'node': child,
-                'current_path': rel_path,
-                'parent_context': context,
-                'is_top_level': False,
-                'output_base_dir': output_base_dir,
-                'root_value': root_value
+                "node": child,
+                "current_path": rel_path,
+                "parent_context": context,
+                "is_top_level": False,
+                "output_base_dir": output_base_dir,
+                "root_value": root_value,
             }
             children_work.append(child_work)
 
-        return {'children': children_work}
+        return {"children": children_work}
 
     except OSError as exc:
         if on_status:
@@ -600,39 +775,57 @@ def process_directory(node, full_path, context, work_queue, output_base_dir="", 
 
 
 class ProjectBlueprint(BaseModel):
-    software_blueprint_details: Dict[str, Any] = Field(description="Dictionary containing core project intelligence, overview, and features")
-    folder_structure: str = Field(description="Raw ASCII string representing the exact directory and file structure tree")
-    file_formats: Dict[str, Any] = Field(description="Dictionary mapping precise filepaths from the folder structure to instructions on how each file must be generated")
+    software_blueprint_details: Dict[str, Any] = Field(
+        description="Dictionary containing core project intelligence, overview, and features"
+    )
+    folder_structure: str = Field(
+        description="Raw ASCII string representing the exact directory and file structure tree"
+    )
+    file_formats: Dict[str, Any] = Field(
+        description="Dictionary mapping precise filepaths from the folder structure to instructions on how each file must be generated"
+    )
 
-def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = None, problem_statement_language: Optional[str] = None) -> Optional[ProjectBlueprint]:
+
+def generate_project_blueprint(
+    prompt: str,
+    pm,
+    provider_name: Optional[str] = None,
+    problem_statement_language: Optional[str] = None,
+) -> Optional[ProjectBlueprint]:
     provider_name = provider_name or InferenceManager.get_default_provider()
     provider = InferenceManager.create_provider(provider_name)
     system_info = get_system_info()
-    system_instruction = pm.render_project_blueprint(user_prompt=prompt, system_info=system_info, problem_statement_language=problem_statement_language)
+    system_instruction = pm.render_project_blueprint(
+        user_prompt=prompt,
+        system_info=system_info,
+        problem_statement_language=problem_statement_language,
+    )
 
     def _extract_json_str(raw_content: str) -> Optional[str]:
         if not raw_content:
             return None
-        match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_content, re.DOTALL)
+        match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_content, re.DOTALL)
         if match:
             return match.group(1)
 
-        start_idx = raw_content.find('{')
+        start_idx = raw_content.find("{")
         if start_idx == -1:
             return None
 
         depth = 0
         for i in range(start_idx, len(raw_content)):
-            if raw_content[i] == '{':
+            if raw_content[i] == "{":
                 depth += 1
-            elif raw_content[i] == '}':
+            elif raw_content[i] == "}":
                 depth -= 1
                 if depth == 0:
-                    return raw_content[start_idx:i + 1]
+                    return raw_content[start_idx : i + 1]
         print(f"processed raw content is: {raw_content}")
         return None
 
-    def _extract_balanced_json_segment(text: str, opening_idx: int, open_char: str, close_char: str) -> Optional[str]:
+    def _extract_balanced_json_segment(
+        text: str, opening_idx: int, open_char: str, close_char: str
+    ) -> Optional[str]:
         if not isinstance(text, str) or opening_idx < 0 or opening_idx >= len(text):
             return None
 
@@ -646,7 +839,7 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
             if in_string:
                 if escape:
                     escape = False
-                elif ch == '\\':
+                elif ch == "\\":
                     escape = True
                 elif ch == '"':
                     in_string = False
@@ -661,7 +854,7 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
             elif ch == close_char:
                 depth -= 1
                 if depth == 0:
-                    return text[opening_idx:i + 1]
+                    return text[opening_idx : i + 1]
 
         return None
 
@@ -670,11 +863,13 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
             return ""
 
         repaired = raw_json
-        repaired = re.sub(r';\s*(?=[}\]])', '', repaired)
-        repaired = re.sub(r',\s*(?=[}\]])', '', repaired)
+        repaired = re.sub(r";\s*(?=[}\]])", "", repaired)
+        repaired = re.sub(r",\s*(?=[}\]])", "", repaired)
         return repaired
 
-    def _extract_key_as_json_segment(raw_text: str, key: str, opening_char: str = '{') -> Optional[str]:
+    def _extract_key_as_json_segment(
+        raw_text: str, key: str, opening_char: str = "{"
+    ) -> Optional[str]:
         if not isinstance(raw_text, str):
             return None
 
@@ -690,14 +885,16 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
         if idx >= len(raw_text) or raw_text[idx] != opening_char:
             return None
 
-        closing_char = '}' if opening_char == '{' else ']'
+        closing_char = "}" if opening_char == "{" else "]"
         return _extract_balanced_json_segment(raw_text, idx, opening_char, closing_char)
 
     def _extract_key_string_value(raw_text: str, key: str) -> Optional[str]:
         if not isinstance(raw_text, str):
             return None
 
-        pattern = re.compile(rf'"{re.escape(key)}"\s*:\s*"((?:\\.|[^"\\])*)"', re.DOTALL)
+        pattern = re.compile(
+            rf'"{re.escape(key)}"\s*:\s*"((?:\\.|[^"\\])*)"', re.DOTALL
+        )
         match = pattern.search(raw_text)
         if not match:
             return None
@@ -707,7 +904,9 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
         except Exception:
             return match.group(1)
 
-    def _parse_blueprint_from_raw(raw_content: Optional[str]) -> Optional[Dict[str, Any]]:
+    def _parse_blueprint_from_raw(
+        raw_content: Optional[str],
+    ) -> Optional[Dict[str, Any]]:
         if not isinstance(raw_content, str) or not raw_content.strip():
             return None
 
@@ -727,16 +926,22 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
         folder_structure: Optional[str] = None
         file_formats: Dict[str, Any] = {}
 
-        details_segment = _extract_key_as_json_segment(raw_content, "software_blueprint_details", opening_char='{')
+        details_segment = _extract_key_as_json_segment(
+            raw_content, "software_blueprint_details", opening_char="{"
+        )
         if details_segment:
             try:
-                software_blueprint_details = json.loads(_repair_common_json_issues(details_segment))
+                software_blueprint_details = json.loads(
+                    _repair_common_json_issues(details_segment)
+                )
             except Exception:
                 software_blueprint_details = {}
 
         folder_structure = _extract_key_string_value(raw_content, "folder_structure")
 
-        file_formats_segment = _extract_key_as_json_segment(raw_content, "file_formats", opening_char='{')
+        file_formats_segment = _extract_key_as_json_segment(
+            raw_content, "file_formats", opening_char="{"
+        )
         if file_formats_segment:
             repaired_segment = _repair_common_json_issues(file_formats_segment)
             try:
@@ -744,7 +949,9 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
                 if isinstance(parsed_formats, dict):
                     file_formats = parsed_formats
             except Exception:
-                kv_pairs = re.findall(r'"([^"]+)"\s*:\s*"((?:\\.|[^"\\])*)"', repaired_segment, re.DOTALL)
+                kv_pairs = re.findall(
+                    r'"([^"]+)"\s*:\s*"((?:\\.|[^"\\])*)"', repaired_segment, re.DOTALL
+                )
                 for file_path, fmt in kv_pairs:
                     try:
                         file_formats[file_path] = json.loads(f'"{fmt}"')
@@ -773,7 +980,9 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
         if not root or any(token in root for token in ["{", "}", "[", "]", ":"]):
             return False
 
-        has_tree_connectors = any(("├──" in line) or ("└──" in line) for line in lines[1:])
+        has_tree_connectors = any(
+            ("├──" in line) or ("└──" in line) for line in lines[1:]
+        )
         return has_tree_connectors
 
     def _extract_ascii_tree(raw_content: str) -> Optional[str]:
@@ -782,14 +991,20 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
 
         candidate = raw_content.strip()
 
-        fenced_match = re.search(r'```(?:[a-zA-Z0-9_+-]+)?\s*([\s\S]*?)\s*```', candidate)
+        fenced_match = re.search(
+            r"```(?:[a-zA-Z0-9_+-]+)?\s*([\s\S]*?)\s*```", candidate
+        )
         if fenced_match:
             candidate = fenced_match.group(1).strip()
 
         if candidate.startswith("{"):
             try:
                 parsed_obj = json.loads(candidate)
-                folder = parsed_obj.get("folder_structure") if isinstance(parsed_obj, dict) else None
+                folder = (
+                    parsed_obj.get("folder_structure")
+                    if isinstance(parsed_obj, dict)
+                    else None
+                )
                 if isinstance(folder, str):
                     return folder.strip()
             except Exception:
@@ -804,7 +1019,9 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
             stripped = line.strip()
             if not stripped:
                 continue
-            if stripped.startswith(("├──", "└──", "│")) or (not tree_lines and stripped):
+            if stripped.startswith(("├──", "└──", "│")) or (
+                not tree_lines and stripped
+            ):
                 tree_lines.append(stripped)
 
         if tree_lines:
@@ -870,7 +1087,9 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
         walk(folder_obj, "")
         return "\n".join([root_name] + lines) if lines else root_name
 
-    def _extract_file_formats_from_folder_obj(folder_obj: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_file_formats_from_folder_obj(
+        folder_obj: Dict[str, Any],
+    ) -> Dict[str, Any]:
         extracted: Dict[str, Any] = {}
 
         def walk(node: Any, current_path: str = ""):
@@ -882,7 +1101,11 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
                 if not name:
                     continue
 
-                next_path = os.path.join(current_path, name).replace("\\", "/") if current_path else name
+                next_path = (
+                    os.path.join(current_path, name).replace("\\", "/")
+                    if current_path
+                    else name
+                )
                 if isinstance(child, dict):
                     if _looks_like_file_contract(child):
                         extracted[next_path] = child
@@ -892,7 +1115,9 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
         walk(folder_obj, "")
         return extracted
 
-    def _normalize_project_blueprint_payload(raw_payload: Any) -> Optional[Dict[str, Any]]:
+    def _normalize_project_blueprint_payload(
+        raw_payload: Any,
+    ) -> Optional[Dict[str, Any]]:
         if not isinstance(raw_payload, dict):
             return None
 
@@ -945,9 +1170,13 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
                     provider.get_client().models.generate_content,
                     model=provider.model,
                     contents="Return only the folder_structure tree.",
-                    config=types.GenerateContentConfig(systemInstruction=followup_system_instruction),
+                    config=types.GenerateContentConfig(
+                        systemInstruction=followup_system_instruction
+                    ),
                 )
-                raw_content = response.text if response and hasattr(response, "text") else ""
+                raw_content = (
+                    response.text if response and hasattr(response, "text") else ""
+                )
             elif provider_name == "vllm":
                 response = provider.call_model(followup_messages)
                 raw_content = provider.extract_text(response)
@@ -956,7 +1185,11 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
                     model=provider.model,
                     messages=followup_messages,
                 )
-                raw_content = completion.choices[0].message.content if completion and completion.choices else ""
+                raw_content = (
+                    completion.choices[0].message.content
+                    if completion and completion.choices
+                    else ""
+                )
 
             extracted_tree = _extract_ascii_tree(raw_content)
             if extracted_tree and _is_valid_ascii_tree(extracted_tree):
@@ -966,7 +1199,9 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
 
         return None
 
-    def _recover_minimal_blueprint_from_raw(raw_output: Optional[str]) -> Optional[ProjectBlueprint]:
+    def _recover_minimal_blueprint_from_raw(
+        raw_output: Optional[str],
+    ) -> Optional[ProjectBlueprint]:
         if not isinstance(raw_output, str) or not raw_output.strip():
             return None
 
@@ -992,6 +1227,7 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
     if provider_name == "google":
         from google.genai import types
         from .utils.inference import retry_api_call
+
         client = provider.get_client()
         response = retry_api_call(
             client.models.generate_content,
@@ -1001,7 +1237,7 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
                 systemInstruction=system_instruction,
                 response_mime_type="application/json",
                 response_schema=ProjectBlueprint,
-            )
+            ),
         )
         if not response or not response.text:
             return None
@@ -1024,7 +1260,7 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
         if provider_name == "vllm":
             messages = [
                 {"role": "system", "content": system_instruction},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt},
             ]
             try:
                 response = provider.call_model(messages)
@@ -1037,13 +1273,15 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
                         normalized["folder_structure"] = repaired_tree
                     return ProjectBlueprint(**normalized)
             except Exception:
-                return _recover_minimal_blueprint_from_raw(raw_content if 'raw_content' in locals() else "")
+                return _recover_minimal_blueprint_from_raw(
+                    raw_content if "raw_content" in locals() else ""
+                )
             return _recover_minimal_blueprint_from_raw(raw_content)
 
         # OpenRouter/OpenAI via structured outputs
         messages = [
             {"role": "system", "content": system_instruction},
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": prompt},
         ]
 
         try:
@@ -1074,14 +1312,21 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
                             normalized["folder_structure"] = repaired_tree
                         return ProjectBlueprint(**normalized)
             except Exception as fallback_err:
-                print(f"Error calling structured output API: {e}. Fallback failed: {fallback_err}")
-            return _recover_minimal_blueprint_from_raw(raw_content if 'raw_content' in locals() else "")
+                print(
+                    f"Error calling structured output API: {e}. Fallback failed: {fallback_err}"
+                )
+            return _recover_minimal_blueprint_from_raw(
+                raw_content if "raw_content" in locals() else ""
+            )
 
 
 def generate_tree(resp, project_name="root"):
-    content = resp.strip().replace('```', '').strip()
-    lines = content.split('\n')
-    tree_line_pattern = re.compile(r'^(?:[│|]\s*)*(?:├──\s*|└──\s*|\|--\s*|\+--\s*|`--\s*|\|___\s*)?([^│├└|+#\n]+?)(?:/)?(?:\s*#.*)?$', re.IGNORECASE)
+    content = resp.strip().replace("```", "").strip()
+    lines = content.split("\n")
+    tree_line_pattern = re.compile(
+        r"^(?:[│|]\s*)*(?:├──\s*|└──\s*|\|--\s*|\+--\s*|`--\s*|\|___\s*)?([^│├└|+#\n]+?)(?:/)?(?:\s*#.*)?$",
+        re.IGNORECASE,
+    )
 
     root = None
     root_name = None
@@ -1094,16 +1339,16 @@ def generate_tree(resp, project_name="root"):
         match = tree_line_pattern.match(line.strip())
         if match:
             raw_name = match.group(1)
-            root_name = re.sub(r'^[│├└─|`+\-\s]+', '', raw_name).strip().rstrip('/')
+            root_name = re.sub(r"^[│├└─|`+\-\s]+", "", raw_name).strip().rstrip("/")
         else:
             root_name = line.strip()
-            if '#' in root_name:
-                root_name = root_name.split('#')[0].strip()
-            root_name = re.sub(r'^[│├└─|`+\-\s]+', '', root_name).strip().rstrip('/')
+            if "#" in root_name:
+                root_name = root_name.split("#")[0].strip()
+            root_name = re.sub(r"^[│├└─|`+\-\s]+", "", root_name).strip().rstrip("/")
 
         # Replace spaces with underscores in folder names
         if root_name:
-            root_name = root_name.replace(' ', '_')
+            root_name = root_name.replace(" ", "_")
             root = TreeNode(root_name)
             root_line_index = i
             break
@@ -1121,13 +1366,17 @@ def generate_tree(resp, project_name="root"):
         indent = 0
         temp_line = line
         while True:
-            if temp_line.startswith('│   ') or temp_line.startswith('|   ') or temp_line.startswith('    '):
+            if (
+                temp_line.startswith("│   ")
+                or temp_line.startswith("|   ")
+                or temp_line.startswith("    ")
+            ):
                 temp_line = temp_line[4:]
                 indent += 1
-            elif temp_line.startswith('│ ') or temp_line.startswith('| '):
+            elif temp_line.startswith("│ ") or temp_line.startswith("| "):
                 temp_line = temp_line[2:]
                 indent += 1
-            elif temp_line.startswith('\t'):
+            elif temp_line.startswith("\t"):
                 temp_line = temp_line[1:]
                 indent += 1
             else:
@@ -1136,17 +1385,17 @@ def generate_tree(resp, project_name="root"):
         match = tree_line_pattern.match(line.strip())
         if not match:
             name = line.strip()
-            if '#' in name:
-                name = name.split('#')[0].strip()
-            name = re.sub(r'^[│├└─|`+\-\s]+', '', name).strip()
+            if "#" in name:
+                name = name.split("#")[0].strip()
+            name = re.sub(r"^[│├└─|`+\-\s]+", "", name).strip()
         else:
             raw_name = match.group(1)
-            name = re.sub(r'^[│├└─|`+\-\s]+', '', raw_name).strip()
+            name = re.sub(r"^[│├└─|`+\-\s]+", "", raw_name).strip()
 
-        name = name.rstrip('/')
+        name = name.rstrip("/")
 
         # Replace spaces with underscores in folder/file names
-        name = name.replace(' ', '_')
+        name = name.replace(" ", "_")
 
         if not name:
             continue
@@ -1163,7 +1412,7 @@ def generate_tree(resp, project_name="root"):
 
         parent_node.add_child(node)
 
-        stack = stack[:parent_index + 1]
+        stack = stack[: parent_index + 1]
         if not node.is_file:
             stack.append(node)
 
@@ -1181,6 +1430,7 @@ def generate_tree(resp, project_name="root"):
 
     mark_files_and_dirs(root)
     return root
+
 
 def check_file_descriptions(node):
     if node.is_file and (not node.description or not node.description.strip()):
@@ -1202,14 +1452,14 @@ def _is_valid_file_node_name(file_name: str) -> bool:
     if name in KNOWN_EXTENSIONLESS_FILENAMES:
         return True
 
-    if name.startswith('.') and len(name) > 1:
+    if name.startswith(".") and len(name) > 1:
         return True
 
     _, ext = os.path.splitext(name)
     if not ext:
         return False
 
-    if ext == '.':
+    if ext == ".":
         return False
 
     return True
@@ -1220,7 +1470,11 @@ def find_invalid_file_nodes(root):
 
     def _walk(node, current_path=""):
         node_name = (node.value or "").strip()
-        next_path = os.path.join(current_path, node_name).replace("\\", "/") if node_name else current_path
+        next_path = (
+            os.path.join(current_path, node_name).replace("\\", "/")
+            if node_name
+            else current_path
+        )
 
         if node.is_file and not _is_valid_file_node_name(node_name):
             invalid_nodes.append(next_path or node_name)
@@ -1233,7 +1487,14 @@ def find_invalid_file_nodes(root):
 
     return invalid_nodes
 
-def generate_project(user_prompt, output_base_dir, on_status=None, provider_name: Optional[str] = None, problem_statement_language="others"):
+
+def generate_project(
+    user_prompt,
+    output_base_dir,
+    on_status=None,
+    provider_name: Optional[str] = None,
+    problem_statement_language="others",
+):
     # here i'm adding a parameter for problem_statement_language, where i need to seperate cuda from others, as we dont hae to generate docker file for cuda projects, which is more constly, a simple shell file is enough
     from .utils.dependencies import DependencyAnalyzer
     from .docker.testing import run_docker_testing
@@ -1249,10 +1510,15 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
     provider_name = provider_name or InferenceManager.get_default_provider()
 
     emit("step", "Analyzing structure and creating unified project blueprint...")
-    blueprint = generate_project_blueprint(user_prompt, pm, provider_name, problem_statement_language)
+    blueprint = generate_project_blueprint(
+        user_prompt, pm, provider_name, problem_statement_language
+    )
 
     if not blueprint:
-        emit("error", "Failed to generate project blueprint. Provider returned no valid structured output.")
+        emit(
+            "error",
+            "Failed to generate project blueprint. Provider returned no valid structured output.",
+        )
         return None
 
     # print("completed blueprint generation")
@@ -1288,13 +1554,24 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
         )
 
         if regeneration_attempt >= max_tree_regeneration_attempts:
-            emit("error", "Unable to recover a valid folder structure after regeneration attempts.")
+            emit(
+                "error",
+                "Unable to recover a valid folder structure after regeneration attempts.",
+            )
             return None
 
-        emit("step", "Regenerating project blueprint due to invalid file nodes in folder structure...")
-        regenerated_blueprint = generate_project_blueprint(user_prompt, pm, provider_name, problem_statement_language)
+        emit(
+            "step",
+            "Regenerating project blueprint due to invalid file nodes in folder structure...",
+        )
+        regenerated_blueprint = generate_project_blueprint(
+            user_prompt, pm, provider_name, problem_statement_language
+        )
         if not regenerated_blueprint:
-            emit("error", "Failed to regenerate project blueprint after invalid file node detection.")
+            emit(
+                "error",
+                "Failed to regenerate project blueprint after invalid file node detection.",
+            )
             return None
 
         software_blueprint = regenerated_blueprint.software_blueprint_details
@@ -1316,8 +1593,10 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
     emit("log", f"file descriptions for the tree has been {file_desc_success}")
     dependency_analyzer = DependencyAnalyzer()
     os.makedirs(output_base_dir, exist_ok=True)
-    with open(os.path.join(output_base_dir, "software_blueprint.txt"), 'w') as f:
-        f.write(f"Software Blueprint Details:\n{json.dumps(software_blueprint, indent=4)}\n\n")
+    with open(os.path.join(output_base_dir, "software_blueprint.txt"), "w") as f:
+        f.write(
+            f"Software Blueprint Details:\n{json.dumps(software_blueprint, indent=4)}\n\n"
+        )
         f.write(f"Folder Structure:\n{folder_struc}\n\n")
         f.write(f"File Generation Instructions:\n{json.dumps(file_format, indent=4)}\n")
     json_file_name = os.path.join(output_base_dir, "projects_metadata.json")
@@ -1339,7 +1618,7 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
         output_base_dir=output_base_dir,
         pm=pm,
         on_status=on_status,
-        provider_name=provider_name
+        provider_name=provider_name,
     )
 
     project_root_path = os.path.join(output_base_dir, folder_tree.value)
@@ -1348,8 +1627,18 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
         emit("error", f"Project root path was not created: {project_root_path}")
         return None
 
-    with open(json_file_name, 'w') as f:
+    with open(json_file_name, "w") as f:
         json.dump(metadata_dict, f, indent=4)
+
+    emit("step", "Running DGAT scan on generated project...")
+    from .utils.dgat_wrapper import DGATManager
+
+    dgat_manager = DGATManager(
+        provider_config={"active_provider": provider_name},
+        project_root=project_root_path,
+        provider_name=provider_name,
+    )
+    dgat_manager.scan()
 
     emit("step", "Generating Dockerfile and test files...")
 
@@ -1364,7 +1653,7 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
             pm=pm,
             on_status=on_status,
             provider=InferenceManager.create_provider(provider_name),
-            problem_statement_language=problem_statement_language
+            problem_statement_language=problem_statement_language,
         )
 
         test_gen.generate_all()
@@ -1373,9 +1662,12 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
         emit("error", traceback.format_exc())
 
     emit("step", "Starting dependency analysis for entire project...")
-    dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
+    dependency_analyzer.analyze_project_files(
+        project_root_path, folder_tree=folder_tree, folder_structure=folder_struc
+    )
 
     from .utils.dependencies import build_dependency_graph_tree
+
     dep_graph = build_dependency_graph_tree(project_root_path, dependency_analyzer)
     print("\n[dependency_graph]\n" + dep_graph + "\n")
 
@@ -1383,12 +1675,14 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
     try:
         from .utils.dependency_file_generator import (
             extract_all_external_dependencies,
-            DependencyFileGenerator
+            DependencyFileGenerator,
         )
 
         # Extract all external dependencies from all files in the project
         print("Extracting external dependencies from project files...")
-        external_dependencies = extract_all_external_dependencies(dependency_analyzer, project_root_path)
+        external_dependencies = extract_all_external_dependencies(
+            dependency_analyzer, project_root_path
+        )
 
         # Generate dependency files using the coding agent
         dep_file_gen = DependencyFileGenerator(
@@ -1399,13 +1693,15 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
             external_dependencies=external_dependencies,
             pm=pm,
             provider_name=provider_name,
-            on_status=on_status
+            on_status=on_status,
         )
 
         dep_file_gen.generate_all()
 
         # Re-analyze project files to include the newly generated dependency files
-        dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
+        dependency_analyzer.analyze_project_files(
+            project_root_path, folder_tree=folder_tree, folder_structure=folder_struc
+        )
     except Exception as e:
         emit("error", f"Error generating dependency files: {e}")
         emit("error", traceback.format_exc())
@@ -1413,7 +1709,12 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
     # Dependency resolution disabled for ablation study
     emit("step", "Skipping dependency resolution (disabled)...")
     error_tracker = ErrorTracker(project_root_path, folder_tree)
-    dep_results = {"success": True, "iterations": 0, "remaining_errors": [], "skipped": True}
+    dep_results = {
+        "success": True,
+        "iterations": 0,
+        "remaining_errors": [],
+        "skipped": True,
+    }
 
     emit("step", "Running Docker testing pipeline...")
 
@@ -1425,9 +1726,10 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
         pm=pm,
         error_tracker=error_tracker,
         dependency_analyzer=dependency_analyzer,
+        dgat_manager=dgat_manager,
         on_status=on_status,
         provider_name=provider_name,
-        problem_statement_language=problem_statement_language
+        problem_statement_language=problem_statement_language,
     )
 
     for file_path, entries in metadata_dict.items():
@@ -1435,13 +1737,15 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
         for entry in entries:
             entry["couples_with"] = deps
 
-    with open(json_file_name, 'w') as f:
+    with open(json_file_name, "w") as f:
         json.dump(metadata_dict, f, indent=4)
 
     end_time = time.time()
     elapsed = end_time - start_time
 
-    overall_success = dep_results.get("success", False) and docker_results.get("success", False)
+    overall_success = dep_results.get("success", False) and docker_results.get(
+        "success", False
+    )
 
     if os.path.exists(json_file_name):
         try:
@@ -1454,6 +1758,5 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
         "success": overall_success,
         "dependency_resolution": dep_results,
         "docker_testing": docker_results,
-        "elapsed_time": elapsed
+        "elapsed_time": elapsed,
     }
-

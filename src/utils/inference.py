@@ -86,8 +86,11 @@ class InferenceProvider(ABC):
     @abstractmethod
     def extract_text(self, response: Any) -> str:
         import re
+
         # it will not be json, so jsut removing this would be enough ``` ```
-        match = re.search(r'```(?:[a-zA-Z0-9_\-+]+)?\s*\n([\s\S]*?)```', response, re.IGNORECASE)
+        match = re.search(
+            r"```(?:[a-zA-Z0-9_\-+]+)?\s*\n([\s\S]*?)```", response, re.IGNORECASE
+        )
         if match:
             return match.group(1).strip()
         return response.strip()
@@ -120,9 +123,9 @@ class GoogleProvider(InferenceProvider):
     def get_client(self):
         if self._client is None:
             from google import genai
-            from ..config import get_api_key
+            from ..config import get_provider_api_key
 
-            api_key = self.api_key or get_api_key()
+            api_key = self.api_key or get_provider_api_key("google")
             self._client = genai.Client(api_key=api_key)
         return self._client
 
@@ -208,8 +211,12 @@ class GoogleProvider(InferenceProvider):
             if param in kwargs:
                 call_kwargs[param] = kwargs[param]
 
-        response = retry_api_call(self.get_client().models.generate_content, **call_kwargs)
-        if hasattr(response, "usage_metadata") and hasattr(response.usage_metadata, "total_token_count"):
+        response = retry_api_call(
+            self.get_client().models.generate_content, **call_kwargs
+        )
+        if hasattr(response, "usage_metadata") and hasattr(
+            response.usage_metadata, "total_token_count"
+        ):
             self.total_tokens_used += response.usage_metadata.total_token_count
         return response
 
@@ -293,7 +300,9 @@ class OpenAICompatibleProvider(InferenceProvider):
         for param in ["temperature", "max_tokens", "top_p"]:
             if param in kwargs:
                 call_kwargs[param] = kwargs[param]
-        response = retry_api_call(self.get_client().chat.completions.create, **call_kwargs)
+        response = retry_api_call(
+            self.get_client().chat.completions.create, **call_kwargs
+        )
         if hasattr(response, "usage") and hasattr(response.usage, "total_tokens"):
             self.total_tokens_used += response.usage.total_tokens
         return response
@@ -370,8 +379,9 @@ class OpenAIProvider(OpenAICompatibleProvider):
     def get_client(self):
         if self._client is None:
             from openai import OpenAI
+            from ..config import get_provider_api_key
 
-            api_key = self.api_key or os.getenv("OPENAI_API_KEY")
+            api_key = self.api_key or get_provider_api_key("openai")
             self._client = OpenAI(api_key=api_key)
         return self._client
 
@@ -381,8 +391,9 @@ class OpenRouterProvider(OpenAICompatibleProvider):
     def get_client(self):
         if self._client is None:
             from openai import OpenAI
+            from ..config import get_provider_api_key
 
-            api_key = self.api_key or os.getenv("OPENROUTER_API_KEY")
+            api_key = self.api_key or get_provider_api_key("openrouter")
             base_url = self.config.get("base_url", "https://openrouter.ai/api/v1")
             default_headers = {
                 "HTTP-Referer": "https://pradheep.dev",
@@ -399,8 +410,9 @@ class PrimeIntellectProvider(OpenAICompatibleProvider):
     def get_client(self):
         if self._client is None:
             from openai import OpenAI
+            from ..config import get_provider_api_key
 
-            api_key = self.api_key or os.getenv("PRIME_API_KEY")
+            api_key = self.api_key or get_provider_api_key("prime_intellect")
             base_url = self.config.get("base_url", "https://api.pinference.ai/api/v1")
             self._client = OpenAI(api_key=api_key, base_url=base_url)
         return self._client
@@ -411,8 +423,9 @@ class VLLMProvider(OpenAICompatibleProvider):
     def get_client(self):
         if self._client is None:
             from openai import OpenAI
+            from ..config import get_provider_api_key
 
-            api_key = self.api_key or os.getenv("VLLM_API_KEY") or "dummy"
+            api_key = self.api_key or get_provider_api_key("vllm") or "dummy"
             base_url = self.config.get("base_url", "http://0.0.0.0:8000/v1")
             self._client = OpenAI(api_key=api_key, base_url=base_url)
         return self._client
@@ -461,7 +474,9 @@ class VLLMProvider(OpenAICompatibleProvider):
             )
         return model_id
 
-    def call_model(self, messages: List[Dict], tools: List[Dict] = None, **kwargs) -> Any:
+    def call_model(
+        self, messages: List[Dict], tools: List[Dict] = None, **kwargs
+    ) -> Any:
         # model = self._resolve_model_name()
 
         payload = {
@@ -610,9 +625,9 @@ class InferenceManager:
         config = InferenceManager.get_provider_config(provider_name)
 
         if validate:
-            api_key = config.get("api_key") or os.getenv(
-                f"{provider_name.upper()}_API_KEY"
-            )
+            from ..config import get_provider_api_key
+
+            api_key = config.get("api_key") or get_provider_api_key(provider_name)
             if not api_key:
                 raise ValueError(
                     f"API key not found for provider '{provider_name}'. "
@@ -654,7 +669,9 @@ class InferenceManager:
     def get_provider_config(provider_name: str) -> Dict[str, Any]:
         all_providers = get_providers()
         if not isinstance(all_providers, dict):
-            raise ValueError("Invalid providers.json format: 'model_providers' must be an object")
+            raise ValueError(
+                "Invalid providers.json format: 'model_providers' must be an object"
+            )
         if provider_name not in all_providers:
             raise ValueError(
                 f"Unknown provider in providers.json: {provider_name}. "
@@ -682,10 +699,14 @@ class InferenceManager:
         return get_tool_definitions()
 
     @staticmethod
-    def get_planner_tool_definitions(problem_statement_language: str = "others") -> List[Dict[str, Any]]:
+    def get_planner_tool_definitions(
+        problem_statement_language: str = "others",
+    ) -> List[Dict[str, Any]]:
         from .tool_definitions import get_planner_tool_definitions
 
-        return get_planner_tool_definitions(problem_statement_language=problem_statement_language)
+        return get_planner_tool_definitions(
+            problem_statement_language=problem_statement_language
+        )
 
     @staticmethod
     def get_executor_tool_definitions() -> List[Dict[str, Any]]:

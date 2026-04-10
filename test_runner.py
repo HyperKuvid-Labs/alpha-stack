@@ -23,7 +23,7 @@ from src.utils.dependency_file_generator import (
 from src.utils.error_tracker import ErrorTracker
 from src.docker.testing import run_docker_testing
 
-# 
+#
 # Set your test prompt here
 TEST_PROMPT = """Implement a tiny RPC framework over TCP with the following features:
 
@@ -140,7 +140,6 @@ def run_test(provider_name_arg=None):
     print_header("PHASE 1: COMPUTING PROJECT BLUEPRINT")
     print("Generating comprehensive intelligence, structure, and file contracts...")
 
-
     phase1_start = time.time()
     blueprint = generate_project_blueprint(TEST_PROMPT, pm, provider_name)
     phase1_time = time.time() - phase1_start
@@ -167,7 +166,6 @@ def run_test(provider_name_arg=None):
     phase3_time = 0.0
     print_header("PHASE 4: GENERATE PROJECT TREE & FILES")
     print("Building project tree and generating all files...")
-
 
     phase4_start = time.time()
 
@@ -215,9 +213,21 @@ def run_test(provider_name_arg=None):
                 print(f"{subindent}📄 {file}")
 
     print(f"\n Phase 4 completed in {phase4_time:.2f}s")
+
+    print_header("PHASE 5: DGAT SCAN")
+    print("Running DGAT scan on generated project...")
+    from src.utils.dgat_wrapper import DGATManager
+
+    dgat_manager = DGATManager(
+        provider_config={"active_provider": provider_name},
+        project_root=project_root_path,
+        provider_name=provider_name,
+    )
+    dgat_manager.scan()
+    print("DGAT scan completed")
+
     print_header("PHASE 6: DOCKER & TEST FILE GENERATION")
     print("Generating Dockerfile and test files...")
-
 
     # Parse file_format if it's a string
     try:
@@ -265,19 +275,24 @@ def run_test(provider_name_arg=None):
         json.dump(metadata_dict, f, indent=4)
 
     print(" Dependency analysis complete")
-    
+
     # Visualization of dependency graph
     if hasattr(dependency_analyzer, "graph") and dependency_analyzer.graph.nodes:
         print_subheader("Dependency Graph")
         for node in dependency_analyzer.graph.nodes:
             deps = list(dependency_analyzer.graph.successors(node))
             if deps:
-                rel_node = os.path.relpath(str(node), project_root_path) if os.path.isabs(str(node)) else str(node)
-                print(f"  🔗 {rel_node} -> {', '.join([os.path.relpath(str(d), project_root_path) if os.path.isabs(str(d)) else str(d) for d in deps])}")
+                rel_node = (
+                    os.path.relpath(str(node), project_root_path)
+                    if os.path.isabs(str(node))
+                    else str(node)
+                )
+                print(
+                    f"  🔗 {rel_node} -> {', '.join([os.path.relpath(str(d), project_root_path) if os.path.isabs(str(d)) else str(d) for d in deps])}"
+                )
     print(f"\nPhase 5 completed in {phase5_time:.2f}s")
     print_header("PHASE 6.5: DEPENDENCY FILE GENERATION")
     print("Generating dependency files from external dependencies...")
-
 
     phase65_start = time.time()
 
@@ -316,9 +331,9 @@ def run_test(provider_name_arg=None):
         folder_structure=folder_struc,
         file_output_format=file_output_format,
         pm=pm,
-        error_tracker=error_tracker
+        error_tracker=error_tracker,
     )
-    
+
     dep_results = feedback_loop.run_feedback_loop()
     phase7_time = time.time() - phase7_start
 
@@ -328,7 +343,6 @@ def run_test(provider_name_arg=None):
     print_header("PHASE 8: DOCKER TESTING PIPELINE")
     print("Running Docker build and tests...")
     print("  Note: Docker must be running for this phase to succeed")
-
 
     phase8_start = time.time()
 
@@ -341,6 +355,7 @@ def run_test(provider_name_arg=None):
             pm=pm,
             error_tracker=error_tracker,
             dependency_analyzer=dependency_analyzer,
+            dgat_manager=dgat_manager,
             on_status=status_handler,
             provider_name=provider_name,
         )
