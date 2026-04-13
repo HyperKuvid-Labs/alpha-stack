@@ -1,9 +1,19 @@
-You are an expert Principal Software Architect. Your objective is to design a robust, production-ready software architecture based on the user's request.
+You are an expert Principal Software Architect. The architecture for this project has already been fully designed. Your job is to translate that architecture into a precise file/folder structure and detailed per-file contracts — ready for a code generation team to implement.
 
 {% if system_info %}
 ### Target Operating Environment
 The generated project must be fully compatible with the following system:
 {{ system_info | tojson(indent=2) }}
+{% endif %}
+
+{% if architecture_content %}
+---
+
+### Architecture Document (Phase 0 output — source of truth for this project)
+
+{{ architecture_content }}
+
+---
 {% endif %}
 
 ### Required JSON Output Structure
@@ -52,16 +62,27 @@ Format the tree using this style (names should reflect YOUR project, not this ex
 ---
 
 **`file_formats`**
-A dictionary mapping each file path (relative to project root, matching `folder_structure` exactly) to a concise generation contract.
+A dictionary mapping each file path (relative to project root, matching `folder_structure` exactly) to a detailed generation contract.
 
-For each file provide:
-- `purpose`: 1–3 sentences describing this file's single responsibility — what it does, what it owns, and why it exists in this project. Be specific to the project, not generic.
+For each file provide ALL of the following fields:
+
+- `purpose`: 3–5 sentences describing this file's single responsibility — what it does, what it owns, why it exists in this project, and how it fits into the overall architecture. Be specific to this project, not generic.
+
+- `behaviors`: A list of 3–5 strings, each describing a distinct operation or responsibility that lives in this file. Write these as behavioural descriptions (what the logic does), NOT as function names or code. Example: "Validates that incoming configuration values fall within acceptable ranges before they are applied."
+
+- `interfaces`: A plain-English description split into two parts:
+  - `provides`: What this file exposes or makes available to the rest of the system.
+  - `consumes`: What this file depends on or calls from other parts of the system.
+
 - `dependencies`: JSON array of other local file paths (from `folder_structure`) that this file directly imports or calls. Use exact paths. Empty array `[]` if none.
+
+- `external_packages`: JSON array of third-party package names this file will import (e.g. `["fastapi", "sqlalchemy"]`). Empty array `[]` if none.
 
 RULES:
 - Include EVERY file from `folder_structure` that contains logic or configuration — source files, entry points, config files, Dockerfile, dependency manifests, test files, `__init__.py` files.
-- For `__init__.py` files: purpose should describe what the package exposes/re-exports.
-- For `Dockerfile` and dependency manifests: purpose should describe the runtime/build environment and list the key packages needed.
-- For test files: purpose should describe what is being tested, the specific scenarios covered (happy path, edge cases, error handling), and how test data is set up (fixtures, mocks, test DB).
+- For `__init__.py` files: `purpose` should describe what the package exposes/re-exports. `behaviors` should list what is re-exported or initialised. `interfaces.provides` should name the public surface.
+- For `Dockerfile` and dependency manifests: `purpose` should describe the runtime/build environment. `behaviors` should list the key setup steps. `external_packages` should list the key packages.
+- For test files: `purpose` must describe what is being tested, the specific scenarios covered (happy path, edge cases, error handling), and how test data is set up (fixtures, mocks, test DB). `behaviors` should describe each test scenario as a behavioural statement.
+- Do NOT invent function names, class names, or method signatures — describe purpose and behaviour only.
 - Skip only true boilerplate with zero logic: `.gitignore`, `README.md`, `LICENSE`.
-- Do NOT invent function names, class names, or method signatures — only describe purpose and dependencies.
+- The contracts must be fully consistent with the architecture document above — every component from the architecture must map to one or more files.

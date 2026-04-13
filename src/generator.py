@@ -711,7 +711,51 @@ def generate_file(
 
 
 # ---------------------------------------------------------------------------
-# Blueprint generation (Phase 1 — unchanged)
+# Architecture planning (Phase 0 — pure design, no code, no file structure)
+# ---------------------------------------------------------------------------
+
+def generate_architecture_plan(prompt: str, pm, provider_name: Optional[str] = None) -> Optional[str]:
+    """Generate a comprehensive architecture document (Markdown) from the user prompt."""
+    provider = InferenceManager.get_active_provider()
+    provider_name = InferenceManager._active_provider_name or ""
+    system_info = get_system_info()
+    system_instruction = pm.render_architecture_planning(user_prompt=prompt, system_info=system_info)
+
+    if provider_name == "google":
+        from google.genai import types
+        from .utils.inference import retry_api_call
+        client = provider.get_client()
+        response = retry_api_call(
+            client.models.generate_content,
+            model=provider.model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                systemInstruction=system_instruction,
+            )
+        )
+        if not response or not response.text:
+            return None
+        return response.text.strip()
+    else:
+        messages = [
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": prompt}
+        ]
+        try:
+            client = provider.get_client()
+            completion = client.chat.completions.create(
+                model=provider.model,
+                messages=messages,
+            )
+            text = completion.choices[0].message.content
+            return text.strip() if text else None
+        except Exception as e:
+            print(f"Error generating architecture plan: {e}")
+            return None
+
+
+# ---------------------------------------------------------------------------
+# Blueprint generation (Phase 1)
 # ---------------------------------------------------------------------------
 
 class ProjectBlueprint(BaseModel):
@@ -720,11 +764,11 @@ class ProjectBlueprint(BaseModel):
     file_formats: Dict[str, Any] = Field(description="Dictionary mapping precise filepaths from the folder structure to instructions on how each file must be generated")
 
 
-def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = None) -> Optional[ProjectBlueprint]:
+def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = None, architecture_content: Optional[str] = None) -> Optional[ProjectBlueprint]:
     provider = InferenceManager.get_active_provider()
     provider_name = InferenceManager._active_provider_name or ""
     system_info = get_system_info()
-    system_instruction = pm.render_project_blueprint(user_prompt=prompt, system_info=system_info)
+    system_instruction = pm.render_project_blueprint(user_prompt=prompt, system_info=system_info, architecture_content=architecture_content)
 
     if provider_name == "google":
         from google.genai import types
@@ -908,8 +952,22 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
     provider_name = provider_name or InferenceManager.get_default_provider()
     InferenceManager.initialize(provider_name)
 
-    emit("step", "Analyzing structure and creating unified project blueprint...")
-    blueprint = generate_project_blueprint(user_prompt, pm, provider_name)
+    emit("step", "Designing system architecture...")
+    architecture_content = generate_architecture_plan(user_prompt, pm, provider_name)
+
+    if not architecture_content:
+        emit("error", "Failed to generate architecture plan.")
+        return None
+
+    alpha_stack_dir = os.path.join(output_base_dir, ".alpha_stack")
+    os.makedirs(alpha_stack_dir, exist_ok=True)
+    arch_path = os.path.join(alpha_stack_dir, "architecture.md")
+    with open(arch_path, "w") as f:
+        f.write(architecture_content)
+    emit("step", f"Architecture document saved to {arch_path}")
+
+    emit("step", "Planning file structure and generating project blueprint...")
+    blueprint = generate_project_blueprint(user_prompt, pm, provider_name, architecture_content=architecture_content)
 
     if not blueprint:
         emit("error", "Failed to generate project blueprint.")

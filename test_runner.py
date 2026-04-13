@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.join(project_root, "src"))
 from src.utils.prompt_manager import PromptManager
 from src.utils.inference import InferenceManager
 from src.config import get_api_key, set_api_key
-from src.generator import generate_project_blueprint, generate_tree
+from src.generator import generate_architecture_plan, generate_project_blueprint, generate_tree
 from src.orchestrator import ParallelOrchestrator
 from src.utils.dependencies import DependencyAnalyzer, build_dependency_graph_tree
 from src.utils.error_tracker import ErrorTracker
@@ -22,32 +22,29 @@ from src.testing.testing import run_testing_pipeline
 # 
 # Set your test prompt here
 TEST_PROMPT = """
-Build a simple JSON serializer supporting basic types.
+Implement a lock-free bounded ring buffer queue using atomics.
 
-Traits:
+API:
 
-Serialize trait with serialize(&self, serializer: &mut Serializer).
+try_push(&self, T) -> Result<(), T> (fails if full).
 
-Implement for primitives, String, Vec<T>, Option<T>, and structs (via derive macro or manual impl).
-Output format:
+try_pop(&self) -> Option<T> (returns None if empty).
+Internals:
 
-JSON (objects, arrays, strings, numbers, null).
-Features:
+Use AtomicUsize for head/tail indices.
 
-Support generics: Vec<T: Serialize>.
+Use UnsafeCell or MaybeUninit array for storage.
 
-Handle recursive structures (nested objects).
-Optional:
-
-Write a simple derive macro #[derive(Serialize)] for structs.
+Careful use of Ordering::Acquire / Ordering::Release.
 Tests:
 
-Serialize primitive types.
+Single-threaded correctness.
 
-Nested structures.
+Multi-threaded stress test (spawn producer and consumer threads).
 
-Round-trip with a JSON parser (use serde_json for validation only).
+Demonstrate zero allocation after initialization.
 
+Show it's Send + Sync.
 
 """
 
@@ -140,14 +137,39 @@ def run_test(provider_name_arg=None):
     start_time = time.time()
     
     # ==========================================
-    # PHASE 1: COMPUTING PROJECT BLUEPRINT
+    # PHASE 1: ARCHITECTURE PLANNING
     # ==========================================
-    print_header("PHASE 1: COMPUTING PROJECT BLUEPRINT")
-    print("Generating comprehensive intelligence, structure, and file contracts...")
+    print_header("PHASE 1: ARCHITECTURE PLANNING")
+    print("Designing system architecture (components, data flows, interfaces)...")
 
     phase1_start = time.time()
-    blueprint = generate_project_blueprint(TEST_PROMPT, pm, provider_name)
+    architecture_content = generate_architecture_plan(TEST_PROMPT, pm, provider_name)
     phase1_time = time.time() - phase1_start
+
+    if not architecture_content:
+        print(" Failed to generate architecture plan!")
+        return
+
+    # Save architecture doc to .alpha_stack/
+    alpha_stack_dir = os.path.join(OUTPUT_DIR, ".alpha_stack")
+    os.makedirs(alpha_stack_dir, exist_ok=True)
+    arch_path = os.path.join(alpha_stack_dir, "architecture.md")
+    with open(arch_path, "w") as f:
+        f.write(architecture_content)
+    print(f" Architecture document saved to: {arch_path}")
+    print_subheader("Architecture Document")
+    print(architecture_content)
+    print(f"\n⏱️  Phase 1 completed in {phase1_time:.2f}s")
+
+    # ==========================================
+    # PHASE 2: COMPUTING PROJECT BLUEPRINT
+    # ==========================================
+    print_header("PHASE 2: COMPUTING PROJECT BLUEPRINT")
+    print("Planning file structure and generating per-file contracts...")
+
+    phase2_start = time.time()
+    blueprint = generate_project_blueprint(TEST_PROMPT, pm, provider_name, architecture_content=architecture_content)
+    phase2_time = time.time() - phase2_start
 
     if not blueprint:
         print(" Failed to compute software blueprint!")
@@ -164,16 +186,16 @@ def run_test(provider_name_arg=None):
     print_subheader("File Format Output")
     print_json(file_format, "File Format Output")
 
-    print(f"\n⏱️  Phase 1 computed in {phase1_time:.2f}s")
+    print(f"\n⏱️  Phase 2 completed in {phase2_time:.2f}s")
 
 
     # ==========================================
-    # PHASE 2: GENERATE PROJECT TREE & FILES
+    # PHASE 3: GENERATE PROJECT TREE & FILES
     # ==========================================
-    print_header("PHASE 2: GENERATE PROJECT TREE & FILES")
+    print_header("PHASE 3: GENERATE PROJECT TREE & FILES")
     print("Building project tree and generating all files...")
 
-    phase2_start = time.time()
+    phase3_start = time.time()
 
     folder_tree = generate_tree(folder_struc, project_name="")
     dependency_analyzer = DependencyAnalyzer()
@@ -192,7 +214,7 @@ def run_test(provider_name_arg=None):
 
     project_root_path = os.path.join(OUTPUT_DIR, folder_tree.value)
     error_tracker = ErrorTracker(project_root_path)
-    phase2_time = time.time() - phase2_start
+    phase3_time = time.time() - phase3_start
 
     print_subheader("Generated Project Tree")
     print(f"Root: {folder_tree.value}")
@@ -209,34 +231,34 @@ def run_test(provider_name_arg=None):
             for file in files:
                 print(f"{subindent}📄 {file}")
 
-    print(f"\n Phase 2 completed in {phase2_time:.2f}s")
+    print(f"\n Phase 3 completed in {phase3_time:.2f}s")
 
 
     # ==========================================
-    # PHASE 3: DEPENDENCY ANALYSIS
+    # PHASE 4: DEPENDENCY ANALYSIS
     # ==========================================
-    print_header("PHASE 3: DEPENDENCY ANALYSIS")
+    print_header("PHASE 4: DEPENDENCY ANALYSIS")
     print("Analyzing project dependencies...")
 
-    phase3_start = time.time()
+    phase4_start = time.time()
     dependency_analyzer.analyze_project_files(
         project_root_path, folder_tree=folder_tree, folder_structure=folder_struc
     )
-    phase3_time = time.time() - phase3_start
+    phase4_time = time.time() - phase4_start
 
     print(" Dependency analysis complete")
-    
+
     # Visualization of dependency graph
     dep_graph = build_dependency_graph_tree(project_root_path, dependency_analyzer)
     print("\nDependency Graph:\n" + dep_graph + "\n")
 
-    print(f"\nPhase 3 completed in {phase3_time:.2f}s")
+    print(f"\nPhase 4 completed in {phase4_time:.2f}s")
 
 
     # ==========================================
-    # PHASE 4: TESTING PIPELINE
+    # PHASE 5: TESTING PIPELINE
     # ==========================================
-    print_header("PHASE 4: TESTING PIPELINE")
+    print_header("PHASE 5: TESTING PIPELINE")
     print("Running tests (agent decides how based on project type)...")
 
     # Parse file_format if it's a string
@@ -248,7 +270,7 @@ def run_test(provider_name_arg=None):
     except:
         file_output_format = {}
 
-    phase4_start = time.time()
+    phase5_start = time.time()
 
     try:
         testing_results = run_testing_pipeline(
@@ -269,21 +291,22 @@ def run_test(provider_name_arg=None):
         traceback.print_exc()
         testing_results = {"success": False, "error": str(e), "exception": True}
 
-    phase4_time = time.time() - phase4_start
+    phase5_time = time.time() - phase5_start
 
     print_subheader("Testing Results")
     print_json(testing_results)
-    print(f"\n Phase 4 completed in {phase4_time:.2f}s")
+    print(f"\n Phase 5 completed in {phase5_time:.2f}s")
     total_time = time.time() - start_time
 
     print_header("SUMMARY")
     print(f" Project Location: {project_root_path}")
     print()
     print("  Phase Timings:")
-    print(f"   Phase 1 (Blueprint):            {phase1_time:.2f}s")
-    print(f"   Phase 2 (File Generation):      {phase2_time:.2f}s")
-    print(f"   Phase 3 (Dep Analysis):         {phase3_time:.2f}s")
-    print(f"   Phase 4 (Testing Pipeline):     {phase4_time:.2f}s")
+    print(f"   Phase 1 (Architecture):         {phase1_time:.2f}s")
+    print(f"   Phase 2 (Blueprint):            {phase2_time:.2f}s")
+    print(f"   Phase 3 (File Generation):      {phase3_time:.2f}s")
+    print(f"   Phase 4 (Dep Analysis):         {phase4_time:.2f}s")
+    print(f"   Phase 5 (Testing Pipeline):     {phase5_time:.2f}s")
     print(f"   ─────────────────────────────────")
     print(f"   TOTAL:                          {total_time:.2f}s")
     print()
