@@ -1,6 +1,7 @@
 import re
 import json
 import os
+import sys
 import time
 import logging
 from threading import Lock
@@ -795,45 +796,118 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
     else:
         messages = [
             {"role": "system", "content": system_instruction},
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": prompt},
         ]
-        try:
-            client = provider.get_client()
-            completion = client.beta.chat.completions.parse(
-                model=provider.model,
-                messages=messages,
-                response_format=ProjectBlueprint,
-            )
-            return completion.choices[0].message.parsed
-        except Exception as e:
+        client = provider.get_client()
+
+        # NOTE: we deliberately skip `client.beta.chat.completions.parse(
+        # response_format=ProjectBlueprint)`. OpenAI's strict-schema mode
+        # rejects `Dict[str, Any]` fields (no fixed property set) and most
+        # providers silently return an empty `{}` for `file_formats` rather
+        # than raising — which produces a valid Pydantic object with no
+        # content and zero files to generate. Plain JSON-mode completion +
+        # manual extraction is the reliable path for this schema.
+
+        json_nudge = (
+            "Respond with EXACTLY one JSON object matching the schema described in the system "
+            "instruction. No markdown fences, no prose before or after, no explanations."
+        )
+        nudged = messages + [{"role": "system", "content": json_nudge}]
+
+        raw_content: Optional[str] = None
+        last_err: Optional[Exception] = None
+        for kwargs in (
+            {"response_format": {"type": "json_object"}},
+            {},
+        ):
             try:
                 completion = client.chat.completions.create(
                     model=provider.model,
-                    messages=messages,
+                    messages=nudged,
+                    **kwargs,
                 )
-                raw_content = completion.choices[0].message.content
-                json_str = None
-                match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_content, re.DOTALL)
-                if match:
-                    json_str = match.group(1)
-                else:
-                    start_idx = raw_content.find('{')
-                    if start_idx != -1:
-                        depth = 0
-                        for i in range(start_idx, len(raw_content)):
-                            if raw_content[i] == '{':
-                                depth += 1
-                            elif raw_content[i] == '}':
-                                depth -= 1
-                                if depth == 0:
-                                    json_str = raw_content[start_idx:i+1]
-                                    break
-                if json_str:
-                    data = json.loads(json_str)
-                    return ProjectBlueprint(**data)
-            except Exception as fallback_err:
-                print(f"Error calling structured output API: {e}. Fallback failed: {fallback_err}")
+                raw_content = (completion.choices[0].message.content or "").strip()
+                break
+            except Exception as call_err:
+                last_err = call_err
+                print(
+                    f"[blueprint] completion call failed ({kwargs or 'plain'}): {call_err}",
+                    file=sys.stderr,
+                )
+
+        if raw_content is None:
+            print(
+                f"[blueprint] all completion attempts failed for {provider.model}; "
+                f"last error: {last_err}",
+                file=sys.stderr,
+            )
             return None
+
+        json_str = _extract_json_object(raw_content)
+        if not json_str:
+            snippet = raw_content[:400].replace("\n", " ")
+            print(
+                f"[blueprint] could not locate JSON object in response. "
+                f"Model: {provider.model}. First 400 chars: {snippet!r}",
+                file=sys.stderr,
+            )
+            return None
+
+        try:
+            data = json.loads(json_str)
+            return ProjectBlueprint(**data)
+        except Exception as parse_err:
+            snippet = json_str[:400].replace("\n", " ")
+            print(
+                f"[blueprint] JSON parse/validate failed: {parse_err}. "
+                f"Extracted: {snippet!r}",
+                file=sys.stderr,
+            )
+            return None
+
+
+def _extract_json_object(text: str) -> Optional[str]:
+    """Pull the first top-level JSON object out of a model response.
+
+    Tries:
+      1. ```json ... ``` fenced block
+      2. Balanced-brace walk from the first '{'
+
+    Returns the substring or None.
+    """
+    if not text:
+        return None
+
+    fence = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if fence:
+        return fence.group(1)
+
+    start = text.find("{")
+    if start == -1:
+        return None
+
+    depth = 0
+    in_str = False
+    esc = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -938,7 +1012,14 @@ def generate_tree(resp, project_name="root"):
 # Main entry point
 # ---------------------------------------------------------------------------
 
-def generate_project(user_prompt, output_base_dir, on_status=None, provider_name: Optional[str] = None):
+def generate_project(
+    user_prompt,
+    output_base_dir,
+    on_status=None,
+    provider_name: Optional[str] = None,
+    model_override: Optional[str] = None,
+    **_unused_kwargs,
+):
     from .utils.dependencies import DependencyAnalyzer
     from .testing.testing import run_testing_pipeline
     from .utils.error_tracker import ErrorTracker
@@ -950,7 +1031,7 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
     pm = PromptManager()
 
     provider_name = provider_name or InferenceManager.get_default_provider()
-    InferenceManager.initialize(provider_name)
+    InferenceManager.initialize(provider_name, model_override=model_override)
 
     emit("step", "Designing system architecture...")
     architecture_content = generate_architecture_plan(user_prompt, pm, provider_name)
@@ -970,7 +1051,24 @@ def generate_project(user_prompt, output_base_dir, on_status=None, provider_name
     blueprint = generate_project_blueprint(user_prompt, pm, provider_name, architecture_content=architecture_content)
 
     if not blueprint:
-        emit("error", "Failed to generate project blueprint.")
+        emit(
+            "error",
+            "Failed to generate project blueprint. "
+            "The model returned malformed JSON or rejected the completion call. "
+            "Check the log above for the underlying error, then try a different model "
+            "(e.g. google/gemini-2.5-pro, openai/gpt-4o, anthropic/claude-3.5-sonnet).",
+        )
+        return None
+
+    if not blueprint.file_formats or not blueprint.folder_structure.strip():
+        emit(
+            "error",
+            f"Blueprint returned empty content (file_formats={len(blueprint.file_formats or {})}, "
+            f"folder_structure={'present' if blueprint.folder_structure.strip() else 'EMPTY'}). "
+            "The model produced a valid JSON shell but didn't populate it. "
+            "Try a stronger model (google/gemini-2.5-pro, openai/gpt-4o, anthropic/claude-3.5-sonnet) "
+            "or rephrase the prompt with more detail.",
+        )
         return None
 
     software_blueprint = blueprint.software_blueprint_details

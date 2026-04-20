@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alphastack"
-version = "0.1.0"
+version = "0.1.6"
 description = "AI-powered project generator with Docker testing"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
     {name = "AlphaStack Team"}
@@ -17,8 +17,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
@@ -34,6 +32,7 @@ dependencies = [
     "pydantic>=2.0",
     "tree-sitter-languages>=1.10.0",
     "tree-sitter>=0.21.0,<0.22",
+    "dgat>=1.0.10",
 ]
 
 [project.optional-dependencies]
@@ -60,11 +59,15 @@ where = ["."]
 include = ["src", "src.*"]
 
 [tool.setuptools.package-data]
-src = ["prompts/*.j2"]
+src = [
+    "prompts/*.j2",
+    "prompts/**/*.j2",
+    "providers.json",
+]
 
 [tool.black]
 line-length = 100
-target-version = ["py39", "py310", "py311", "py312"]
+target-version = ["py311", "py312"]
 
 [tool.isort]
 profile = "black"

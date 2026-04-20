@@ -240,14 +240,15 @@ class TestFileGeneratorEval:
         if not test_files:
             return {"success": True, "resolved": 0}
 
-        for test_file in test_files:
-            if os.path.exists(test_file):
-                try:
-                    with open(test_file, 'r', encoding='utf-8', errors='ignore') as f:
-                        content = f.read()
-                    self.dependency_analyzer.add_file(test_file, content, self.folder_structure)
-                except Exception:
-                    pass
+        if test_files and any(os.path.exists(tf) for tf in test_files):
+            try:
+                self.dependency_analyzer.analyze_project_files(
+                    self.project_root,
+                    folder_tree=self.dependency_analyzer.folder_tree,
+                    folder_structure=self.folder_structure,
+                )
+            except Exception:
+                pass
 
         resolved_count = 0
         for test_file in test_files:

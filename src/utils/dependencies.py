@@ -1,17 +1,15 @@
 import os
 import json
-import re
-from typing import Dict, List, Optional, Set
+import subprocess
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple
+
 import networkx as nx
-from jinja2 import Environment, FileSystemLoader
-from .helpers import SKIP_DIRS, GENERATABLE_FILES, GENERATABLE_FILENAMES
+
+from ..config import sync_dgat_config, _map_alphastack_to_dgat
+from .helpers import SKIP_DIRS
 from .inference import InferenceManager
-from .treesitter_parser import (
-    parse_file, parse_file_from_content, verify_symbols,
-    get_language_for_file, ParseResult, ImportInfo,
-    TREE_SITTER_AVAILABLE, SUPPORTED_LANGUAGES,
-)
+from .treesitter_parser import parse_file, TREE_SITTER_AVAILABLE
 
 
 class TreeNode:
@@ -24,512 +22,303 @@ class TreeNode:
     def add_child(self, child_node):
         self.children.append(child_node)
 
-class DependencyError:
-    def __init__(self, file_path: str, error_type: str, message: str,
-                 dependency: Optional[str] = None, affected_files: Optional[List[str]] = None,
-                 coupling_details: Optional[Dict] = None):
-        self.file_path = file_path
-        self.error_type = error_type
-        self.message = message
-        self.dependency = dependency
-        self.affected_files = affected_files or []
-        self.coupling_details = coupling_details or {}
 
-    def to_dict(self, project_root: Optional[str] = None):
-        if project_root and self.file_path:
-            file_rel = os.path.relpath(self.file_path, project_root)
-        else:
-            file_rel = self.file_path or ""
-
-        affected_files_rel = []
-        for f in self.affected_files:
-            if project_root and f:
-                affected_files_rel.append(os.path.relpath(f, project_root))
-            else:
-                affected_files_rel.append(f or "")
-
-        result = {
-            "file": file_rel,
-            "error": self.message,
-            "error_type": self.error_type,
-            "dependency": self.dependency,
-            "affected_files": affected_files_rel,
-            "line_number": None
-        }
-
-        if self.coupling_details:
-            result["coupling_details"] = self.coupling_details
-
-        return result
+_DGAT_SCAN_TIMEOUT_SECONDS = int(os.getenv("DGAT_SCAN_TIMEOUT", "1800"))
 
 
 class DependencyAnalyzer:
+    """Adapter around the `dgat` package (https://pypi.org/project/dgat/).
+
+    Runs `dgat scan` on the project, loads the resulting dep_graph.json /
+    file_tree.json / dgat_blueprint.md, and exposes the same public surface
+    the rest of alpha-stack expects (`.graph`, `.dependency_details`,
+    `.file_symbols`, `.get_dependencies`, `.get_dependents`,
+    `.get_dependency_details`).
+    """
+
     def __init__(self):
-        self.graph = nx.DiGraph()
-        self.supported_extensions = {
-            '.py': 'python', '.pyi': 'python',
-            '.js': 'javascript', '.jsx': 'javascript', '.ts': 'typescript', '.tsx': 'typescript',
-            '.mjs': 'javascript', '.cjs': 'javascript',
-            '.java': 'java', '.kt': 'jvm', '.kts': 'jvm', '.scala': 'jvm', '.groovy': 'jvm',
-            '.php': 'php', '.phtml': 'php',
-            '.rs': 'rust', '.go': 'go',
-            '.c': 'c', '.cpp': 'cpp', '.cc': 'cpp', '.cxx': 'cpp',
-            '.h': 'c-header', '.hpp': 'cpp-header',
-            '.cs': 'csharp', '.m': 'objective-c', '.mm': 'objective-c', '.swift': 'swift',
-            '.rb': 'ruby', '.ex': 'elixir', '.exs': 'elixir', '.erl': 'erlang',
-            '.html': 'html', '.htm': 'html', '.xhtml': 'html',
-            '.css': 'css', '.scss': 'scss', '.sass': 'sass', '.less': 'less',
-            '.json': 'json', '.yml': 'yaml', '.yaml': 'yaml',
-            '.sql': 'sql', '.sol': 'solidity',
-            '.vue': 'vue', '.svelte': 'svelte', '.dart': 'dart',
-        }
+        self.graph: nx.DiGraph = nx.DiGraph()
         self.project_root: Optional[str] = None
         self.project_files: Set[str] = set()
         self.dependency_details: Dict[str, List[Dict[str, Optional[str]]]] = {}
         self.file_symbols: Dict[str, Dict[str, List[str]]] = {}
         self.folder_tree: Optional[TreeNode] = None
-        template_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'prompts')
-        if os.path.exists(template_dir):
-            self.jinja_env = Environment(
-                loader=FileSystemLoader(template_dir),
-                trim_blocks=True,
-                lstrip_blocks=True
-            )
-        else:
-            self.jinja_env = None
+        self.blueprint: str = ""
+        self.file_tree = None  # dgat FileTree (pydantic model) if loaded
 
     def set_folder_tree(self, folder_tree: TreeNode) -> None:
         self.folder_tree = folder_tree
 
-    def analyze_project_files(self, project_root_path: str, folder_tree: TreeNode, folder_structure: str) -> None:
+    def analyze_project_files(
+        self,
+        project_root_path: str,
+        folder_tree: TreeNode,
+        folder_structure: str,
+    ) -> None:
         self.set_folder_tree(folder_tree)
-
-        skip_extensions = {'.pyc', '.pyo', '.pyd', '.so', '.dylib', '.dll', '.exe', '.bin'}
-
-        for root, dirs, files in os.walk(project_root_path):
-            dirs[:] = [d for d in dirs if not d.startswith('.')]
-
-            for file in files:
-                if file.startswith('.'):
-                    continue
-                file_ext = Path(file).suffix.lower()
-                if file_ext in skip_extensions:
-                    continue
-
-                file_path = os.path.join(root, file)
-
-                if not os.path.isfile(file_path):
-                    continue
-
-                try:
-                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        content = f.read()
-                    self.add_file(file_path, content, folder_structure)
-                except Exception:
-                    pass
-
-    def add_file(self, file_path: str, content: str, folder_structure: str):
-        abs_path = os.path.abspath(file_path)
-        self.project_files.add(abs_path)
-        self._update_project_root()
-
-        self.graph.add_node(abs_path)
-        outgoing = list(self.graph.out_edges(abs_path))
-        if outgoing:
-            self.graph.remove_edges_from(outgoing)
-
-        file_ext = Path(abs_path).suffix.lower()
-        language = self.supported_extensions.get(file_ext, 'unknown')
-
-        # Use tree-sitter to extract imports, classes, and functions
-        ts_lang = get_language_for_file(abs_path)
-        if TREE_SITTER_AVAILABLE and ts_lang:
-            parse_result = parse_file_from_content(content, ts_lang)
-            self.file_symbols[abs_path] = {
-                "classes": parse_result.classes,
-                "functions": parse_result.functions,
-            }
-            raw_deps = set()
-            for imp in parse_result.imports:
-                raw_deps.add(imp.module)
-            dependencies = raw_deps
-        else:
-            dependencies = self.extract_dependencies(abs_path, content, folder_structure, language)
-
-        details: List[Dict[str, Optional[str]]] = []
-
-        for dep in sorted(dependencies):
-            info = self._classify_dependency(abs_path, dep, language)
-            details.append(info)
-            target_path = info.get("path")
-            if info.get("kind") == "internal" and target_path:
-                normalized_target = os.path.abspath(target_path)
-                self.graph.add_node(normalized_target)
-                if not self.graph.has_edge(abs_path, normalized_target):
-                    self.graph.add_edge(abs_path, normalized_target)
-
-        self.dependency_details[abs_path] = details
-
-    def extract_dependencies(self, file_path: str, content: str, folder_structure: str, language: Optional[str] = None) -> Set[str]:
-        """Fallback regex-based extraction for languages not supported by tree-sitter."""
-        dependencies = set()
-        file_dir = os.path.dirname(file_path)
-        file_ext = Path(file_path).suffix.lower()
-
-        language = language or self.supported_extensions.get(file_ext, 'unknown')
-        if language == 'python':
-            dependencies.update(self._extract_python_dependencies(file_path, content, file_dir))
-        elif language in ['javascript', 'typescript']:
-            dependencies.update(self._extract_js_ts_dependencies(file_path, content, file_dir))
-        elif language == 'java':
-            dependencies.update(self._extract_java_dependencies(content))
-        elif language == 'go':
-            dependencies.update(self._extract_go_dependencies(content))
-        elif language == 'rust':
-            dependencies.update(self._extract_rust_dependencies(content))
-
-        return dependencies
-
-    def _update_project_root(self) -> None:
-        if not self.project_files:
-            return
-        try:
-            self.project_root = os.path.commonpath(list(self.project_files))
-        except ValueError:
-            pass
-
-    def _classify_dependency(self, source_path: str, raw_dep: str, language: str) -> Dict[str, Optional[str]]:
-        raw_dep = raw_dep.strip()
-        if not raw_dep:
-            return {"raw": raw_dep, "kind": "external"}
-
-        resolved_path = self._resolve_relative_path(source_path, raw_dep)
-        filename = self._extract_filename_from_dependency(raw_dep)
-
-        if resolved_path and os.path.isfile(resolved_path):
-            return {
-                "raw": raw_dep,
-                "kind": "internal",
-                "path": os.path.abspath(resolved_path)
-            }
-
-        if filename:
-            matching_files = self._find_all_files_by_name(filename, language)
-            if matching_files:
-                best_match = self._find_best_match_path(raw_dep, matching_files)
-                if best_match:
-                    return {
-                        "raw": raw_dep,
-                        "kind": "internal",
-                        "path": os.path.abspath(best_match)
-                    }
-
-        return {"raw": raw_dep, "kind": "external"}
-
-    def _extract_filename_from_dependency(self, raw_dep: str) -> str:
-        if not raw_dep:
-            return ""
-
-        dep = raw_dep.strip()
-        if dep.startswith('./'):
-            dep = dep[2:]
-        elif dep.startswith('../'):
-            dep = os.path.basename(dep)
-        elif dep.startswith('.'):
-            dep = dep.lstrip('.')
-
-        dep = dep.lstrip('/')
-
-        if '::' in dep:
-            parts = dep.split('::')
-            filename = parts[-1]
-        elif '/' in dep or '\\' in dep:
-            filename = os.path.basename(dep)
-        elif '.' in dep:
-            parts = dep.split('.')
-            common_extensions = {'h', 'hpp', 'cpp', 'c', 'cc', 'cxx', 'py', 'js', 'ts',
-                               'jsx', 'tsx', 'java', 'go', 'rs', 'rb', 'php', 'cs',
-                               'swift', 'kt', 'scala', 'm', 'mm', 'html', 'css', 'scss'}
-
-            if len(parts) == 2 and parts[-1].lower() in common_extensions:
-                filename = parts[0]
-            elif len(parts) > 2:
-                filename = parts[-1]
-            else:
-                if len(parts[-1]) <= 5:
-                    filename = parts[0]
-                else:
-                    filename = parts[-1]
-        else:
-            filename = dep
-
-        filename = os.path.splitext(filename)[0] if os.path.splitext(filename)[1] else filename
-
-        return filename
-
-    def _resolve_relative_path(self, source_path: str, raw_dep: str) -> Optional[str]:
-        if not raw_dep:
-            return None
-
-        raw_dep = raw_dep.strip()
-
-        if raw_dep.startswith('.') or raw_dep.startswith('./'):
-            base_dir = os.path.dirname(source_path)
-
-            if raw_dep.startswith('./'):
-                rel_path = raw_dep[2:]
-                target_path = os.path.join(base_dir, rel_path)
-                return self._resolve_file_path(target_path, source_path)
-
-            if raw_dep.startswith('.'):
-                level = len(raw_dep) - len(raw_dep.lstrip('.'))
-                remainder = raw_dep[level:]
-
-                target_dir = base_dir
-                for _ in range(max(level - 1, 0)):
-                    target_dir = os.path.dirname(target_dir)
-
-                if remainder:
-                    rel_path = remainder.replace('.', os.sep).replace('/', os.sep)
-                    target_path = os.path.join(target_dir, rel_path)
-                else:
-                    target_path = target_dir
-
-                return self._resolve_file_path(target_path, source_path)
-
-        if raw_dep.startswith('/'):
-            if self.project_root:
-                rel_path = raw_dep[1:]
-                target_path = os.path.join(self.project_root, rel_path)
-                return self._resolve_file_path(target_path, source_path)
-
-        if '.' in raw_dep and not raw_dep.startswith('.') and not raw_dep.startswith('/'):
-            if self.project_root:
-                parts = raw_dep.split('.')
-                possible_bases = ['src', 'lib', 'app', '']
-                for base in possible_bases:
-                    if base:
-                        package_path = os.path.join(self.project_root, base, *parts)
-                    else:
-                        package_path = os.path.join(self.project_root, *parts)
-
-                    py_file = package_path + '.py'
-                    if os.path.isfile(py_file):
-                        return os.path.abspath(py_file)
-
-                    if os.path.isdir(package_path):
-                        init_file = os.path.join(package_path, '__init__.py')
-                        if os.path.isfile(init_file):
-                            return os.path.abspath(init_file)
-
-        return None
-
-    def _resolve_file_path(self, base_path: str, source_path: str) -> Optional[str]:
-        source_ext = Path(source_path).suffix.lower()
-
-        base_path = os.path.normpath(base_path)
-
-        if os.path.isfile(base_path):
-            return os.path.abspath(base_path)
-
-        possible_extensions = self._get_possible_extensions(source_ext)
-
-        if source_ext:
-            candidate = base_path + source_ext
-            if os.path.isfile(candidate):
-                return os.path.abspath(candidate)
-
-        for ext in possible_extensions:
-            candidate = base_path + ext
-            if os.path.isfile(candidate):
-                return os.path.abspath(candidate)
-
-        if os.path.isdir(base_path):
-            for ext in possible_extensions:
-                index_file = os.path.join(base_path, 'index' + ext)
-                if os.path.isfile(index_file):
-                    return os.path.abspath(index_file)
-                if ext == '.py':
-                    init_file = os.path.join(base_path, '__init__.py')
-                    if os.path.isfile(init_file):
-                        return os.path.abspath(init_file)
-
-        return None
-
-    def _get_possible_extensions(self, source_ext: str) -> List[str]:
-        extension_map = {
-            '.py': ['.py'],
-            '.js': ['.js', '.jsx', '.mjs', '.cjs', '.json'],
-            '.jsx': ['.js', '.jsx', '.mjs', '.cjs'],
-            '.ts': ['.ts', '.tsx', '.d.ts'],
-            '.tsx': ['.ts', '.tsx', '.d.ts'],
-            '.java': ['.java'],
-            '.kt': ['.kt', '.kts'],
-            '.rs': ['.rs'],
-            '.go': ['.go'],
-            '.rb': ['.rb'],
-            '.php': ['.php', '.phtml'],
-            '.cs': ['.cs'],
-            '.swift': ['.swift'],
-            '.cpp': ['.cpp', '.c', '.hpp', '.h'],
-            '.c': ['.c', '.h'],
-        }
-
-        return extension_map.get(source_ext, [source_ext] if source_ext else [])
-
-    def _extract_python_dependencies(self, file_path: str, content: str, file_dir: str) -> Set[str]:
-        dependencies = set()
-
-        imports = re.findall(r'^\s*import\s+([a-zA-Z_][\w\., \t]*)', content, re.MULTILINE)
-        for imp in imports:
-            for part in imp.split(','):
-                module = part.strip().split()[0] if part.strip() else ''
-                if module and not module.startswith('#'):
-                    dependencies.add(module)
-
-        from_imports = re.findall(r'^\s*from\s+([a-zA-Z_][\w\.]*)\s+import', content, re.MULTILINE)
-        dependencies.update(from_imports)
-
-        relative_imports_with_path = re.findall(r'^\s*from\s+(\.+[a-zA-Z_][\w\.]*)\s+import', content, re.MULTILINE)
-        dependencies.update(relative_imports_with_path)
-
-        bare_relative_imports = re.findall(r'^\s*from\s+(\.+)\s+import\s+([a-zA-Z_][\w\., \t]*)', content, re.MULTILINE)
-        for dots, modules in bare_relative_imports:
-            num_dots = len(dots)
-            for module in modules.split(','):
-                module = module.strip().split()[0] if module.strip() else ''
-                if module and not module.startswith('#'):
-                    if num_dots == 1:
-                        relative_path = f"./{module}"
-                    else:
-                        parent_dirs = "../" * (num_dots - 1)
-                        relative_path = f"{parent_dirs}{module}"
-                    dependencies.add(relative_path)
-
-        return dependencies
-
-    def _extract_js_ts_dependencies(self, file_path: str, content: str, file_dir: str) -> Set[str]:
-        dependencies = set()
-
-        es6_imports = re.findall(r'import\s+(?:[\w{}\*\s,]+?\s+from\s+)?[\'"]([^\'"]+)[\'"]', content)
-        dependencies.update(es6_imports)
-
-        requires = re.findall(r'require\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)', content)
-        dependencies.update(requires)
-
-        dynamic_imports = re.findall(r'import\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)', content)
-        dependencies.update(dynamic_imports)
-
-        return dependencies
-
-    def _extract_java_dependencies(self, content: str) -> Set[str]:
-        dependencies = set()
-        imports = re.findall(r'^\s*import\s+(?:static\s+)?([a-zA-Z0-9_.*]+);', content, flags=re.MULTILINE)
-        dependencies.update(imports)
-        return dependencies
-
-    def _extract_go_dependencies(self, content: str) -> Set[str]:
-        dependencies = set()
-        imports = re.findall(r'import\s+(?:[a-zA-Z0-9_]+\s+)?["]([^"]+)["]', content)
-        dependencies.update(imports)
-
-        block_imports = re.findall(r'import\s*\((.*?)\)', content, flags=re.DOTALL)
-        for block in block_imports:
-            matches = re.findall(r'"([^"]+)"', block)
-            dependencies.update(matches)
-
-        return dependencies
-
-    def _extract_rust_dependencies(self, content: str) -> Set[str]:
-        dependencies = set()
-
-        externs = re.findall(r'extern\s+crate\s+([a-zA-Z0-9_]+)', content)
-        dependencies.update(externs)
-
-        uses = re.findall(r'\b(?:pub\s+)?use\s+([a-zA-Z0-9_:{}*,\s]+);', content)
-        dependencies.update([u.strip() for u in uses])
-
-        mods = re.findall(r'\b(?:pub\s+)?mod\s+([a-zA-Z0-9_]+)\s*;', content)
-        dependencies.update(mods)
-
-        return dependencies
+        self.project_root = os.path.abspath(project_root_path)
+
+        active_provider = (
+            InferenceManager._active_provider_name
+            or InferenceManager._load_providers_json().get("default_provider")
+        )
+        if not active_provider:
+            raise RuntimeError("No active alpha-stack provider; cannot configure dgat")
+        active_model = None
+        if InferenceManager._active_provider is not None:
+            active_model = InferenceManager._active_provider.config.get("model")
+        sync_dgat_config(active_provider, model_override=active_model)
+        dgat_provider, _endpoint, model = _map_alphastack_to_dgat(
+            active_provider, model_override=active_model
+        )
+
+        scan_result = self._run_dgat_binary(dgat_provider, model)
+        if scan_result.returncode != 0:
+            stderr = (scan_result.stderr or scan_result.stdout or "").strip()
+            raise RuntimeError(
+                f"dgat scan failed for {self.project_root} "
+                f"(provider='{dgat_provider}'): {stderr or 'no output'}"
+            )
+
+        dep_graph_obj, dep_raw = self._load_dep_graph()
+        self.file_tree = self._load_file_tree()
+        self.blueprint = self._read_text(os.path.join(self.project_root, "dgat_blueprint.md"))
+
+        self._populate_from_depgraph(dep_graph_obj, dep_raw)
+        self._supplement_with_treesitter()
 
     def get_dependencies(self, file_path: str) -> List[str]:
-        abs_path = os.path.abspath(file_path)
-        details = self.dependency_details.get(abs_path, [])
-        internal_paths = [item.get('path') for item in details if item.get('kind') == 'internal' and item.get('path')]
-        return [os.path.abspath(path) for path in internal_paths if path]
-
-    def get_dependency_details(self, file_path: str) -> List[Dict[str, Optional[str]]]:
-        abs_path = os.path.abspath(file_path)
-        return self.dependency_details.get(abs_path, [])
+        return [
+            d["path"]
+            for d in self.dependency_details.get(file_path, [])
+            if d.get("kind") == "internal" and d.get("path")
+        ]
 
     def get_dependents(self, file_path: str) -> List[str]:
-        abs_path = os.path.abspath(file_path)
-        return list(self.graph.predecessors(abs_path))
+        if file_path in self.graph:
+            return list(self.graph.predecessors(file_path))
+        return []
 
-    def _find_all_files_by_name(self, filename: str, language: str) -> List[str]:
-        matching_files = []
-        filename_basename = os.path.splitext(filename)[0]
+    def get_dependency_details(self, file_path: str) -> List[Dict[str, Optional[str]]]:
+        return self.dependency_details.get(file_path, [])
 
-        possible_extensions = []
-        for ext, lang in self.supported_extensions.items():
-            if lang == language:
-                possible_extensions.append(ext)
+    def _run_dgat_binary(
+        self, provider: str, model: Optional[str]
+    ) -> subprocess.CompletedProcess:
+        from dgat.scanner import get_binary_path
 
-        for file_path in self.project_files:
-            file_basename = os.path.splitext(os.path.basename(file_path))[0]
-            file_ext = Path(file_path).suffix.lower()
+        binary = str(get_binary_path())
+        cmd = [binary, self.project_root, f"--provider={provider}"]
+        if model:
+            cmd.append(f"--model={model}")
+        if os.getenv("DGAT_DEPS_ONLY"):
+            cmd.append("--deps-only")
 
-            if file_basename == filename_basename:
-                if file_ext in possible_extensions or not possible_extensions:
-                    matching_files.append(file_path)
+        return subprocess.run(
+            cmd,
+            cwd=self.project_root,
+            capture_output=True,
+            text=True,
+            timeout=_DGAT_SCAN_TIMEOUT_SECONDS,
+        )
 
-        return matching_files
+    def _load_dep_graph(self) -> Tuple[Any, Dict[str, Any]]:
+        from dgat.types import DepGraph
 
-    def _find_best_match_path(self, dependency_path: str, candidate_paths: List[str]) -> Optional[str]:
-        if not candidate_paths:
+        dep_path = os.path.join(self.project_root, "dep_graph.json")
+        if not os.path.isfile(dep_path):
+            raise RuntimeError(f"dgat did not produce dep_graph.json at {dep_path}")
+        with open(dep_path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        return DepGraph(**raw), raw
+
+    def _load_file_tree(self):
+        from dgat.types import FileTree
+
+        tree_path = os.path.join(self.project_root, "file_tree.json")
+        if not os.path.isfile(tree_path):
+            return None
+        with open(tree_path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        try:
+            return FileTree(**raw)
+        except Exception:
             return None
 
-        if len(candidate_paths) == 1:
-            return candidate_paths[0]
+    def _read_text(self, path: str) -> str:
+        if not os.path.isfile(path):
+            return ""
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        except OSError:
+            return ""
 
-        dep_normalized = dependency_path.replace('\\', '/').lower().strip('/')
-        dep_parts = [p for p in dep_normalized.split('/') if p]
+    def _populate_from_depgraph(self, dep_graph, dep_raw: Dict[str, Any]) -> None:
+        raw_edges = dep_raw.get("edges") or []
+        import_stmt_by_pair = {
+            (e.get("from"), e.get("to")): e.get("import_stmt", "")
+            for e in raw_edges
+            if isinstance(e, dict)
+        }
 
-        best_match = None
-        best_score = -1
+        for node in dep_graph.nodes:
+            abs_path = node.abs_path or os.path.normpath(
+                os.path.join(self.project_root, node.rel_path)
+            )
+            abs_path = os.path.normpath(abs_path)
+            self.graph.add_node(abs_path)
+            if os.path.isfile(abs_path):
+                self.project_files.add(abs_path)
 
-        for candidate in candidate_paths:
-            if self.project_root:
-                rel_candidate = os.path.relpath(candidate, self.project_root)
-            else:
-                rel_candidate = candidate
+        for edge in dep_graph.edges:
+            from_abs = os.path.normpath(
+                os.path.join(self.project_root, edge.from_node)
+            )
+            to_abs = os.path.normpath(os.path.join(self.project_root, edge.to_node))
+            self.graph.add_edge(from_abs, to_abs)
+            stmt = import_stmt_by_pair.get((edge.from_node, edge.to_node), "") or edge.from_node
+            self.dependency_details.setdefault(from_abs, []).append(
+                {
+                    "raw": stmt,
+                    "kind": "internal",
+                    "path": to_abs,
+                    "description": edge.description or "",
+                }
+            )
 
-            candidate_normalized = rel_candidate.replace('\\', '/').lower().strip('/')
-            candidate_parts = [p for p in candidate_normalized.split(os.sep) if p]
+    def _supplement_with_treesitter(self) -> None:
+        """dgat (v1.0.x) has two gaps we patch up here:
+          1. External (unresolved) imports are dropped entirely — so a file
+             whose first import is e.g. `import requests` ends up skipped
+             from the dep graph *completely*. We re-walk the tree and emit
+             both external entries and any internal edges dgat missed.
+          2. Class/function symbols aren't exposed at all.
+        """
+        if not TREE_SITTER_AVAILABLE or not self.project_root:
+            return
 
-            score = 0
-            for i, dep_part in enumerate(dep_parts):
-                if i < len(candidate_parts) and dep_part == candidate_parts[i]:
-                    score += 1
-                elif dep_part in candidate_parts:
-                    score += 0.5
+        skip_extensions = {".pyc", ".pyo", ".pyd", ".so", ".dylib", ".dll", ".exe", ".bin"}
+        for root, dirs, files in os.walk(self.project_root):
+            dirs[:] = [d for d in dirs if not d.startswith(".") and d not in SKIP_DIRS]
+            for fname in files:
+                if fname.startswith("."):
+                    continue
+                if Path(fname).suffix.lower() in skip_extensions:
+                    continue
+                abs_file = os.path.normpath(os.path.join(root, fname))
+                try:
+                    pr = parse_file(abs_file)
+                except Exception:
+                    continue
+                if pr is None:
+                    continue
 
-            if score > best_score or (score == best_score and len(candidate_parts) < len(best_match.split(os.sep) if best_match else [])):
-                best_score = score
-                best_match = candidate
+                self.project_files.add(abs_file)
+                self.graph.add_node(abs_file)
+                self.file_symbols[abs_file] = {
+                    "classes": list(pr.classes or []),
+                    "functions": list(pr.functions or []),
+                }
 
-        return best_match
+                existing = self.dependency_details.get(abs_file, [])
+                existing_internal_paths: Set[str] = {
+                    d.get("path") for d in existing if d.get("kind") == "internal" and d.get("path")
+                }
+                existing_internal_raw = {
+                    d.get("raw") for d in existing if d.get("kind") == "internal"
+                }
+                seen_external: Set[str] = {
+                    d.get("raw") for d in existing if d.get("kind") == "external"
+                }
+
+                for imp in pr.imports or []:
+                    module = (imp.module or imp.raw or "").strip()
+                    if not module:
+                        continue
+
+                    resolved = self._resolve_internal_import(abs_file, module)
+                    if resolved:
+                        if resolved in existing_internal_paths:
+                            continue
+                        existing_internal_paths.add(resolved)
+                        existing_internal_raw.add(module)
+                        self.graph.add_edge(abs_file, resolved)
+                        self.dependency_details.setdefault(abs_file, []).append(
+                            {
+                                "raw": module,
+                                "kind": "internal",
+                                "path": resolved,
+                                "description": "",
+                            }
+                        )
+                        continue
+
+                    if module.startswith("."):
+                        # Relative import we couldn't resolve to a real file —
+                        # skip (don't mislabel it as external).
+                        continue
+                    if module in existing_internal_raw or module in seen_external:
+                        continue
+                    seen_external.add(module)
+                    self.dependency_details.setdefault(abs_file, []).append(
+                        {"raw": module, "kind": "external", "path": None}
+                    )
+
+    def _resolve_internal_import(
+        self, source_file: str, module: str
+    ) -> Optional[str]:
+        """Try to map an `import X` / `from X import ...` to a project file.
+
+        Supports relative imports (`.b`, `..sub.c`) resolved against
+        `source_file`'s directory, and absolute imports (`pkg.mod`)
+        resolved against `self.project_root`. Returns an absolute path
+        that exists on disk, or None.
+        """
+        if not module or not self.project_root:
+            return None
+
+        ext_candidates = (".py",)
+
+        def try_paths(base: str, parts: list[str]) -> Optional[str]:
+            if not parts:
+                return None
+            for ext in ext_candidates:
+                cand = os.path.normpath(os.path.join(base, *parts) + ext)
+                if os.path.isfile(cand):
+                    return cand
+            # package __init__.py
+            cand = os.path.normpath(os.path.join(base, *parts, "__init__.py"))
+            if os.path.isfile(cand):
+                return cand
+            return None
+
+        if module.startswith("."):
+            dots = 0
+            while dots < len(module) and module[dots] == ".":
+                dots += 1
+            rel = module[dots:]
+            base = os.path.dirname(source_file)
+            for _ in range(max(0, dots - 1)):
+                base = os.path.dirname(base)
+            parts = [p for p in rel.split(".") if p]
+            return try_paths(base, parts)
+
+        parts = module.split(".")
+        return try_paths(self.project_root, parts)
 
 
-def build_dependency_graph_tree(project_root: str, dependency_analyzer: 'DependencyAnalyzer') -> str:
+def build_dependency_graph_tree(
+    project_root: str, dependency_analyzer: "DependencyAnalyzer"
+) -> str:
     skip_dirs = SKIP_DIRS
-    lines = []
+    lines: List[str] = []
 
     def _walk_tree(dir_path: str, prefix: str = "", is_last: bool = True):
         rel_dir = os.path.relpath(dir_path, project_root)
-        dir_name = os.path.basename(dir_path) if rel_dir != "." else os.path.basename(project_root)
+        dir_name = (
+            os.path.basename(dir_path) if rel_dir != "." else os.path.basename(project_root)
+        )
 
         if dir_name.startswith(".") and dir_name != ".":
             return
@@ -544,16 +333,24 @@ def build_dependency_graph_tree(project_root: str, dependency_analyzer: 'Depende
         except PermissionError:
             return
 
-        dirs = [e for e in entries if os.path.isdir(os.path.join(dir_path, e))
-                and not e.startswith(".") and e not in skip_dirs]
-        files = [e for e in entries if os.path.isfile(os.path.join(dir_path, e))
-                 and not e.startswith(".")]
+        dirs = [
+            e
+            for e in entries
+            if os.path.isdir(os.path.join(dir_path, e))
+            and not e.startswith(".")
+            and e not in skip_dirs
+        ]
+        files = [
+            e
+            for e in entries
+            if os.path.isfile(os.path.join(dir_path, e)) and not e.startswith(".")
+        ]
 
         all_entries = dirs + files
 
         for i, entry in enumerate(all_entries):
             entry_path = os.path.join(dir_path, entry)
-            entry_is_last = (i == len(all_entries) - 1)
+            entry_is_last = i == len(all_entries) - 1
 
             if os.path.isdir(entry_path):
                 _walk_tree(entry_path, child_prefix, entry_is_last)
@@ -561,7 +358,6 @@ def build_dependency_graph_tree(project_root: str, dependency_analyzer: 'Depende
                 file_connector = "└── " if entry_is_last else "├── "
                 lines.append(f"{child_prefix}{file_connector}{entry}")
 
-                # Get dependencies, dependents, and symbols for this file
                 abs_file = os.path.abspath(entry_path)
                 dep_details = dependency_analyzer.dependency_details.get(abs_file, [])
                 internal_deps = [
@@ -584,340 +380,23 @@ def build_dependency_graph_tree(project_root: str, dependency_analyzer: 'Depende
                     lines.append(f"{annot_prefix}  classes: {', '.join(file_classes)}")
                 if file_functions:
                     lines.append(f"{annot_prefix}  functions: {', '.join(file_functions)}")
-                external_deps = sorted({
-                    d["raw"] for d in dep_details
-                    if d.get("kind") == "external" and d.get("raw")
-                })
+                external_deps = sorted(
+                    {
+                        d["raw"]
+                        for d in dep_details
+                        if d.get("kind") == "external" and d.get("raw")
+                    }
+                )
                 if internal_deps:
                     lines.append(f"{annot_prefix}  deps: {', '.join(internal_deps)}")
                 if external_deps:
                     lines.append(f"{annot_prefix}  external: {', '.join(external_deps)}")
                 if dependents_rel:
                     lines.append(f"{annot_prefix}  used-by: {', '.join(dependents_rel)}")
+
     try:
         _walk_tree(project_root)
     except Exception:
         pass
 
     return "\n".join(lines)
-
-
-class DependencyFeedbackLoop:
-    def __init__(self, dependency_analyzer: DependencyAnalyzer, project_root: str,
-                 software_blueprint: Optional[Dict] = None,
-                 folder_structure: Optional[str] = None,
-                 file_output_format: Optional[Dict] = None,
-                 pm=None, error_tracker=None):
-        from .tools import ToolHandler
-        from .prompt_manager import PromptManager
-        from .error_tracker import ErrorTracker
-
-        self.dependency_analyzer = dependency_analyzer
-        self.project_root = project_root
-        self.software_blueprint = software_blueprint or {}
-        self.folder_structure = folder_structure or ""
-        self.file_output_format = file_output_format or {}
-        self.pm = pm or PromptManager(templates_dir="prompts")
-        self.max_iterations = 25
-        folder_tree = getattr(self.dependency_analyzer, "folder_tree", None)
-        self.error_tracker = error_tracker or ErrorTracker(project_root, folder_tree)
-        self.tool_handler = ToolHandler(project_root, self.error_tracker, dependency_analyzer=self.dependency_analyzer)
-
-    def walk_project_files(self) -> List[str]:
-        files = []
-
-        for root, dirs, filenames in os.walk(self.project_root):
-            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in SKIP_DIRS]
-
-            for filename in filenames:
-                if filename.startswith('.') and filename not in GENERATABLE_FILENAMES:
-                    continue
-
-                file_ext = Path(filename).suffix.lower()
-
-                if filename not in GENERATABLE_FILENAMES and file_ext not in GENERATABLE_FILES:
-                    continue
-
-                file_path = os.path.join(root, filename)
-                if os.path.isfile(file_path):
-                    files.append(os.path.abspath(file_path))
-
-        return sorted(files)
-
-    def check_file_dependencies(self, file_path: str, fix_immediately: bool = False) -> List[DependencyError]:
-        errors = []
-        dep_details = self.dependency_analyzer.get_dependency_details(file_path)
-
-        if not dep_details:
-            return errors
-
-        project_files = self.dependency_analyzer.project_files
-
-        for dep_info in dep_details:
-            if dep_info.get("kind") == "internal":
-                dep_path = dep_info.get("path")
-                raw_dep = dep_info.get("raw", "")
-
-                if not dep_path:
-                    errors.append(DependencyError(
-                        file_path=file_path,
-                        error_type="MISSING_PATH",
-                        message=f"Dependency '{raw_dep}' resolved to None",
-                        dependency=raw_dep
-                    ))
-                    continue
-
-                abs_dep_path = os.path.abspath(dep_path)
-                if abs_dep_path not in project_files:
-                    errors.append(DependencyError(
-                        file_path=file_path,
-                        error_type="FILE_NOT_IN_PROJECT",
-                        message=f"Dependency file '{os.path.relpath(dep_path, self.project_root)}' is not in the project files set",
-                        dependency=raw_dep,
-                        affected_files=[dep_path]
-                    ))
-                    continue
-
-                if not os.path.exists(dep_path):
-                    errors.append(DependencyError(
-                        file_path=file_path,
-                        error_type="FILE_NOT_FOUND",
-                        message=f"Dependency file does not exist: {dep_path}",
-                        dependency=raw_dep,
-                        affected_files=[dep_path]
-                    ))
-                    continue
-
-                # Verify target is inside project root
-                if self.project_root and not abs_dep_path.startswith(os.path.abspath(self.project_root)):
-                    errors.append(DependencyError(
-                        file_path=file_path,
-                        error_type="PATH_OUTSIDE_PROJECT",
-                        message=f"Dependency resolves outside project root: {os.path.relpath(dep_path, self.project_root)}",
-                        dependency=raw_dep,
-                        affected_files=[dep_path]
-                    ))
-                    continue
-
-                coupling_error = self.check_coupling(file_path, dep_path, raw_dep)
-
-                if coupling_error:
-                    errors.append(coupling_error)
-
-        if errors:
-            rel_file = os.path.relpath(file_path, self.project_root) if self.project_root else file_path
-            for e in errors:
-                print(f"[dep_check] {rel_file}: {e.error_type} - {e.message}")
-
-        return errors
-
-    def check_coupling(self, source_file: str, target_file: str, dependency: str) -> Optional[DependencyError]:
-        """Deterministic coupling check using tree-sitter symbol verification."""
-        try:
-            abs_source = os.path.abspath(source_file)
-            abs_target = os.path.abspath(target_file)
-
-            # Get the symbols the source file imports from the target
-            source_symbols = self.dependency_analyzer.file_symbols.get(abs_source, {})
-            target_symbols = self.dependency_analyzer.file_symbols.get(abs_target, {})
-
-            # If we don't have tree-sitter data for either file, skip the check
-            if not source_symbols and not target_symbols:
-                return None
-
-            target_classes = target_symbols.get("classes", [])
-            target_functions = target_symbols.get("functions", [])
-
-            # Find what symbols the source imports from this dependency
-            imported_symbols = self._get_imported_symbols_for_dep(
-                abs_source, dependency
-            )
-
-            if not imported_symbols:
-                return None
-
-            missing = verify_symbols(imported_symbols, target_classes, target_functions)
-
-            if missing:
-                return DependencyError(
-                    file_path=source_file,
-                    error_type="MISSING_EXPORT",
-                    message=f"Symbols not found in target: {', '.join(missing)}",
-                    dependency=dependency,
-                    affected_files=[target_file],
-                    coupling_details={
-                        "missing_symbols": missing,
-                        "available_classes": target_classes,
-                        "available_functions": target_functions,
-                    }
-                )
-            return None
-        except Exception as e:
-            return DependencyError(
-                file_path=source_file,
-                error_type="COUPLING_CHECK_ERROR",
-                message=f"Error checking coupling: {str(e)}",
-                dependency=dependency,
-                affected_files=[target_file]
-            )
-
-    def _get_imported_symbols_for_dep(self, source_path: str, dependency: str) -> List[str]:
-        """Get which specific symbols the source file imports from a dependency."""
-        ts_lang = get_language_for_file(source_path)
-        if not ts_lang or not TREE_SITTER_AVAILABLE:
-            return []
-
-        try:
-            result = parse_file(source_path, ts_lang)
-            for imp in result.imports:
-                if imp.module == dependency or dependency in imp.raw:
-                    return imp.symbols
-        except Exception:
-            pass
-        return []
-
-    def _get_changed_files_from_tracker(self) -> Set[str]:
-        changed_files = set()
-        for change_entry in self.error_tracker.change_log:
-            file_path = change_entry.get("file", "")
-            if file_path:
-                if not os.path.isabs(file_path):
-                    abs_path = os.path.join(self.project_root, file_path)
-                else:
-                    abs_path = file_path
-                changed_files.add(os.path.abspath(abs_path))
-        return changed_files
-
-    def _get_files_to_recheck(self, changed_files: Set[str]) -> Set[str]:
-        files_to_check = set(changed_files)
-
-        for changed_file in changed_files:
-            try:
-                dependents = self.dependency_analyzer.get_dependents(changed_file)
-                files_to_check.update(dependents)
-            except Exception:
-                pass
-
-        return files_to_check
-
-    def _reanalyze_changed_files(self, changed_files: Set[str]) -> None:
-        for file_path in changed_files:
-            if os.path.exists(file_path):
-                try:
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        content = f.read()
-                    self.dependency_analyzer.add_file(file_path, content, self.folder_structure)
-                except Exception:
-                    pass
-
-    def run_feedback_loop(self) -> Dict:
-        all_files = self.walk_project_files()
-        previous_errors = set()
-        stuck_iterations = 0
-        max_stuck_iterations = 20
-        files_to_check = None
-
-        for iteration in range(1, self.max_iterations + 1):
-            print(f"[dep_resolution] iteration={iteration}")
-            changes_before = len(self.error_tracker.change_log)
-
-            if files_to_check is None:
-                files_to_check = set(all_files)
-
-            all_errors = []
-
-            for file_path in files_to_check:
-                errors = self.check_file_dependencies(file_path, fix_immediately=False)
-                all_errors.extend(errors)
-
-            if not all_errors:
-                print("[dep_resolution] no errors found")
-                return {
-                    "success": True,
-                    "iterations": iteration,
-                    "remaining_errors": []
-                }
-
-            print(f"[dep_resolution] errors_found={len(all_errors)}")
-            current_error_signatures = {
-                (e.file_path, e.error_type, e.message[:100]) for e in all_errors
-            }
-
-            if current_error_signatures == previous_errors:
-                stuck_iterations += 1
-
-                if stuck_iterations >= max_stuck_iterations:
-                    print("[dep_resolution] stuck errors detected, stopping")
-                    return {
-                        "success": False,
-                        "iterations": iteration,
-                        "remaining_errors": [e.to_dict(self.project_root) for e in all_errors],
-                        "reason": "stuck_errors"
-                    }
-            else:
-                stuck_iterations = 0
-                previous_errors = current_error_signatures
-
-            fixable_errors = list(all_errors)
-
-            if not fixable_errors:
-                print("[dep_resolution] no fixable errors")
-                return {
-                    "success": False,
-                    "iterations": iteration,
-                    "remaining_errors": [e.to_dict(self.project_root) for e in all_errors],
-                    "reason": "unfixable_errors"
-                }
-
-            errors_dict = [e.to_dict(self.project_root) for e in fixable_errors]
-            error_info = {
-                "error_type": "dependency",
-                "error": "Dependency resolution errors",
-                "errors": errors_dict
-            }
-            is_repeat = self.error_tracker.is_repeat_error(error_info)
-            if is_repeat:
-                error_info["repeat"] = True
-                print("[dep_resolution] repeat_error=true")
-            error_id = self.error_tracker.log_error(error_info)
-
-            tasks = [
-                {
-                    "file_path": e.get("file", ""),
-                    "instructions": f"Fix dependency error: {e.get('error', '')}. {e.get('message', '')}",
-                }
-                for e in errors_dict if e.get("file")
-            ]
-            if tasks:
-                from .corrector_tool import batch_edit_files
-                print(f"[dep_resolution] tasks_planned={len(tasks)}")
-                
-                batch_result = batch_edit_files(tasks, self.tool_handler)
-                changed_files = set()
-                
-                if batch_result.get("success") or batch_result.get("succeeded", 0) > 0:
-                    for res in batch_result.get("results", []):
-                        if res.get("success") and res.get("file_path"):
-                            changed_files.add(os.path.abspath(res["file_path"]))
-
-                if changed_files:
-                    print(f"[dep_resolution] changed_files={len(changed_files)}")
-                    self._reanalyze_changed_files(changed_files)
-                    files_to_check = self._get_files_to_recheck(changed_files)
-                    error_files = {os.path.abspath(e.file_path) for e in all_errors if e.file_path}
-                    files_to_check.update(error_files)
-                else:
-                    print("[dep_resolution] no file changes applied")
-                    files_to_check = set(all_files)
-            else:
-                print("[dep_resolution] no tasks returned from planner")
-                files_to_check = set(all_files)
-
-        print("[dep_resolution] max_iterations reached")
-        return {
-            "success": False,
-            "iterations": self.max_iterations,
-            "remaining_errors": [e.to_dict(self.project_root) for e in all_errors],
-            "reason": "max_iterations"
-        }
-

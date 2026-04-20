@@ -412,7 +412,9 @@ class InferenceManager:
 
     @staticmethod
     def initialize(
-        provider_name: Optional[str] = None, validate: bool = True
+        provider_name: Optional[str] = None,
+        validate: bool = True,
+        model_override: Optional[str] = None,
     ) -> InferenceProvider:
         """
         Initialize and cache a provider instance for the entire project run.
@@ -421,15 +423,15 @@ class InferenceManager:
         Args:
             provider_name: Provider to use (defaults to default_provider from config)
             validate: If True, validates API key exists
-
-        Returns:
-            The initialized provider instance
+            model_override: If set, overrides the model from providers.json
         """
         provider_name = provider_name or InferenceManager.get_default_provider()
 
         if (
             InferenceManager._active_provider is not None
             and InferenceManager._active_provider_name == provider_name
+            and (model_override is None
+                 or InferenceManager._active_provider.config.get("model") == model_override)
         ):
             return InferenceManager._active_provider
 
@@ -446,9 +448,15 @@ class InferenceManager:
                 )
 
         InferenceManager._active_provider = InferenceManager.create_provider(
-            provider_name
+            provider_name, model_override=model_override
         )
         InferenceManager._active_provider_name = provider_name
+
+        try:
+            from ..config import sync_dgat_config
+            sync_dgat_config(provider_name, model_override=model_override)
+        except Exception:
+            pass
 
         return InferenceManager._active_provider
 
@@ -487,19 +495,37 @@ class InferenceManager:
 
     @staticmethod
     def get_provider_config(provider_name: str) -> Dict[str, Any]:
-        """Read provider config from providers.json (cached after first read)."""
+        """Read provider config from providers.json + user key store.
+
+        Key resolution order:
+          1. OS env var (e.g. ``OPENROUTER_API_KEY``) — wins so dev overrides work.
+          2. ``~/.alphastack/config.json`` (written by the TUI / set_provider_api_key).
+
+        Must match ``src.config.get_provider_api_key`` so that anywhere the TUI
+        reports "has_api_key=true" the actual LLM call can find the key.
+        """
         config = InferenceManager._load_providers_json()
         provider_config = config["model_providers"][provider_name].copy()
 
-        # Override with env var
         env_key = f"{provider_name.upper()}_API_KEY"
-        if os.getenv(env_key):
-            provider_config["api_key"] = os.getenv(env_key)
+        env_val = os.getenv(env_key)
+        if env_val:
+            provider_config["api_key"] = env_val
+        else:
+            try:
+                from ..config import get_provider_api_key
+                stored = get_provider_api_key(provider_name)
+                if stored:
+                    provider_config["api_key"] = stored
+            except Exception:
+                pass
 
         return provider_config
 
     @staticmethod
-    def create_provider(provider_name: str) -> InferenceProvider:
+    def create_provider(
+        provider_name: str, model_override: Optional[str] = None
+    ) -> InferenceProvider:
         """Factory method to create provider instance"""
         if provider_name not in _PROVIDER_REGISTRY:
             raise ValueError(
@@ -507,6 +533,8 @@ class InferenceManager:
             )
 
         config = InferenceManager.get_provider_config(provider_name)
+        if model_override:
+            config["model"] = model_override
         provider_class = _PROVIDER_REGISTRY[provider_name]
         return provider_class(config)
 

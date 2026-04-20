@@ -317,15 +317,17 @@ class ParallelOrchestrator:
             logger.error(f"[Orchestrator] Failed to generate: {filepath}")
 
     def _register_deps(self, filepath: str, full_path: str, content: Optional[str] = None):
-        """Extract imports from a just-written file and update DependencyRegistry."""
+        """Extract external imports from a just-written file and update DependencyRegistry."""
         try:
-            from .utils.dependencies import DependencyAnalyzer
-            analyzer = DependencyAnalyzer()
-            if content is None:
-                with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
-                    content = f.read()
-            analyzer.add_file(full_path, content, "")
-            details = analyzer.dependency_details.get(os.path.abspath(full_path), [])
+            from .utils.treesitter_parser import parse_file
+            pr = parse_file(full_path)
+            details: List[Dict] = []
+            if pr is not None:
+                for imp in getattr(pr, "imports", []) or []:
+                    module = (imp.module or imp.raw or "").strip()
+                    if not module or module.startswith("."):
+                        continue
+                    details.append({"raw": module, "kind": "external", "path": None})
             self.dep_registry.register(filepath, details)
         except Exception as e:
             logger.warning(f"[Orchestrator] Dep extraction failed for {filepath}: {e}")

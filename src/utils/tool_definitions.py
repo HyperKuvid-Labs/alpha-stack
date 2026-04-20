@@ -4,8 +4,115 @@ from typing import List, Dict, Any
 
 
 def get_tool_definitions() -> List[Dict[str, Any]]:
-    """Get all tool definitions in JSON Schema format"""
+    """Get all tool definitions in JSON Schema format.
+
+    Ordering convention: dgat-backed analysis tools come first. The LLM
+    should reach for these before structural/mutation tools — they're
+    cheaper (pre-computed) and give broader context about the project.
+    """
     return [
+        # ── dgat-backed primary analysis tools ─────────────────────────────
+        {
+            "name": "get_file_description",
+            "description": (
+                "PRIMARY tool. Return the dgat-generated natural-language "
+                "description of a file — what it does and why it matters. "
+                "Always try this before reading file contents. Backed by "
+                "dgat's LLM-annotated file tree."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Relative path from project root (e.g., 'src/main.py')",
+                    }
+                },
+                "required": ["file_path"],
+            },
+        },
+        {
+            "name": "get_file_dependencies",
+            "description": (
+                "PRIMARY tool. Internal files that the given file depends on, "
+                "resolved by dgat's cross-language import analysis. Prefer this "
+                "over grep-style searches for understanding code structure."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Relative path to the file",
+                    },
+                    "include_descriptions": {
+                        "type": "boolean",
+                        "description": "If true, include each dependency's file description (default false).",
+                    },
+                },
+                "required": ["file_path"],
+            },
+        },
+        {
+            "name": "get_file_dependents",
+            "description": (
+                "PRIMARY tool. Files that import or depend on the given file "
+                "(dgat reverse-edges). Essential before changing a module — "
+                "tells you who breaks if you edit this file."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Relative path to the file",
+                    },
+                    "include_descriptions": {
+                        "type": "boolean",
+                        "description": "If true, include each dependent's file description (default false).",
+                    },
+                },
+                "required": ["file_path"],
+            },
+        },
+        {
+            "name": "get_project_blueprint",
+            "description": (
+                "PRIMARY tool. Return the dgat-synthesized architectural "
+                "blueprint of the whole project (markdown). Call this first "
+                "when you need broad orientation — it summarises every file "
+                "bottom-up into an overview."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+        {
+            "name": "search_files",
+            "description": (
+                "PRIMARY tool. Search the project by file name or "
+                "description using dgat's file tree. Returns ranked matches "
+                "with rel_path, name, and description. Use this instead of "
+                "grepping the filesystem for concept-level lookups."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Name fragment or concept to search for",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results (default 10)",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+        # ── structural / mutation tools (come after dgat analysis) ─────────
         {
             "name": "get_file_code",
             "description": "Get the code content of a file from the project. Use this to read any file you need to understand before making changes.",
@@ -223,34 +330,6 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
             },
         },
         {
-            "name": "get_file_dependencies",
-            "description": "Get internal dependencies for a file (paths it depends on).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "file_path": {
-                        "type": "string",
-                        "description": "Relative path to the file",
-                    }
-                },
-                "required": ["file_path"],
-            },
-        },
-        {
-            "name": "get_file_dependents",
-            "description": "Get dependents of a file (files that import it).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "file_path": {
-                        "type": "string",
-                        "description": "Relative path to the file",
-                    }
-                },
-                "required": ["file_path"],
-            },
-        },
-        {
             "name": "batch_edit_files",
             "description": (
                 "Delegate multiple file-editing tasks to parallel corrector mini-agents. "
@@ -348,30 +427,41 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
     ]
 
 
-# Tools the planner is allowed to use
+# Tools the planner is allowed to use. dgat tools come first — the planner
+# should consult descriptions, dependencies, and the blueprint before
+# reading file contents.
 PLANNER_TOOL_NAMES = {
+    # dgat-backed primary tools
+    "get_file_description",
+    "get_file_dependencies",
+    "get_file_dependents",
+    "get_project_blueprint",
+    "search_files",
+    # structural / mutation
     "get_file_code",
     "update_file_code",
     "patch_file",
     "run_shell_command",
     "get_error_history",
     "get_action_history",
-    "get_file_dependencies",
-    "get_file_dependents",
     "batch_edit_files",
     "batch_read_files",
     "give_up",
     "mark_complete",
 }
 
-# Tools the executor is allowed to use (file read/write only — no recursion)
+# Tools the executor is allowed to use (no recursion).
 EXECUTOR_TOOL_NAMES = {
+    # dgat-backed (read-only analysis)
+    "get_file_description",
+    "get_file_dependencies",
+    "get_file_dependents",
+    "search_files",
+    # structural / mutation
     "get_file_code",
     "update_file_code",
     "patch_file",
     "run_shell_command",
-    "get_file_dependencies",
-    "get_file_dependents",
 }
 
 

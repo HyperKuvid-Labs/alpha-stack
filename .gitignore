@@ -21,9 +21,11 @@ tempCodeRunnerFile.py
 # Build artifacts
 build/
 alphastack.egg-info/
+/bin/alphastack-tui
 /examples
 open_router.ipynb
 test.py
 /test_output
 /testing
-experiment/
+/test_cuda
+/created_projects

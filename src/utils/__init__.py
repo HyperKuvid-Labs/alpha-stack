@@ -5,7 +5,7 @@ from .helpers import (
     GENERATABLE_FILES, GENERATABLE_FILENAMES
 )
 from .tools import ToolHandler
-from .dependencies import DependencyAnalyzer, DependencyFeedbackLoop, DependencyError, TreeNode
+from .dependencies import DependencyAnalyzer, TreeNode
 from .prompt_manager import PromptManager
 from .error_tracker import ErrorTracker
 
@@ -15,6 +15,6 @@ __all__ = [
     "SKIP_DIRS",
     "GENERATABLE_FILES", "GENERATABLE_FILENAMES",
     "ToolHandler",
-    "DependencyAnalyzer", "DependencyFeedbackLoop", "DependencyError", "TreeNode",
+    "DependencyAnalyzer", "TreeNode",
     "PromptManager", "ErrorTracker"
 ]

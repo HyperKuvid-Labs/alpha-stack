@@ -2,7 +2,7 @@ import os
 import subprocess
 import threading
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 
 
 class ShellManager:
@@ -318,9 +318,24 @@ class ToolHandler:
                 new_content=args.get("new_content")
             )
         elif function_name == "get_file_dependencies":
-            return self._get_file_dependencies(args.get("file_path", ""))
+            return self._get_file_dependencies(
+                args.get("file_path", ""),
+                include_descriptions=bool(args.get("include_descriptions", False)),
+            )
         elif function_name == "get_file_dependents":
-            return self._get_file_dependents(args.get("file_path", ""))
+            return self._get_file_dependents(
+                args.get("file_path", ""),
+                include_descriptions=bool(args.get("include_descriptions", False)),
+            )
+        elif function_name == "get_file_description":
+            return self._get_file_description(args.get("file_path", ""))
+        elif function_name == "get_project_blueprint":
+            return self._get_project_blueprint()
+        elif function_name == "search_files":
+            return self._search_files(
+                query=args.get("query", ""),
+                limit=int(args.get("limit", 10) or 10),
+            )
         elif function_name == "batch_edit_files":
             return self._batch_edit_files(tasks=args.get("tasks", []))
         elif function_name == "batch_read_files":
@@ -778,7 +793,9 @@ class ToolHandler:
             "new": new_snippet,
         }
 
-    def _get_file_dependencies(self, file_path: str) -> Dict[str, Any]:
+    def _get_file_dependencies(
+        self, file_path: str, include_descriptions: bool = False
+    ) -> Dict[str, Any]:
         if not self.dependency_analyzer:
             return {"error": "Dependency analyzer not available"}
         if not file_path:
@@ -786,9 +803,20 @@ class ToolHandler:
         full_path = os.path.join(self.project_root, file_path)
         deps = self.dependency_analyzer.get_dependencies(full_path)
         rel_deps = [os.path.relpath(p, self.project_root) for p in deps]
-        return {"success": True, "file_path": file_path, "dependencies": rel_deps}
+        payload: Dict[str, Any] = {
+            "success": True,
+            "file_path": file_path,
+            "dependencies": rel_deps,
+        }
+        if include_descriptions:
+            payload["descriptions"] = {
+                rel: self._lookup_dgat_description(rel) for rel in rel_deps
+            }
+        return payload
 
-    def _get_file_dependents(self, file_path: str) -> Dict[str, Any]:
+    def _get_file_dependents(
+        self, file_path: str, include_descriptions: bool = False
+    ) -> Dict[str, Any]:
         if not self.dependency_analyzer:
             return {"error": "Dependency analyzer not available"}
         if not file_path:
@@ -796,7 +824,93 @@ class ToolHandler:
         full_path = os.path.join(self.project_root, file_path)
         deps = self.dependency_analyzer.get_dependents(full_path)
         rel_deps = [os.path.relpath(p, self.project_root) for p in deps]
-        return {"success": True, "file_path": file_path, "dependents": rel_deps}
+        payload: Dict[str, Any] = {
+            "success": True,
+            "file_path": file_path,
+            "dependents": rel_deps,
+        }
+        if include_descriptions:
+            payload["descriptions"] = {
+                rel: self._lookup_dgat_description(rel) for rel in rel_deps
+            }
+        return payload
+
+    def _get_file_description(self, file_path: str) -> Dict[str, Any]:
+        if not self.dependency_analyzer:
+            return {"error": "Dependency analyzer not available"}
+        if not file_path:
+            return {"error": "file_path is required"}
+        desc = self._lookup_dgat_description(file_path)
+        if desc is None:
+            return {
+                "success": False,
+                "file_path": file_path,
+                "error": "no description found in dgat file tree",
+            }
+        return {"success": True, "file_path": file_path, "description": desc}
+
+    def _get_project_blueprint(self) -> Dict[str, Any]:
+        if not self.dependency_analyzer:
+            return {"error": "Dependency analyzer not available"}
+        blueprint = getattr(self.dependency_analyzer, "blueprint", "") or ""
+        if not blueprint:
+            return {"success": False, "error": "no dgat blueprint available"}
+        return {"success": True, "blueprint": blueprint}
+
+    def _search_files(self, query: str, limit: int = 10) -> Dict[str, Any]:
+        if not self.dependency_analyzer:
+            return {"error": "Dependency analyzer not available"}
+        if not query:
+            return {"error": "query is required"}
+        file_tree = getattr(self.dependency_analyzer, "file_tree", None)
+        if file_tree is None:
+            return {"success": False, "error": "dgat file tree not available"}
+
+        q = query.lower()
+        results: List[Dict[str, Any]] = []
+
+        def visit(node):
+            name = getattr(node, "name", "") or ""
+            rel = getattr(node, "rel_path", "") or ""
+            desc = getattr(node, "description", "") or ""
+            score = 0.0
+            if q == name.lower():
+                score = 100.0
+            elif q in name.lower():
+                score = 50.0 + (len(q) / max(len(name), 1)) * 50
+            elif q in desc.lower():
+                score = 25.0
+            if score > 0 and getattr(node, "is_file", False):
+                results.append({
+                    "rel_path": rel,
+                    "name": name,
+                    "description": desc,
+                    "score": score,
+                })
+            for child in getattr(node, "children", []) or []:
+                visit(child)
+
+        visit(file_tree)
+        results.sort(key=lambda r: r["score"], reverse=True)
+        return {"success": True, "query": query, "results": results[:limit]}
+
+    def _lookup_dgat_description(self, rel_path: str) -> Optional[str]:
+        file_tree = getattr(self.dependency_analyzer, "file_tree", None)
+        if file_tree is None:
+            return None
+        target = rel_path.replace("\\", "/").lstrip("./")
+
+        def find(node) -> Optional[str]:
+            rp = (getattr(node, "rel_path", "") or "").replace("\\", "/").lstrip("./")
+            if rp == target and getattr(node, "is_file", False):
+                return getattr(node, "description", "") or ""
+            for child in getattr(node, "children", []) or []:
+                hit = find(child)
+                if hit is not None:
+                    return hit
+            return None
+
+        return find(file_tree)
 
     def _batch_edit_files(self, tasks: list) -> Dict[str, Any]:
         from .corrector_tool import batch_edit_files
