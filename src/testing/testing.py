@@ -64,9 +64,7 @@ class TestingPipeline:
         self.max_rounds = 200  # max tool call rounds in one continuous conversation
 
         self.state = PipelineState()
-        self.memory = AgentMemory()
-        self._memory_path = os.path.join(project_root, ".alpha_stack", "planner_memory.json")
-        self.memory.load(self._memory_path)
+        self.memory = AgentMemory(project_root=project_root, role="planner")
         self._cached_dep_graph: Optional[str] = None
 
     def _emit(self, event_type: str, message: str, **kwargs):
@@ -105,7 +103,7 @@ class TestingPipeline:
             dependency_graph=dep_graph,
             project_root=self.project_root,
             state=self.state,
-            memory=self.memory.render() if self.memory else "",
+            memory=self.memory.render(query=self.state.last_test_output) if self.memory else "",
             active_jobs=active_jobs,
         )
 
@@ -278,6 +276,10 @@ class TestingPipeline:
             self._sync_state()
             if self.state.tests_passed:
                 self._emit("success", "All tests passing")
+                try:
+                    self.memory.notify_success()
+                except Exception:
+                    pass
                 return self._build_result("All tests passing", tool_calls_made)
 
         msg = (
@@ -293,7 +295,7 @@ class TestingPipeline:
         self.tool_handler.cleanup()
 
         try:
-            self.memory.save(self._memory_path)
+            self.memory.save()
         except Exception as e:
             self._emit("warning", f"Failed to save planner memory: {e}")
 

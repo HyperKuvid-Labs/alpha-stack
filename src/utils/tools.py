@@ -222,6 +222,7 @@ class ToolHandler:
                  dependency_analyzer=None, tool_log_path: Optional[str] = None,
                  agent_name: Optional[str] = None):
         from .tool_call_log import ToolCallLogger
+        from .web_search import WebSearchCache
         self.project_root = project_root
         self.error_tracker = error_tracker
         self.dependency_analyzer = dependency_analyzer
@@ -231,6 +232,9 @@ class ToolHandler:
         self.last_test_output: str = ""
         self._gave_up: bool = False
         self.shell = ShellManager(cwd=project_root)
+        self._web_cache = WebSearchCache()
+        self._browse_cache: Dict[str, Dict[str, Any]] = {}
+        self._browse_lock = threading.Lock()
 
     def cleanup(self):
         """Kill any running shell processes. Call on pipeline exit."""
@@ -335,6 +339,16 @@ class ToolHandler:
             return self._search_files(
                 query=args.get("query", ""),
                 limit=int(args.get("limit", 10) or 10),
+            )
+        elif function_name == "web_search":
+            return self._web_search(
+                query=args.get("query", ""),
+                max_results=int(args.get("max_results", 5) or 5),
+            )
+        elif function_name == "browse_url":
+            return self._browse_url(
+                url=args.get("url", ""),
+                max_chars=int(args.get("max_chars", 8000) or 8000),
             )
         elif function_name == "batch_edit_files":
             return self._batch_edit_files(tasks=args.get("tasks", []))
@@ -911,6 +925,25 @@ class ToolHandler:
             return None
 
         return find(file_tree)
+
+    def _web_search(self, query: str, max_results: int) -> Dict[str, Any]:
+        if not query:
+            return {"error": "query is required"}
+        from .web_search import run_search
+        return run_search(query, max_results=max_results, cache=self._web_cache)
+
+    def _browse_url(self, url: str, max_chars: int) -> Dict[str, Any]:
+        if not url:
+            return {"error": "url is required"}
+        cached = self._browse_cache.get(url)
+        if cached is not None:
+            return {**cached, "cached": True}
+        from .web_browse import fetch_url
+        with self._browse_lock:
+            result = fetch_url(url, max_chars=max_chars)
+        if result.get("success"):
+            self._browse_cache[url] = result
+        return result
 
     def _batch_edit_files(self, tasks: list) -> Dict[str, Any]:
         from .corrector_tool import batch_edit_files

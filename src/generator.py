@@ -525,7 +525,7 @@ def call_orchestrator_agent(
         "orchestrator_agent.j2",
         filepath=filepath,
         blueprint_context=blueprint_context,
-        orchestrator_memory=memory.render() if memory else "",
+        orchestrator_memory=memory.render(query=question) if memory else "",
     )
 
     result = _run_agentic_loop(
@@ -588,11 +588,12 @@ def process_orchestrator_batch(
         orchestrator_ref, pm, memory=memory,
     )
 
+    batch_query = " | ".join((q.get("question") or "")[:200] for q in queries)
     system_prompt = pm.render(
         "orchestrator_agent.j2",
         filepath="multiple agents",
         blueprint_context=blueprint_context,
-        orchestrator_memory=memory.render() if memory else "",
+        orchestrator_memory=memory.render(query=batch_query) if memory else "",
     )
 
     # Build user message with history + all queries

@@ -198,7 +198,7 @@ class ParallelOrchestrator:
         self._gen_log = None  # Initialized in execute()
         self.dep_registry = DependencyRegistry()
         self.mailbox = OrchestratorMailbox()
-        self.memory = AgentMemory()
+        self.memory = AgentMemory(project_root=output_base_dir, role="orchestrator")
         self._tasks: Dict[str, Dict[str, Any]] = {}
         self.blueprint_context: Optional[Dict[str, Any]] = None
         self._shutdown = ThreadEvent()
@@ -433,3 +433,8 @@ class ParallelOrchestrator:
             logger.warning(f"[Orchestrator] {len(failed_final)} files failed after retries: {failed_final}")
 
         logger.info(f"[Orchestrator] Complete. {self.tracker.summary()}")
+
+        try:
+            self.memory.save()
+        except Exception as e:
+            logger.debug(f"[Orchestrator] memory.save() failed: {e}")

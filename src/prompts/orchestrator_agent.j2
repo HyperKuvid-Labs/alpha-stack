@@ -35,7 +35,8 @@ A child agent generating `{{ filepath }}` needs your help.
 - `regenerate_file(file_path, corrections)` — re-spawn a child agent to regenerate a file from scratch with your correction instructions appended
 
 {% if orchestrator_memory %}
-### Memory (your previous actions this session)
+### Memory
+Below: your working buffer for this session, lessons distilled from past sessions, and similar past episodes retrieved by the current query.
 ```
 {{ orchestrator_memory }}
 ```

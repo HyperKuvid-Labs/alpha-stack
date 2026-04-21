@@ -88,3 +88,79 @@ def test_tool_without_analyzer_returns_error():
     handler = ToolHandler(project_root="/tmp", dependency_analyzer=None)
     r = handler.handle_function_call("get_file_description", {"file_path": "x.py"})
     assert "error" in r
+
+
+def test_web_search_dispatches_and_caches(handler, monkeypatch):
+    calls = {"n": 0}
+
+    class FakeDDGS:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def text(self, q, **kw):
+            calls["n"] += 1
+            return [
+                {"title": "t1", "href": "https://x/1", "body": "b1"},
+                {"title": "t2", "href": "https://x/2", "body": "b2"},
+            ]
+
+    import src.utils.web_search as ws
+    monkeypatch.setattr(ws, "_load_ddgs", lambda: FakeDDGS)
+
+    r1 = handler.handle_function_call(
+        "web_search", {"query": "asyncio", "max_results": 2}
+    )
+    assert r1["success"] and len(r1["results"]) == 2
+    assert r1["results"][0] == {"title": "t1", "url": "https://x/1", "snippet": "b1"}
+    assert r1["cached"] is False
+
+    r2 = handler.handle_function_call(
+        "web_search", {"query": "asyncio", "max_results": 2}
+    )
+    assert r2["cached"] is True
+    assert calls["n"] == 1  # cache served it
+
+
+def test_web_search_requires_query(handler):
+    r = handler.handle_function_call("web_search", {"query": ""})
+    assert "error" in r
+
+
+def test_browse_url_falls_back_to_http(handler, monkeypatch):
+    import src.utils.web_browse as wb
+
+    monkeypatch.setattr(wb, "_load_bh_helpers", lambda: None)
+    monkeypatch.setattr(wb, "_daemon_socket_present", lambda: False)
+
+    class FakeResp:
+        headers = {}
+
+        def read(self):
+            return (
+                b"<html><head><title>T</title></head>"
+                b"<body>hello <b>world</b></body></html>"
+            )
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(wb, "_http_open", lambda url, timeout: FakeResp())
+
+    r = handler.handle_function_call("browse_url", {"url": "https://x/p"})
+    assert r["success"] and r["mode"] == "http"
+    assert "hello world" in r["content"]
+    assert r["title"] == "T"
+
+    r2 = handler.handle_function_call("browse_url", {"url": "https://x/p"})
+    assert r2.get("cached") is True
+
+
+def test_browse_url_requires_url(handler):
+    r = handler.handle_function_call("browse_url", {"url": ""})
+    assert "error" in r

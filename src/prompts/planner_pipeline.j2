@@ -29,7 +29,8 @@ The following processes are currently running or recently completed. You MUST ma
 {% endif %}
 
 {% if memory %}
-### Memory (what you tried before — recent entries are detailed, older ones are summarized)
+## Memory
+Below: your recent working buffer, distilled lessons from past runs, similar past episodes retrieved by the current failure, and warnings about repeated actions. Use these to avoid repeating mistakes.
 ```
 {{ memory }}
 ```
@@ -72,6 +73,8 @@ Each file lists its classes, functions, internal dependencies (deps), external p
 - `get_file_dependents(file_path)` — What files import this file.
 - `batch_edit_files(tasks)` — **Parallel multi-file editing.** Provide a list of `{file_path, instructions}` tasks. Each task spawns an independent corrector agent — all in parallel. Use this when you need to edit 2+ files at once.
 - `batch_read_files(file_paths)` — **Parallel multi-file reading.** Much faster than calling `get_file_code` repeatedly.
+- `web_search(query, max_results)` — Cheap DuckDuckGo search. Returns {title, url, snippet}. Use first when you need info outside the repo.
+- `browse_url(url, max_chars)` — Fetch a page's text (real browser if available, plain HTTP otherwise). Only call after `web_search` when a snippet wasn't enough.
 - `mark_complete(reason)` — **Call this only after running tests and seeing them pass.** The system verifies your recent shell output contains passing test results. Provide a summary of what was fixed.
 - `give_up(reason)` — Call if you've exhausted all approaches and cannot fix the remaining issues.
 

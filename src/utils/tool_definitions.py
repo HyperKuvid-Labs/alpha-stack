@@ -112,6 +112,55 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "required": ["query"],
             },
         },
+        # ── external-context tools (web) ───────────────────────────────────
+        {
+            "name": "web_search",
+            "description": (
+                "Cheap web search (DuckDuckGo) for external context — library "
+                "docs, error-message lookups, API usage. Returns ranked "
+                "{title, url, snippet}. Cached per run. Prefer this first; "
+                "fall back to browse_url only when a snippet isn't enough."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query",
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "1-10, default 5",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+        {
+            "name": "browse_url",
+            "description": (
+                "Fetch a web page and return its readable text. Uses a real "
+                "Chrome via browser-harness CDP when the daemon is running "
+                "(handles JS-rendered pages); falls back to plain HTTP "
+                "otherwise. Heavier than web_search — only call it when you "
+                "have a specific URL from web_search that snippets didn't "
+                "cover."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "Absolute URL to fetch",
+                    },
+                    "max_chars": {
+                        "type": "integer",
+                        "description": "Truncate output (default 8000)",
+                    },
+                },
+                "required": ["url"],
+            },
+        },
         # ── structural / mutation tools (come after dgat analysis) ─────────
         {
             "name": "get_file_code",
@@ -437,6 +486,9 @@ PLANNER_TOOL_NAMES = {
     "get_file_dependents",
     "get_project_blueprint",
     "search_files",
+    # external context
+    "web_search",
+    "browse_url",
     # structural / mutation
     "get_file_code",
     "update_file_code",
