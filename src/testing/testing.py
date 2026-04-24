@@ -10,6 +10,8 @@ from ..utils.error_tracker import ErrorTracker
 from ..utils.tools import ToolHandler
 from ..utils.dependencies import build_dependency_graph_tree
 from ..utils.agent_memory import AgentMemory
+from ..config import get_sandbox_config
+from ..sandbox.cube import CubeSession, SandboxStartupError
 
 
 class PipelineState(BaseModel):
@@ -50,12 +52,15 @@ class TestingPipeline:
             project_root, ".alpha_stack", "tool_calls.jsonl"
         )
 
+        self.sandbox_session: Optional[CubeSession] = self._maybe_start_sandbox()
+
         self.tool_handler = ToolHandler(
             project_root,
             self.error_tracker,
             dependency_analyzer=self.dependency_analyzer,
             tool_log_path=tool_log_path,
             agent_name="planner",
+            sandbox_session=self.sandbox_session,
         )
 
         self.tool_definitions = InferenceManager.get_planner_tool_definitions()
@@ -71,6 +76,35 @@ class TestingPipeline:
         print(f"[{event_type}] {message}")
         if self.on_status:
             self.on_status(event_type, message, **kwargs)
+
+    def _maybe_start_sandbox(self) -> Optional[CubeSession]:
+        """Try to start a CubeSandbox; fall back to host execution on failure."""
+        cfg = get_sandbox_config()
+        template_id = cfg.get("template_id")
+        if not template_id:
+            self._emit(
+                "warning",
+                "No CubeSandbox template configured — running shell commands on host. "
+                "Configure with: cubemastercli tpl create-from-image --image "
+                "ccr.ccs.tencentyun.com/ags-image/sandbox-code:latest && "
+                "alphastack sandbox --template-id <id>",
+            )
+            return None
+        try:
+            session = CubeSession(
+                project_root=self.project_root,
+                template_id=template_id,
+                api_url=cfg.get("api_url"),
+                api_key=cfg.get("api_key"),
+            ).start()
+            self._emit("step", f"CubeSandbox started (template={template_id}).")
+            return session
+        except SandboxStartupError as exc:
+            self._emit("warning", f"Sandbox startup failed, falling back to host: {exc}")
+            return None
+        except Exception as exc:
+            self._emit("warning", f"Unexpected sandbox startup error: {exc}")
+            return None
 
     def _build_dependency_graph(self, force_rebuild: bool = False) -> str:
         """Build the dependency graph, cached. Rebuild if files were edited."""
@@ -293,6 +327,13 @@ class TestingPipeline:
         """Build the return dict from PipelineState — single source of truth."""
         # Kill any stalled background processes
         self.tool_handler.cleanup()
+
+        if self.sandbox_session is not None:
+            try:
+                self.sandbox_session.close()
+            except Exception as e:
+                self._emit("warning", f"Failed to close sandbox session: {e}")
+            self.sandbox_session = None
 
         try:
             self.memory.save()

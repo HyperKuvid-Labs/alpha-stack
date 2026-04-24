@@ -4,7 +4,7 @@
 
 # AlphaStack
 
-**AI-powered project generator that transforms natural language descriptions into complete, production-ready codebases with Docker configurations and automated testing.**
+**AI-powered project generator that transforms natural language descriptions into complete, production-ready codebases, validated inside a CubeSandbox microVM.**
 
 > 📄 **Paper submitted to ICML 2026**  
 > A novel approach to autonomous code generation using multi-agent systems with iterative self-healing and comprehensive validation across diverse programming paradigms.
@@ -25,11 +25,11 @@
 - Intelligent dependency resolution
 - Best practices and design patterns
 
-### **Docker-Based Validation**
-- Automated Docker container creation
-- Isolated build and test environments
-- Resource-managed execution (configurable CPU/memory limits)
-- Complete validation pipeline from build to test execution
+### **CubeSandbox-Based Validation**
+- Every shell command from the planner runs inside a [CubeSandbox](https://github.com/TencentCloud/CubeSandbox) microVM
+- Project tree mirrored to `/workspace` on session start; subsequent edits are written through
+- Drop-in `e2b_code_interpreter` SDK — no Docker daemon required
+- Sandbox is killed automatically when the pipeline exits
 
 ### **Extensive Evaluation Framework**
 - **40 Programming Challenges** across 4 languages:
@@ -45,11 +45,11 @@
 ## How It Works
 
 ```mermaid
-graph LR
+graptLR:> LR
     A[Natural Language Input] --> B[AI Analysis & Blueprint]
     B --> C[Multi-File Code Generation]
     C --> D[Dependency Resolution]
-    D --> E[Docker Configuration]
+    D --> E[CubeSandbox Provisioning]
     E --> F[Build Validation]
     F --> G{Build Success?}
     G -->|No| H[Planning Agent]
@@ -84,7 +84,7 @@ graph LR
 - **Iterative Refinement**: Continues until success or max iterations reached
 
 **Validation & Testing:**
-- **Docker Isolation**: Sandboxed build and test environments
+- **CubeSandbox Isolation**: Every shell command runs inside a microVM with `/workspace` mirroring the project tree
 - **Command Detection**: Automatically identifies build/test commands
 - **Log Analysis**: Extracts and analyzes error messages
 - **Success Verification**: Validates complete pipeline execution
@@ -96,7 +96,7 @@ graph LR
 **Requirements:** 
 - Python 3.9+
 - [Google Gemini API Key](https://makersuite.google.com/app/apikey)
-- Docker (optional, for validation)
+- [CubeSandbox](https://github.com/TencentCloud/CubeSandbox) (optional, for sandboxed validation)
 
 ```bash
 # Clone and install
@@ -108,16 +108,29 @@ pip install .
 alphastack setup
 ```
 
-**Docker Installation (Recommended):**
+**CubeSandbox Installation (Recommended):**
 ```bash
-# Install Docker Engine (Linux)
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
+# One-click install of the local CubeSandbox stack
+curl -sL https://github.com/tencentcloud/CubeSandbox/raw/master/deploy/one-click/online-install.sh | bash
 
-# Or via package manager (Ubuntu/Debian)
-sudo apt-get update
-sudo apt-get install docker-ce docker-ce-cli containerd.io
+# Create a sandbox template based on the official code-runner image
+cubemastercli tpl create-from-image \
+    --image ccr.ccs.tencentyun.com/ags-image/sandbox-code:latest \
+    --writable-layer-size 1G
+
+# Wire the template id into AlphaStack (overrideable via env vars)
+alphastack sandbox --template-id <id>
 ```
+
+**Sandbox environment variables:**
+
+| Variable             | Default                  | Purpose                                            |
+|----------------------|--------------------------|----------------------------------------------------|
+| `E2B_API_URL`        | `http://127.0.0.1:3000`  | CubeSandbox API endpoint                           |
+| `E2B_API_KEY`        | `dummy`                  | API key (CubeSandbox local mode does not enforce) |
+| `CUBE_TEMPLATE_ID`   | _(unset)_                | Template id for the sandbox image                  |
+
+If `CUBE_TEMPLATE_ID` (or the saved config) is missing, the testing pipeline falls back to running shell commands directly on the host and prints instructions on how to set it up.
 
 ## Usage
 
@@ -222,9 +235,11 @@ alpha-stack/
 │   ├── agents/                  # Multi-agent system
 │   │   ├── planner.py          # Planning agent for error analysis
 │   │   └── corrector.py        # Correction agent for fixes
-│   ├── docker/                  # Docker integration
-│   │   ├── generator.py        # Dockerfile generation
-│   │   └── testing.py          # Docker-based validation
+│   ├── sandbox/                 # CubeSandbox integration
+│   │   └── cube.py             # CubeSession + SandboxShellManager
+│   ├── testing/                 # Planner-driven testing pipeline
+│   │   ├── eval_generator.py   # Test-file blueprint + generator
+│   │   └── testing.py          # TestingPipeline (sandbox lifecycle)
 │   ├── prompts/                 # Jinja2 prompt templates
 │   │   └── eval/               # Evaluation challenges
 │   │       ├── cuda/           # 10 CUDA challenges
@@ -269,19 +284,20 @@ alpha-stack/
 - Uses language-specific parsers for syntax validation
 - Tracks changes to prevent infinite loops
 
-### Docker Integration
+### CubeSandbox Integration
 
 **Features**:
-- Automatic Dockerfile generation based on project type
-- Multi-stage builds for optimized images
-- Resource management (configurable CPU/memory limits)
-- Network isolation and security
-- Support for custom base images
+- Per-pipeline microVM provisioned from a configured template
+- Project tree mirrored to `/workspace` on session start; subsequent edits are written through
+- Shell commands stream stdout/stderr live so the planner can detect stalls
+- Sandbox is killed automatically when the pipeline exits (no leaked microVMs)
+- Falls back to host execution when no template is configured
 
-**Testing Framework** (`src/docker/testing.py`):
-- Command detection (build, test, run commands)
+**Testing Framework** (`src/testing/testing.py` + `src/sandbox/cube.py`):
+- `CubeSession` owns the sandbox handle and file mirroring
+- `SandboxShellManager` is a drop-in replacement for the host `ShellManager`
 - Real-time log capture and analysis
-- Iterative error resolution with max iteration limits
+- Iterative error resolution with max round limits
 - Success/failure validation with detailed reporting
 
 ### Prompt Engineering
@@ -294,7 +310,7 @@ alpha-stack/
   - Folder structure planning
   - File content generation
   - Error correction strategies
-  - Docker configuration
+  - Sandbox-aware planner instructions
 
 ---
 
@@ -304,7 +320,7 @@ alpha-stack/
 - **Languages**: Python, JavaScript/TypeScript, Go, Rust, Java, C/C++, CUDA, and more
 - **Frameworks**: Flask, FastAPI, Express.js, React, Vue, Next.js, etc.
 - **Project Types**: Web APIs, CLI tools, data processors, system utilities, GPU kernels
-- **File Types**: Source code, configuration, tests, documentation, Docker files
+- **File Types**: Source code, configuration, tests, documentation
 
 ### Self-Healing Iterations
 - **Dependency Resolution**: Automatically resolves missing packages and version conflicts
@@ -312,11 +328,11 @@ alpha-stack/
 - **Test Fixes**: Addresses failing tests, missing test dependencies, assertion errors
 - **Max Iterations**: Configurable (default: 5 per phase)
 
-### Docker Validation
-- **Build Time**: Typically 1-5 minutes depending on project complexity
-- **Test Execution**: Isolated environment with resource limits
+### CubeSandbox Validation
+- **Startup**: Sub-second microVM provisioning per pipeline run
+- **Test Execution**: Isolated `/workspace` mirroring the project tree
 - **Success Rate**: High success rate on Tier 1-2 challenges (>80%)
-- **Resource Usage**: Configurable memory (default: 25% of system) and CPU (default: 50%)
+- **Lifecycle**: Single sandbox per project run, killed on completion
 
 ---
 
@@ -328,7 +344,7 @@ This work introduces a novel approach to autonomous code generation that address
 
 1. **Multi-Agent Architecture**: Separation of planning and correction concerns for better error resolution
 2. **Iterative Self-Healing**: Autonomous error detection and correction without human intervention
-3. **Comprehensive Validation**: End-to-end validation from build to test execution in isolated environments
+3. **Comprehensive Validation**: End-to-end validation from build to test execution inside CubeSandbox microVMs
 4. **Cross-Language Evaluation**: Diverse evaluation suite spanning different programming paradigms
 5. **Tool-Augmented Reasoning**: Integration of file operations and command execution for context-aware fixes
 
@@ -344,7 +360,7 @@ This work introduces a novel approach to autonomous code generation that address
 The evaluation framework (`src/prompts/eval/`) provides a standardized benchmark with:
 - 40 challenges across 4 languages and 4 difficulty tiers
 - Clear success criteria (build success, test pass rate)
-- Reproducible evaluation in Docker containers
+- Reproducible evaluation inside CubeSandbox microVMs
 - Metrics for iteration count, time to solution, and code quality
 
 **For more details on the evaluation suite, see** [`src/prompts/eval/README.md`](src/prompts/eval/README.md)

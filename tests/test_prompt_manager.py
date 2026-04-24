@@ -13,8 +13,10 @@ def pm():
 def test_listing_templates(pm):
     templates = pm.list_templates()
     assert "planner_pipeline.j2" in templates
-    assert "dockerfile_generation.j2" in templates
+    assert "test_file_blueprint.j2" in templates
     assert "ping_greeting.j2" in templates
+    assert "dockerfile_generation.j2" not in templates
+    assert "test_dockerfile_blueprint.j2" not in templates
 
 
 def test_ping_greeting_renders(pm):

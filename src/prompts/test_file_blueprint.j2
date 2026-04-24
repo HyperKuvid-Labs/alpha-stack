@@ -1,4 +1,4 @@
-You are a test/Dockerfile planning agent. Create blueprint for test files and Dockerfile.
+You are a test planning agent. Create a blueprint for test files.
 
 ## Project Context
 
@@ -35,13 +35,11 @@ No external dependencies
 
 ## Task
 
-Create blueprint for:
-1. **Test Files**: Which source files need tests, where to place them
-2. **Dockerfile**: Requirements based on tech stack
+Create a blueprint of **test files**: which source files need tests and where each test file should live.
 
 ## Output
 
-Return ONLY JSON array:
+Return ONLY a JSON array:
 ```json
 [
   {
@@ -50,10 +48,6 @@ Return ONLY JSON array:
     "test_file_path": "tests/test_main.py",
     "description": "Unit tests for main.py",
     "test_framework": "pytest"
-  },
-  {
-    "type": "dockerfile",
-    "description": "Dockerfile for Python project with pytest"
   }
 ]
 ```

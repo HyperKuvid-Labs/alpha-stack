@@ -62,10 +62,10 @@ class TestFileGeneratorEval:
             "external_dependencies": external_deps
         }
 
-    def generate_test_dockerfile_blueprint(self) -> List[Dict]:
+    def generate_test_file_blueprint(self) -> List[Dict]:
         metadata_context = self._extract_metadata_context()
 
-        prompt = self.pm.render("test_dockerfile_blueprint.j2",
+        prompt = self.pm.render("test_file_blueprint.j2",
             software_blueprint=self.software_blueprint,
             folder_structure=self.folder_structure,
             file_output_format=self.file_output_format,
@@ -180,62 +180,6 @@ class TestFileGeneratorEval:
 
         return generated_files
 
-    def generate_dockerfile(self) -> bool:
-        metadata_context = self._extract_metadata_context()
-
-        prompt = self.pm.render("dockerfile_generation.j2",
-            software_blueprint=self.software_blueprint,
-            folder_structure=self.folder_structure,
-            file_output_format=self.file_output_format,
-            file_summaries=metadata_context["file_summaries"],
-            external_dependencies=metadata_context["external_dependencies"],
-            project_root=self.project_root
-        )
-
-        load_dotenv()
-        api_key = os.getenv("OPENROUTER_API_KEY")
-
-        client = OpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1")
-
-        messages = [
-            {"role": "user", "content": prompt}
-        ]
-
-        completion = retry_api_call(
-            client.chat.completions.create,
-            model=self.model_name,
-            messages=messages,
-            extra_headers={
-                "HTTP-Referer": "https://pradheep.dev",
-                "X-Title": "Alphastack",
-            },
-        )
-
-        resp = completion.choices[0].message.content if completion and completion.choices else ""
-        resp = resp or ""
-
-        dockerfile_content = resp.strip()
-
-        if dockerfile_content.startswith('```'):
-            lines = dockerfile_content.split('\n')
-            if len(lines) > 1:
-                dockerfile_content = '\n'.join(lines[1:])
-                if dockerfile_content.endswith('```'):
-                    dockerfile_content = dockerfile_content[:-3].rstrip()
-
-        dockerfile_path = os.path.join(self.project_root, "Dockerfile")
-        with open(dockerfile_path, 'w', encoding='utf-8') as f:
-            f.write(dockerfile_content)
-
-        self.error_tracker.log_change(
-            file_path=dockerfile_path,
-            change_description="Generated Dockerfile from project metadata",
-            error_context="Dockerfile generation phase",
-            actions=["generate_dockerfile"]
-        )
-
-        return True
-
     def resolve_test_dependencies(self, test_files: List[str]) -> Dict:
         if not test_files:
             return {"success": True, "resolved": 0}
@@ -264,25 +208,21 @@ class TestFileGeneratorEval:
         results = {
             "blueprint": None,
             "test_files": [],
-            "dockerfile": False,
             "dependency_resolution": None,
             "success": False
         }
 
         try:
-            blueprint = self.generate_test_dockerfile_blueprint()
+            blueprint = self.generate_test_file_blueprint()
             results["blueprint"] = blueprint
 
             test_files = self.generate_test_files(blueprint)
             results["test_files"] = test_files
 
-            dockerfile_success = self.generate_dockerfile()
-            results["dockerfile"] = dockerfile_success
-
             dep_results = self.resolve_test_dependencies(test_files)
             results["dependency_resolution"] = dep_results
 
-            results["success"] = dockerfile_success and len(test_files) > 0
+            results["success"] = len(test_files) > 0
 
         except Exception:
             pass

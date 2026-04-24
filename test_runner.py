@@ -22,30 +22,13 @@ from src.testing.testing import run_testing_pipeline
 # 
 # Set your test prompt here
 TEST_PROMPT = """
-Implement a lock-free bounded ring buffer queue using atomics.
-
-API:
-
-try_push(&self, T) -> Result<(), T> (fails if full).
-
-try_pop(&self) -> Option<T> (returns None if empty).
-Internals:
-
-Use AtomicUsize for head/tail indices.
-
-Use UnsafeCell or MaybeUninit array for storage.
-
-Careful use of Ordering::Acquire / Ordering::Release.
-Tests:
-
-Single-threaded correctness.
-
-Multi-threaded stress test (spawn producer and consumer threads).
-
-Demonstrate zero allocation after initialization.
-
-Show it's Send + Sync.
-
+A simple Python CLI tool named 'greeter' that:
+- Takes a --name argument (default: "world") and prints "Hello, <name>!".
+- Has a --shout flag that prints the greeting in uppercase.
+- Exposes a small function greet(name: str, shout: bool=False) -> str in a module,
+  and a console entry point.
+- Uses argparse, no third-party dependencies.
+- Include a couple of pytest unit tests for greet() covering default, custom name, and shout=True.
 """
 
 # Output directory for generated projec"

@@ -96,7 +96,7 @@ def cmd_generate(args):
     print("=" * 80)
 
     dep_result = result.get("dependency_resolution", {})
-    docker_result = result.get("docker_testing", {})
+    testing_result = result.get("testing", {})
     success = result.get("success", False)
 
     print(f"\nDependency Resolution: {'SUCCESS' if dep_result.get('success') else 'FAILED'}")
@@ -105,23 +105,20 @@ def cmd_generate(args):
         if remaining:
             print(f"   {len(remaining)} remaining issues")
 
-    print(f"\n🐳 Docker Build: {' SUCCESS' if docker_result.get('build_success') else ' FAILED'}")
-    if docker_result.get('build_success'):
-        print(f"   Iterations: {docker_result.get('build_iterations', 0)}")
-
-    print(f"\n Docker Tests: {' SUCCESS' if docker_result.get('tests_success') else ' FAILED'}")
-    if docker_result.get('tests_success'):
-        print(f"   Iterations: {docker_result.get('test_iterations', 0)}")
+    tests_passed = testing_result.get("tests_success", False)
+    print(f"\nSandboxed Tests: {'SUCCESS' if tests_passed else 'FAILED'}")
+    print(f"   Tool calls: {testing_result.get('tool_calls', 0)}")
+    if testing_result.get("gave_up"):
+        print("   Planner gave up before tests passed.")
 
     print(f"\n{'=' * 80}")
     if success:
-        print(" PROJECT GENERATION: COMPLETE SUCCESS")
+        print("PROJECT GENERATION: COMPLETE SUCCESS")
         print("\n   All dependencies resolved")
-        print("    Docker build successful")
-        print("    All tests passed")
+        print("   All tests passed in sandbox")
         print("\n   The project is ready to use!")
     else:
-        print("  PROJECT GENERATION: INCOMPLETE")
+        print("PROJECT GENERATION: INCOMPLETE")
         print("\n   Some steps may require manual fixes")
     print(f"\nTime: {result.get('elapsed_time', 0):.2f}s")
     print(f" Location: {result.get('project_path', 'unknown')}")
@@ -152,13 +149,11 @@ def cmd_list(args):
 
     for project in sorted(projects):
         project_path = os.path.join(output_dir, project)
-        dockerfile_exists = os.path.exists(os.path.join(project_path, "Dockerfile"))
         readme_exists = os.path.exists(os.path.join(project_path, "README.md"))
 
-        status = "🐳" if dockerfile_exists else "📄"
         readme_status = "📖" if readme_exists else ""
 
-        print(f"   {status} {project} {readme_status}")
+        print(f"   📄 {project} {readme_status}")
 
     print("-" * 40)
     print(f"   Total: {len(projects)} project(s)")
@@ -601,104 +596,38 @@ def interactive_mode():
 
     return 0 if success else 1
 
-# def cmd_eval(args):
-#     prompt_number, model_name = args.prompt_number, args.model_name
-#     from .eval_generator import eval_generate_project_batch
+def cmd_sandbox(args):
+    """Configure CubeSandbox connection details."""
+    from .config import set_sandbox_template, get_sandbox_config
 
-#     print("=" * 80)
-#     print("ALPHASTACK - Model Evaluation Mode")
-#     print("=" * 80)
-#     print(f"\nPrompt Number: {prompt_number}")
-#     print(f"Model: {model_name}")
-#     print()
+    template_id = (getattr(args, "template_id", None) or "").strip()
+    if not template_id:
+        cfg = get_sandbox_config()
+        print("Current CubeSandbox configuration:")
+        print(f"  template_id: {cfg.get('template_id') or '(unset)'}")
+        print(f"  api_url    : {cfg.get('api_url')}")
+        print(f"  api_key    : {cfg.get('api_key')}")
+        print(
+            "\nProvide --template-id <id> to update. "
+            "Create a template with:\n"
+            "  cubemastercli tpl create-from-image --image "
+            "ccr.ccs.tencentyun.com/ags-image/sandbox-code:latest"
+        )
+        return 0
 
-#     results = eval_generate_project_batch(
-#         prompt_number=prompt_number,
-#         output_base_dir="./eval_projects",
-#         model_name=model_name,
-#         on_status=status_handler
-#     )
+    api_url = getattr(args, "api_url", None) or None
+    api_key = getattr(args, "api_key", None) or None
+    ok = set_sandbox_template(template_id, api_url=api_url, api_key=api_key)
+    if not ok:
+        print("Failed to write sandbox config.")
+        return 1
+    print(f"Saved CubeSandbox template_id={template_id}.")
+    if api_url:
+        print(f"  api_url={api_url}")
+    if api_key:
+        print(f"  api_key={api_key}")
+    return 0
 
-#     if not results:
-#         print("\n❌ Evaluation failed")
-#         return 1
-
-#     print("\n" + "=" * 80)
-#     print("BATCH EVALUATION RESULTS")
-#     print("=" * 80)
-
-#     all_success = True
-#     for language, result in results.items():
-#         print(f"\n{'=' * 80}")
-#         print(f"LANGUAGE: {language.upper()}")
-#         print(f"{'=' * 80}")
-
-#         if not result:
-#             print(f" {language} evaluation failed")
-#             all_success = False
-#             continue
-
-#         metrics = result.get("metrics", {})
-#         dep_result = result.get("dependency_resolution", {})
-#         docker_result = result.get("docker_testing", {})
-
-#         print(f"\n⏱TIMING METRICS")
-#         print(f"   Blueprint Generation: {metrics.get('blueprint_generation_time', 0):.2f}s")
-#         print(f"   Folder Structure: {metrics.get('folder_structure_generation_time', 0):.2f}s")
-#         print(f"   File Format: {metrics.get('file_format_generation_time', 0):.2f}s")
-#         print(f"   First File: {metrics.get('first_file_generation_time', 0):.2f}s")
-#         print(f"   All Files: {metrics.get('all_files_generation_time', 0):.2f}s")
-#         print(f"   Dependency Analysis: {metrics.get('dependency_analysis_time', 0):.2f}s")
-#         print(f"   Dockerfile Generation: {metrics.get('dockerfile_generation_time', 0):.2f}s")
-#         print(f"   Dependency Resolution: {metrics.get('dependency_resolution_time', 0):.2f}s")
-#         print(f"   Docker Testing: {metrics.get('docker_testing_time', 0):.2f}s")
-#         print(f"   Total: {metrics.get('total_elapsed_time', 0):.2f}s")
-
-#         print(f"\nPROJECT METRICS")
-#         print(f"   Total Files Generated: {metrics.get('total_files_generated', 0)}")
-
-#         print(f"\nDEPENDENCY RESOLUTION")
-#         print(f"   Status: {'✅ SUCCESS' if metrics.get('dependency_resolution_success') else '❌ FAILED'}")
-#         print(f"   Iterations: {metrics.get('dependency_resolution_iterations', 0)}")
-#         print(f"   Remaining Errors: {metrics.get('dependency_remaining_errors_count', 0)}")
-
-#         if metrics.get('dependency_errors_by_iteration'):
-#             print(f"\n   Errors by Iteration:")
-#             for iteration, errors in metrics['dependency_errors_by_iteration'].items():
-#                 print(f"      Iteration {iteration}: {len(errors)} error(s)")
-#                 for error in errors[:3]:
-#                     print(f"         - {error['file']}: {error['error_type']}")
-#                 if len(errors) > 3:
-#                     print(f"         ... and {len(errors) - 3} more")
-
-#         print(f"\n🐳 DOCKER BUILD")
-#         print(f"   Status: {'SUCCESS' if metrics.get('docker_build_success') else ' FAILED'}")
-#         print(f"   Iterations: {metrics.get('docker_build_iterations', 0)}")
-
-#         print(f"\n🧪 DOCKER TESTS")
-#         print(f"   Status: {' SUCCESS' if metrics.get('docker_tests_success') else ' FAILED'}")
-#         print(f"   Iterations: {metrics.get('docker_test_iterations', 0)}")
-
-#         print(f"\n{'=' * 80}")
-#         if metrics.get('overall_success'):
-#             print("EVALUATION: COMPLETE SUCCESS")
-#         else:
-#             print("EVALUATION: INCOMPLETE")
-#             all_success = False
-
-#         print(f"\nMetrics saved to: {result.get('metrics_file', 'unknown')}")
-#         print(f"Project location: {result.get('project_path', 'unknown')}")
-
-#     print("\n" + "=" * 80)
-#     print("FINAL BATCH SUMMARY")
-#     print("=" * 80)
-#     if all_success:
-#         print("🎉 ALL LANGUAGES: COMPLETE SUCCESS")
-#     else:
-#         print("⚠️ SOME LANGUAGES: INCOMPLETE")
-#     print("=" * 80)
-
-#     return 0 if all_success else 1
 
 def main():
     if "--json-rpc" in sys.argv[1:]:
@@ -710,7 +639,7 @@ def main():
 
     parser = argparse.ArgumentParser(
         prog="alphastack",
-        description="ALPHASTACK - AI-powered project generator with Docker testing"
+        description="ALPHASTACK - AI-powered project generator with sandboxed testing"
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -753,29 +682,18 @@ def main():
     )
     blueprint_smoke_parser.set_defaults(func=cmd_blueprint_smoke)
 
-    # eval_parser = subparsers.add_parser("eval", help="Evaluate different frontier models for project generation with Alphastack's Architecture")
-    # eval_parser.add_argument(
-    #     "prompt_number",
-    #     type=int,
-    #     choices=range(1, 11),
-    #     metavar="PROMPT_NUMBER",
-    #     help="Prompt number (1-10)"
-    # )
-    # eval_parser.add_argument(
-    #     "--m", "--model-name",
-    #     dest="model_name",
-    #     required=True,
-    #     choices=[
-    #         "gemini-2.5-pro",
-    #         "gpt-5.1-codex-max",
-    #         "claude-sonnet-4.5",
-    #         "grok-code-fast-1",
-    #         "deepseek-v3.2",
-    #         "qwen-3-coder"
-    #     ],
-    #     help="Model name to use for evaluation"
-    # )
-    # eval_parser.set_defaults(func=cmd_eval)
+    sandbox_parser = subparsers.add_parser(
+        "sandbox",
+        help="Configure CubeSandbox connection (template_id, api_url, api_key)"
+    )
+    sandbox_parser.add_argument("--template-id", dest="template_id",
+                                help="CubeSandbox template id (created via cubemastercli tpl create-from-image)")
+    sandbox_parser.add_argument("--api-url", dest="api_url",
+                                help="CubeSandbox API URL (default: http://127.0.0.1:3000)")
+    sandbox_parser.add_argument("--api-key", dest="api_key",
+                                help="CubeSandbox API key (default: dummy)")
+    sandbox_parser.set_defaults(func=cmd_sandbox)
+
     args = parser.parse_args()
 
     if not args.command:

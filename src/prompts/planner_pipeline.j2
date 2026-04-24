@@ -36,6 +36,9 @@ Below: your recent working buffer, distilled lessons from past runs, similar pas
 ```
 {% endif %}
 
+## Environment
+Your `run_shell_command` calls execute inside a CubeSandbox microVM. The working directory is `/workspace`, which mirrors the project tree below. Use relative paths — they resolve against `/workspace`. No Docker is involved.
+
 ## Project Info
 - **Project root**: `{{ project_root }}`
 
