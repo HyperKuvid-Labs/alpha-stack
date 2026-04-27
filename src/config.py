@@ -175,7 +175,7 @@ def _map_alphastack_to_dgat(
     dgat_provider = _DGAT_PROVIDER_MAP.get(alphastack_provider, "openai")
 
     if dgat_provider == "openrouter" and not endpoint:
-        endpoint = "https://openrouter.ai/api"
+        endpoint = "https://openrouter.ai/api/v1"
     if dgat_provider == "openai" and not endpoint:
         endpoint = "https://api.openai.com/v1"
 

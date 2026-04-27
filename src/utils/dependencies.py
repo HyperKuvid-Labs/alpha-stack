@@ -1,12 +1,10 @@
 import os
 import json
-import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import networkx as nx
 
-from ..config import sync_dgat_config, _map_alphastack_to_dgat
 from .helpers import SKIP_DIRS
 from .inference import InferenceManager
 from .treesitter_parser import parse_file, TREE_SITTER_AVAILABLE
@@ -23,7 +21,7 @@ class TreeNode:
         self.children.append(child_node)
 
 
-_DGAT_SCAN_TIMEOUT_SECONDS = int(os.getenv("DGAT_SCAN_TIMEOUT", "1800"))
+_DGAT_SCAN_TIMEOUT_SECONDS = int(os.getenv("DGAT_SCAN_TIMEOUT", "300"))
 
 
 class DependencyAnalyzer:
@@ -45,6 +43,14 @@ class DependencyAnalyzer:
         self.folder_tree: Optional[TreeNode] = None
         self.blueprint: str = ""
         self.file_tree = None  # dgat FileTree (pydantic model) if loaded
+        # Dirty-tracking: planner-edited files awaiting the next `dgat update`.
+        self._dirty_files: Set[str] = set()
+        # Cached lookups rebuilt on every state load.
+        self._node_by_rel: Dict[str, Any] = {}
+        self._edge_by_pair: Dict[tuple, Any] = {}
+        # Active provider/model so run_update() can pass them straight through.
+        self._dgat_provider: Optional[str] = None
+        self._dgat_model: Optional[str] = None
 
     def set_folder_tree(self, folder_tree: TreeNode) -> None:
         self.folder_tree = folder_tree
@@ -54,38 +60,31 @@ class DependencyAnalyzer:
         project_root_path: str,
         folder_tree: TreeNode,
         folder_structure: str,
+        on_status=None,
     ) -> None:
+        from dgat.scanner import run_scan
+
+        def _emit(msg):
+            if on_status:
+                on_status("progress", msg)
+
         self.set_folder_tree(folder_tree)
         self.project_root = os.path.abspath(project_root_path)
 
-        active_provider = (
-            InferenceManager._active_provider_name
-            or InferenceManager._load_providers_json().get("default_provider")
-        )
-        if not active_provider:
-            raise RuntimeError("No active alpha-stack provider; cannot configure dgat")
-        active_model = None
-        if InferenceManager._active_provider is not None:
-            active_model = InferenceManager._active_provider.config.get("model")
-        sync_dgat_config(active_provider, model_override=active_model)
-        dgat_provider, _endpoint, model = _map_alphastack_to_dgat(
-            active_provider, model_override=active_model
-        )
-
-        scan_result = self._run_dgat_binary(dgat_provider, model)
-        if scan_result.returncode != 0:
-            stderr = (scan_result.stderr or scan_result.stdout or "").strip()
+        # run_scan() calls the C++ binary, streams output, detects the
+        # "scan complete. starting server" marker, kills the process at
+        # that point (before the HTTP server starts), and returns — so the
+        # 3 files (file_tree.json / dep_graph.json / dgat_blueprint.md)
+        # are written without ever hanging on the backend server.
+        _emit("Running dgat scan...")
+        result = run_scan(project_root_path, provider=None, model=None, deps_only=False)
+        if not result.success:
             raise RuntimeError(
-                f"dgat scan failed for {self.project_root} "
-                f"(provider='{dgat_provider}'): {stderr or 'no output'}"
+                f"dgat scan failed for {self.project_root}: {result.message}"
             )
+        _emit(f"dgat scan complete ({result.files_scanned} files, {result.edges} edges).")
 
-        dep_graph_obj, dep_raw = self._load_dep_graph()
-        self.file_tree = self._load_file_tree()
-        self.blueprint = self._read_text(os.path.join(self.project_root, "dgat_blueprint.md"))
-
-        self._populate_from_depgraph(dep_graph_obj, dep_raw)
-        self._supplement_with_treesitter()
+        self._load_state_from_disk()
 
     def get_dependencies(self, file_path: str) -> List[str]:
         return [
@@ -101,26 +100,6 @@ class DependencyAnalyzer:
 
     def get_dependency_details(self, file_path: str) -> List[Dict[str, Optional[str]]]:
         return self.dependency_details.get(file_path, [])
-
-    def _run_dgat_binary(
-        self, provider: str, model: Optional[str]
-    ) -> subprocess.CompletedProcess:
-        from dgat.scanner import get_binary_path
-
-        binary = str(get_binary_path())
-        cmd = [binary, self.project_root, f"--provider={provider}"]
-        if model:
-            cmd.append(f"--model={model}")
-        if os.getenv("DGAT_DEPS_ONLY"):
-            cmd.append("--deps-only")
-
-        return subprocess.run(
-            cmd,
-            cwd=self.project_root,
-            capture_output=True,
-            text=True,
-            timeout=_DGAT_SCAN_TIMEOUT_SECONDS,
-        )
 
     def _load_dep_graph(self) -> Tuple[Any, Dict[str, Any]]:
         from dgat.types import DepGraph
@@ -264,6 +243,235 @@ class DependencyAnalyzer:
                     self.dependency_details.setdefault(abs_file, []).append(
                         {"raw": module, "kind": "external", "path": None}
                     )
+
+    # ------------------------------------------------------------------
+    # State loading + incremental update
+    # ------------------------------------------------------------------
+    def _load_state_from_disk(self) -> None:
+        """Re-read dgat state files and rebuild graph/details/lookups.
+
+        Idempotent: clears previous state first. Called after `dgat scan`
+        and after each `dgat update`.
+        """
+        # Reset everything derived from dgat output (folder_tree is owned by
+        # the caller and stays untouched).
+        self.graph = nx.DiGraph()
+        self.project_files = set()
+        self.dependency_details = {}
+        self.file_symbols = {}
+        self._node_by_rel = {}
+        self._edge_by_pair = {}
+
+        dep_graph_obj, dep_raw = self._load_dep_graph()
+        self.file_tree = self._load_file_tree()
+        if self.project_root:
+            self.blueprint = self._read_text(
+                os.path.join(self.project_root, "dgat_blueprint.md")
+            )
+
+        self._populate_from_depgraph(dep_graph_obj, dep_raw)
+        self._supplement_with_treesitter()
+        self._build_lookup_caches(dep_graph_obj, dep_raw)
+
+    def _build_lookup_caches(self, dep_graph_obj, dep_raw: Dict[str, Any]) -> None:
+        """Index file_tree nodes by rel_path and edges by (from, to)."""
+        if self.file_tree is not None:
+            def _walk(node):
+                rp = (getattr(node, "rel_path", "") or "").replace("\\", "/").lstrip("./")
+                if rp and getattr(node, "is_file", False):
+                    self._node_by_rel[rp] = node
+                for child in getattr(node, "children", []) or []:
+                    _walk(child)
+            _walk(self.file_tree)
+
+        for raw_edge in dep_raw.get("edges") or []:
+            if not isinstance(raw_edge, dict):
+                continue
+            f = (raw_edge.get("from") or "").replace("\\", "/").lstrip("./")
+            t = (raw_edge.get("to") or "").replace("\\", "/").lstrip("./")
+            if f and t:
+                self._edge_by_pair[(f, t)] = raw_edge
+
+    def mark_dirty(self, rel_path: str) -> None:
+        """Flag a file as edited; the next `run_update()` will re-describe it."""
+        if not rel_path:
+            return
+        norm = rel_path.replace("\\", "/").lstrip("./")
+        self._dirty_files.add(norm)
+
+    def has_dirty(self) -> bool:
+        return bool(self._dirty_files)
+
+    def pop_dirty(self) -> Set[str]:
+        """Return and clear the dirty set."""
+        out = set(self._dirty_files)
+        self._dirty_files.clear()
+        return out
+
+    def is_dirty(self, rel_path: str) -> bool:
+        if not rel_path:
+            return False
+        return rel_path.replace("\\", "/").lstrip("./") in self._dirty_files
+
+    def run_update(self) -> Dict[str, Any]:
+        """Run `dgat update` and reload state.
+
+        Synchronous. Returns:
+          {"ok": bool, "elapsed": float, "changed": int, "message": str}
+        Caller decides whether to surface failures to the planner; this
+        never raises (DGAT going down should not break the pipeline).
+        """
+        import time
+
+        if not self.project_root:
+            return {"ok": False, "elapsed": 0.0, "changed": 0,
+                    "message": "no project_root set"}
+
+        # Need a prior state to update from. If file_tree.json is missing,
+        # dgat update silently no-ops — fall back to a full scan.
+        tree_path = os.path.join(self.project_root, "file_tree.json")
+        if not os.path.isfile(tree_path):
+            return {"ok": False, "elapsed": 0.0, "changed": 0,
+                    "message": "no prior dgat state; skipping update"}
+
+        t0 = time.time()
+        try:
+            from dgat.scanner import run_update as _dgat_run_update
+        except ImportError as exc:
+            return {"ok": False, "elapsed": 0.0, "changed": 0,
+                    "message": f"dgat package not installed: {exc}"}
+
+        try:
+            result = _dgat_run_update(self.project_root)
+        except Exception as exc:
+            return {"ok": False, "elapsed": time.time() - t0, "changed": 0,
+                    "message": f"dgat update raised: {exc}"}
+
+        elapsed = time.time() - t0
+        if not getattr(result, "success", False):
+            return {"ok": False, "elapsed": elapsed, "changed": 0,
+                    "message": getattr(result, "message", "update failed")}
+
+        # Reload state so callers see fresh descriptions/edges.
+        try:
+            self._load_state_from_disk()
+        except Exception as exc:
+            return {"ok": False, "elapsed": elapsed, "changed": 0,
+                    "message": f"state reload failed: {exc}"}
+
+        return {"ok": True, "elapsed": elapsed,
+                "changed": -1,  # we don't parse stdout; -1 = unknown
+                "message": "ok"}
+
+    # ------------------------------------------------------------------
+    # On-demand context lookups (used by ToolHandler)
+    # ------------------------------------------------------------------
+    def _normalize_rel(self, rel_path: str) -> str:
+        return (rel_path or "").replace("\\", "/").lstrip("./")
+
+    def find_node(self, rel_path: str):
+        return self._node_by_rel.get(self._normalize_rel(rel_path))
+
+    def get_file_context(self, rel_path: str, *, edge_desc_chars: int = 160) -> Dict[str, Any]:
+        """Compact context block for auto-attaching to file reads.
+
+        Shape:
+          {
+            "description": str,
+            "depends_on":  [{"path": str, "edge": str, "import_stmt": str}],
+            "depended_by": [{"path": str, "edge": str}],
+          }
+        Returns {} when DGAT has no record of the file (e.g. just-created).
+        """
+        node = self.find_node(rel_path)
+        if node is None:
+            return {}
+        rp = self._normalize_rel(rel_path)
+        out: Dict[str, Any] = {
+            "description": (getattr(node, "description", "") or "")[:600],
+        }
+
+        deps = []
+        for dep_rel in (getattr(node, "depends_on", []) or []):
+            edge = self._edge_by_pair.get((rp, dep_rel)) or {}
+            deps.append({
+                "path": dep_rel,
+                "edge": (edge.get("description") or "")[:edge_desc_chars],
+                "import_stmt": (edge.get("import_stmt") or "")[:120],
+            })
+        if deps:
+            out["depends_on"] = deps
+
+        dependents = []
+        for src_rel in (getattr(node, "depended_by", []) or []):
+            edge = self._edge_by_pair.get((src_rel, rp)) or {}
+            dependents.append({
+                "path": src_rel,
+                "edge": (edge.get("description") or "")[:edge_desc_chars],
+            })
+        if dependents:
+            out["depended_by"] = dependents
+
+        return out
+
+    def get_file_edges(self, rel_path: str) -> Dict[str, Any]:
+        """Full edge records for both directions. Used by `get_file_edges` tool."""
+        node = self.find_node(rel_path)
+        if node is None:
+            return {"outgoing": [], "incoming": []}
+        rp = self._normalize_rel(rel_path)
+        outgoing = []
+        for dep_rel in (getattr(node, "depends_on", []) or []):
+            edge = self._edge_by_pair.get((rp, dep_rel)) or {}
+            outgoing.append({
+                "to": dep_rel,
+                "import_stmt": edge.get("import_stmt") or "",
+                "description": edge.get("description") or "",
+            })
+        incoming = []
+        for src_rel in (getattr(node, "depended_by", []) or []):
+            edge = self._edge_by_pair.get((src_rel, rp)) or {}
+            incoming.append({
+                "from": src_rel,
+                "import_stmt": edge.get("import_stmt") or "",
+                "description": edge.get("description") or "",
+            })
+        return {"outgoing": outgoing, "incoming": incoming}
+
+    def compute_blast_radius(self, edited_rel_paths: Set[str], *, max_callers: int = 8) -> str:
+        """Render a planner-prompt blast-radius section for a set of edits.
+
+        Returns "" if nothing useful to show (no DGAT data, or no callers).
+        """
+        if not edited_rel_paths or self.file_tree is None:
+            return ""
+
+        sections = []
+        for rp in sorted(edited_rel_paths):
+            node = self.find_node(rp)
+            if node is None:
+                sections.append(f"▸ {rp} (NEW — not yet in DGAT graph)")
+                continue
+            desc = (getattr(node, "description", "") or "").strip()
+            callers = list(getattr(node, "depended_by", []) or [])[:max_callers]
+
+            block = [f"▸ {rp}"]
+            if desc:
+                block.append(f"  description: {desc[:300]}")
+            if callers:
+                block.append(f"  callers ({len(callers)}):")
+                for c in callers:
+                    edge = self._edge_by_pair.get((c, rp)) or {}
+                    edesc = (edge.get("description") or "").strip()
+                    if edesc:
+                        block.append(f"    • {c} — {edesc[:140]}")
+                    else:
+                        block.append(f"    • {c}")
+            else:
+                block.append("  callers: (none)")
+            sections.append("\n".join(block))
+
+        return "\n\n".join(sections)
 
     def _resolve_internal_import(
         self, source_file: str, module: str

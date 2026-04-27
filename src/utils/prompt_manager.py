@@ -56,11 +56,20 @@ class PromptManager:
         except Exception as e:
             raise ValueError(f"Error rendering template '{template_name}': {str(e)} (Search path: {self.templates_dir})")
     
-    def render_architecture_planning(self, user_prompt: Optional[str] = None, system_info: Optional[Dict[str, Any]] = None) -> str:
-        return self.render('architecture_planning.j2', user_prompt=user_prompt, system_info=system_info)
+    def render_architecture_planning(self, user_prompt: Optional[str] = None, system_info: Optional[Dict[str, Any]] = None, previous_attempt: Optional[str] = None, critique_issues: Optional[list] = None) -> str:
+        return self.render('architecture_planning.j2', user_prompt=user_prompt, system_info=system_info, previous_attempt=previous_attempt, critique_issues=critique_issues)
 
-    def render_project_blueprint(self, user_prompt: Optional[str] = None, system_info: Optional[Dict[str, Any]] = None, architecture_content: Optional[str] = None) -> str:
-        return self.render('project_blueprint.j2', user_prompt=user_prompt, system_info=system_info, architecture_content=architecture_content)
+    def render_project_blueprint(self, user_prompt: Optional[str] = None, system_info: Optional[Dict[str, Any]] = None, architecture_content: Optional[str] = None, previous_attempt: Optional[str] = None, critique_issues: Optional[list] = None) -> str:
+        return self.render('project_blueprint.j2', user_prompt=user_prompt, system_info=system_info, architecture_content=architecture_content, previous_attempt=previous_attempt, critique_issues=critique_issues)
+
+    def render_architecture_critic(self, user_prompt: str, architecture_content: str) -> str:
+        return self.render('architecture_critic.j2', user_prompt=user_prompt, architecture_content=architecture_content)
+
+    def render_blueprint_critic(self, architecture_content: str, folder_structure: str, file_formats_json: str) -> str:
+        return self.render('blueprint_critic.j2', architecture_content=architecture_content, folder_structure=folder_structure, file_formats_json=file_formats_json)
+
+    def render_test_critic(self, user_prompt: str, architecture_content: str, test_contracts_json: str) -> str:
+        return self.render('test_critic.j2', user_prompt=user_prompt, architecture_content=architecture_content, test_contracts_json=test_contracts_json)
     
     def list_templates(self) -> list:
         return self.env.list_templates()

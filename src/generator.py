@@ -716,12 +716,21 @@ def generate_file(
 # Architecture planning (Phase 0 — pure design, no code, no file structure)
 # ---------------------------------------------------------------------------
 
-def generate_architecture_plan(prompt: str, pm, provider_name: Optional[str] = None) -> Optional[str]:
-    """Generate a comprehensive architecture document (Markdown) from the user prompt."""
+def generate_architecture_plan(prompt: str, pm, provider_name: Optional[str] = None, previous_attempt: Optional[str] = None, critique_issues: Optional[list] = None) -> Optional[str]:
+    """Generate a comprehensive architecture document (Markdown) from the user prompt.
+
+    If `previous_attempt` and `critique_issues` are provided, runs in refinement mode:
+    the prompt asks the LLM to revise the previous attempt to fix the listed issues.
+    """
     provider = InferenceManager.get_active_provider()
     provider_name = InferenceManager._active_provider_name or ""
     system_info = get_system_info()
-    system_instruction = pm.render_architecture_planning(user_prompt=prompt, system_info=system_info)
+    system_instruction = pm.render_architecture_planning(
+        user_prompt=prompt,
+        system_info=system_info,
+        previous_attempt=previous_attempt,
+        critique_issues=critique_issues,
+    )
 
     if provider_name == "google":
         from google.genai import types
@@ -766,11 +775,17 @@ class ProjectBlueprint(BaseModel):
     file_formats: Dict[str, Any] = Field(description="Dictionary mapping precise filepaths from the folder structure to instructions on how each file must be generated")
 
 
-def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = None, architecture_content: Optional[str] = None) -> Optional[ProjectBlueprint]:
+def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = None, architecture_content: Optional[str] = None, previous_attempt: Optional[str] = None, critique_issues: Optional[list] = None) -> Optional[ProjectBlueprint]:
     provider = InferenceManager.get_active_provider()
     provider_name = InferenceManager._active_provider_name or ""
     system_info = get_system_info()
-    system_instruction = pm.render_project_blueprint(user_prompt=prompt, system_info=system_info, architecture_content=architecture_content)
+    system_instruction = pm.render_project_blueprint(
+        user_prompt=prompt,
+        system_info=system_info,
+        architecture_content=architecture_content,
+        previous_attempt=previous_attempt,
+        critique_issues=critique_issues,
+    )
 
     if provider_name == "google":
         from google.genai import types
@@ -865,6 +880,114 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
                 file=sys.stderr,
             )
             return None
+
+
+# ---------------------------------------------------------------------------
+# Critic helpers (Phase 0 + Phase 1 self-review)
+# ---------------------------------------------------------------------------
+
+def _call_llm_text(system_instruction: str, user_message: str, timeout: int = 60) -> Optional[str]:
+    """Single text-mode LLM call against the active provider. Returns raw text or None.
+
+    Times out after `timeout` seconds so a stalled critic never blocks the pipeline.
+    """
+    import concurrent.futures
+    provider = InferenceManager.get_active_provider()
+    provider_name = InferenceManager._active_provider_name or ""
+
+    def _do_call():
+        try:
+            if provider_name == "google":
+                from google.genai import types
+                from .utils.inference import retry_api_call
+                client = provider.get_client()
+                response = retry_api_call(
+                    client.models.generate_content,
+                    model=provider.model,
+                    contents=user_message,
+                    config=types.GenerateContentConfig(systemInstruction=system_instruction),
+                )
+                if not response or not response.text:
+                    return None
+                return response.text.strip()
+            else:
+                client = provider.get_client()
+                completion = client.chat.completions.create(
+                    model=provider.model,
+                    messages=[
+                        {"role": "system", "content": system_instruction},
+                        {"role": "user", "content": user_message},
+                    ],
+                )
+                text = completion.choices[0].message.content
+                return text.strip() if text else None
+        except Exception as e:
+            print(f"[critic] LLM call failed: {e}", file=sys.stderr)
+            return None
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        future = ex.submit(_do_call)
+        try:
+            return future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError:
+            print(f"[critic] call timed out after {timeout}s — skipping", file=sys.stderr)
+            return None
+
+
+def _parse_critic_issues(raw: Optional[str]) -> list:
+    """Extract the `issues` array from a critic JSON response. Returns [] on any failure."""
+    if not raw:
+        return []
+    json_str = _extract_json_object(raw) or raw
+    try:
+        data = json.loads(json_str)
+        issues = data.get("issues", [])
+        if isinstance(issues, list):
+            return [str(i).strip() for i in issues if str(i).strip()]
+    except (json.JSONDecodeError, AttributeError):
+        pass
+    return []
+
+
+def critique_architecture(user_prompt: str, architecture_content: str, pm) -> list:
+    """Run the architecture critic. Returns a list of concrete issues (possibly empty)."""
+    system_instruction = pm.render_architecture_critic(
+        user_prompt=user_prompt,
+        architecture_content=architecture_content,
+    )
+    raw = _call_llm_text(system_instruction, "Review the architecture per the rubric and return JSON.")
+    return _parse_critic_issues(raw)
+
+
+def critique_tests(user_prompt: str, architecture_content: str, blueprint: "ProjectBlueprint", pm) -> list:
+    """Run the test critic against test file contracts only. Returns a list of concrete issues."""
+    test_contracts = {
+        path: contract
+        for path, contract in blueprint.file_formats.items()
+        if "test" in path.lower()
+    }
+    if not test_contracts:
+        return []
+    test_contracts_json = json.dumps(test_contracts, indent=2)
+    system_instruction = pm.render_test_critic(
+        user_prompt=user_prompt,
+        architecture_content=architecture_content,
+        test_contracts_json=test_contracts_json,
+    )
+    raw = _call_llm_text(system_instruction, "Review the test contracts per the rubric and return JSON.")
+    return _parse_critic_issues(raw)
+
+
+def critique_blueprint(architecture_content: str, blueprint: "ProjectBlueprint", pm) -> list:
+    """Run the blueprint critic. Returns a list of concrete issues (possibly empty)."""
+    file_formats_json = json.dumps(blueprint.file_formats, indent=2)
+    system_instruction = pm.render_blueprint_critic(
+        architecture_content=architecture_content,
+        folder_structure=blueprint.folder_structure,
+        file_formats_json=file_formats_json,
+    )
+    raw = _call_llm_text(system_instruction, "Review the blueprint per the rubric and return JSON.")
+    return _parse_critic_issues(raw)
 
 
 def _extract_json_object(text: str) -> Optional[str]:
@@ -1013,6 +1136,11 @@ def generate_tree(resp, project_name="root"):
 # Main entry point
 # ---------------------------------------------------------------------------
 
+def _build_prompt_rules(filepath: str, details: dict) -> str:
+    import json as _json
+    return _json.dumps(details, indent=2)
+
+
 def generate_project(
     user_prompt,
     output_base_dir,
@@ -1041,15 +1169,85 @@ def generate_project(
         emit("error", "Failed to generate architecture plan.")
         return None
 
+    emit("info", "Reviewing architecture against problem statement...")
+    arch_issues = critique_architecture(user_prompt, architecture_content, pm)
+    if arch_issues:
+        emit("info", f"Architecture critic found {len(arch_issues)} issue(s); refining...")
+        for i, issue in enumerate(arch_issues, 1):
+            emit("info", f"  [{i}] {issue}")
+        refined = generate_architecture_plan(
+            user_prompt, pm, provider_name,
+            previous_attempt=architecture_content,
+            critique_issues=arch_issues,
+        )
+        if refined:
+            architecture_content = refined
+            emit("info", "Architecture refined.")
+        else:
+            emit("info", "Architecture refinement failed; keeping original.")
+    else:
+        emit("info", "Architecture review: no blocking issues.")
+
     alpha_stack_dir = os.path.join(output_base_dir, ".alpha_stack")
     os.makedirs(alpha_stack_dir, exist_ok=True)
     arch_path = os.path.join(alpha_stack_dir, "architecture.md")
     with open(arch_path, "w") as f:
         f.write(architecture_content)
-    emit("step", f"Architecture document saved to {arch_path}")
+    emit("info", f"Architecture document saved to {arch_path}")
 
     emit("step", "Planning file structure and generating project blueprint...")
     blueprint = generate_project_blueprint(user_prompt, pm, provider_name, architecture_content=architecture_content)
+
+    if blueprint:
+        emit("info", "Reviewing blueprint against architecture...")
+        bp_issues = critique_blueprint(architecture_content, blueprint, pm)
+        if bp_issues:
+            emit("info", f"Blueprint critic found {len(bp_issues)} issue(s); refining...")
+            for i, issue in enumerate(bp_issues, 1):
+                emit("info", f"  [{i}] {issue}")
+            previous_bp_json = json.dumps({
+                "software_blueprint_details": blueprint.software_blueprint_details,
+                "folder_structure": blueprint.folder_structure,
+                "file_formats": blueprint.file_formats,
+            }, indent=2)
+            refined_bp = generate_project_blueprint(
+                user_prompt, pm, provider_name,
+                architecture_content=architecture_content,
+                previous_attempt=previous_bp_json,
+                critique_issues=bp_issues,
+            )
+            if refined_bp and refined_bp.file_formats and refined_bp.folder_structure.strip():
+                blueprint = refined_bp
+                emit("info", "Blueprint refined.")
+            else:
+                emit("info", "Blueprint refinement failed; keeping original.")
+        else:
+            emit("info", "Blueprint review: no blocking issues.")
+
+        emit("info", "Reviewing test contracts against architecture and requirements...")
+        test_issues = critique_tests(user_prompt, architecture_content, blueprint, pm)
+        if test_issues:
+            emit("info", f"Test critic found {len(test_issues)} issue(s); refining test contracts...")
+            for i, issue in enumerate(test_issues, 1):
+                emit("info", f"  [{i}] {issue}")
+            previous_bp_json = json.dumps({
+                "software_blueprint_details": blueprint.software_blueprint_details,
+                "folder_structure": blueprint.folder_structure,
+                "file_formats": blueprint.file_formats,
+            }, indent=2)
+            refined_bp = generate_project_blueprint(
+                user_prompt, pm, provider_name,
+                architecture_content=architecture_content,
+                previous_attempt=previous_bp_json,
+                critique_issues=test_issues,
+            )
+            if refined_bp and refined_bp.file_formats and refined_bp.folder_structure.strip():
+                blueprint = refined_bp
+                emit("info", "Test contracts refined.")
+            else:
+                emit("info", "Test refinement failed; keeping current test contracts.")
+        else:
+            emit("info", "Test review: no blocking issues.")
 
     if not blueprint:
         emit(
@@ -1080,10 +1278,18 @@ def generate_project(
     emit("step", "Building project tree and generating files...")
     folder_tree = generate_tree(folder_struc, project_name="")
     dependency_analyzer = DependencyAnalyzer()
-    os.makedirs(output_base_dir, exist_ok=True)
+
+    # Files are written relative to the project root folder (folder_tree.value),
+    # so the orchestrator must write into output_base_dir/<project_name>/.
+    # Guard: if the LLM emitted a flat tree, folder_tree.value may be a filename ("Cargo.toml")
+    # rather than a directory name — fall back to output_base_dir in that case.
+    _root_name = folder_tree.value
+    _is_dir_name = _root_name and '.' not in _root_name
+    project_root_path = os.path.join(output_base_dir, _root_name) if _is_dir_name else output_base_dir
+    os.makedirs(project_root_path, exist_ok=True)
 
     # Build orchestrator with full blueprint context
-    orchestrator = ParallelOrchestrator(output_base_dir=output_base_dir, max_workers=20)
+    orchestrator = ParallelOrchestrator(output_base_dir=project_root_path, max_workers=20)
     orchestrator.set_blueprint(
         software_blueprint=software_blueprint,
         folder_structure=folder_struc,
@@ -1091,19 +1297,18 @@ def generate_project(
     )
 
     for filepath, details in file_format.items():
-        prompt_rules = details.get("purpose", "")
+        prompt_rules = _build_prompt_rules(filepath, details)
         orchestrator.add_node(filepath, prompt_rules)
 
     start_time = time.time()
     orchestrator.execute()
 
-    project_root_path = os.path.join(output_base_dir, folder_tree.value)
-
     if not os.path.exists(project_root_path):
         return None
 
     emit("step", "Starting dependency analysis for entire project...")
-    dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc)
+    dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc, on_status=on_status)
+    emit("progress", "Dependency graph scan complete.")
 
     from .utils.dependencies import build_dependency_graph_tree
     dep_graph = build_dependency_graph_tree(project_root_path, dependency_analyzer)

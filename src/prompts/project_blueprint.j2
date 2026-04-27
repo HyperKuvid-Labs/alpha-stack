@@ -1,4 +1,6 @@
-You are an expert Principal Software Architect. The architecture for this project has already been fully designed. Your job is to translate that architecture into a precise file/folder structure and detailed per-file contracts — ready for a code generation team to implement.
+You are an expert Principal Software Architect. The architecture for this project has already been fully designed. Your job is to translate that architecture into a precise file/folder structure and richly detailed per-file contracts — ready for a code generation team to implement without any further clarification.
+
+The contracts you produce are the ONLY specification the code generators will have. A vague contract produces broken code. Be concrete, exhaustive, and specific to this project.
 
 {% if system_info %}
 ### Target Operating Environment
@@ -12,6 +14,30 @@ The generated project must be fully compatible with the following system:
 ### Architecture Document (Phase 0 output — source of truth for this project)
 
 {{ architecture_content }}
+
+---
+{% endif %}
+
+{% if previous_attempt and critique_issues %}
+---
+
+### REFINEMENT MODE
+
+You previously produced a blueprint for this same architecture. A reviewer found the following concrete issues with that blueprint. Your task now is to produce an improved version that resolves EVERY issue listed below while preserving the parts that were correct.
+
+**Previous Blueprint (JSON):**
+```json
+{{ previous_attempt }}
+```
+
+**Issues to Fix:**
+{% for issue in critique_issues %}
+{{ loop.index }}. {{ issue }}
+{% endfor %}
+
+For each issue, ensure your revised blueprint directly addresses it. Fix the specific problems and keep everything else intact.
+
+IMPORTANT: You MUST return the COMPLETE blueprint JSON with ALL THREE top-level keys: `software_blueprint_details`, `folder_structure`, and `file_formats`. Do not return partial JSON or only the changed sections — return the full object every time.
 
 ---
 {% endif %}
@@ -66,23 +92,129 @@ A dictionary mapping each file path (relative to project root, matching `folder_
 
 For each file provide ALL of the following fields:
 
-- `purpose`: 3–5 sentences describing this file's single responsibility — what it does, what it owns, why it exists in this project, and how it fits into the overall architecture. Be specific to this project, not generic.
+---
 
-- `behaviors`: A list of 3–5 strings, each describing a distinct operation or responsibility that lives in this file. Write these as behavioural descriptions (what the logic does), NOT as function names or code. Example: "Validates that incoming configuration values fall within acceptable ranges before they are applied."
+### `purpose`
+3–5 sentences describing this file's single responsibility — what it does, what it owns, why it exists in this project, and exactly how it fits into the overall architecture. Be specific to this project, not generic.
 
-- `interfaces`: A plain-English description split into two parts:
-  - `provides`: What this file exposes or makes available to the rest of the system.
-  - `consumes`: What this file depends on or calls from other parts of the system.
+---
 
-- `dependencies`: JSON array of other local file paths (from `folder_structure`) that this file directly imports or calls. Use exact paths. Empty array `[]` if none.
+### `design_approach`
+Describe the concrete implementation strategy for this file:
+- What design pattern or structure to use (e.g., "singleton class", "pure functions module", "dataclass with class-level validation", "abstract base class with two concrete implementations", "event-driven with callback registration").
+- Any important invariants or constraints the implementation must respect (e.g., "must be thread-safe", "must be lazily initialised", "all public functions must be stateless").
+- If there is a non-obvious algorithmic approach, name it here (e.g., "use a two-pointer sweep for deduplication", "use BFS not DFS for traversal order").
+- For config or manifest files: describe the key sections and their purpose.
 
-- `external_packages`: JSON array of third-party package names this file will import (e.g. `["fastapi", "sqlalchemy"]`). Empty array `[]` if none.
+---
 
-RULES:
+### `behaviors`
+A list of 3–6 strings. Each string must describe a distinct, concrete operation or responsibility in this file. Write as precise behavioural statements — not vague role descriptions.
+
+BAD: "Validates configuration values."
+GOOD: "Reads the config dict and raises ConfigError if any required key from REQUIRED_KEYS is missing or if a numeric value is outside its allowed range."
+
+BAD: "Handles user input."
+GOOD: "Parses CLI arguments using argparse: accepts --config PATH (required), --verbose (flag), --output DIR (optional, defaults to './out'), and prints a formatted help message on --help."
+
+---
+
+### `interfaces`
+
+#### `provides`
+List every public item this file exports that other files will import. For each item give:
+- **Name** — the exact function, class, constant, or type name to use.
+- **Kind** — function / class / constant / type alias / decorator / context manager.
+- **Signature** — parameters with types and return type, in plain English (not code syntax). Example: "takes a filepath string and an optional encoding string, returns a dict."
+- **Purpose** — one sentence on what callers use it for.
+
+Example format (use this style):
+```
+- load_config (function): takes filepath: str → returns dict[str, Any].
+  Loads and validates the YAML config file; raises ConfigError on missing keys.
+- ConfigError (exception class): subclass of ValueError.
+  Raised by load_config when validation fails; callers catch this for user-facing error messages.
+- DEFAULT_TIMEOUT (constant): int, value 30.
+  Default HTTP timeout used by the request module.
+```
+
+If this is an `__init__.py`, list every symbol re-exported from the package.
+
+---
+
+### `dependencies`
+JSON array of other local file paths (from `folder_structure`) that this file directly imports or calls. Use exact paths. Empty array `[]` if none.
+
+---
+
+### `dependency_context`
+A dictionary mapping each path in `dependencies` to a single `why_needed` string — one sentence explaining what role that dependency plays in this file's implementation.
+
+The code generator already receives the actual code skeleton of each dependency via tree-sitter analysis, so you do NOT need to list specific export names here. Focus only on WHY this file needs that dependency — the intent behind the import.
+
+Example:
+```json
+{
+  "src/config.py": "Provides the validated settings dict that this module reads at startup to configure its retry and timeout behaviour.",
+  "src/models.py": "Supplies the domain model classes that this file instantiates when parsing incoming records."
+}
+```
+
+Empty object `{}` if `dependencies` is empty.
+
+---
+
+### `test_contract`
+Every file (source files AND test files) must include a `test_contract` block describing how this file should be verified.
+
+**For source files** — describe what a test suite for this file must cover:
+- **units_to_test**: List the specific functions/classes/methods that have non-trivial logic and must be unit tested.
+- **scenarios**: List 3–6 specific test scenarios (happy path, boundary conditions, error cases). Be concrete: name the input and expected output or expected exception.
+- **mocks_needed**: List any external systems or file dependencies to mock (e.g., "mock filesystem reads", "mock HTTP client", "mock the database session").
+- **fixtures**: Describe any shared test data or setup needed (e.g., "a minimal valid config dict", "a pre-populated in-memory DB with 3 users").
+
+**For test files** — describe exactly what this test file covers:
+- **module_under_test**: The source file being tested.
+- **test_class_or_functions**: List each test function or class to implement with a one-line description.
+- **setup_teardown**: Describe any setUp/tearDown or pytest fixture logic needed.
+- **assertions**: For each scenario, describe the key assertion (not just "it works" — name the value or exception checked).
+
+Example for a source file:
+```json
+{
+  "units_to_test": ["load_config", "validate_config"],
+  "scenarios": [
+    "load_config with a valid YAML file returns a dict with all required keys populated",
+    "load_config with a missing file raises FileNotFoundError",
+    "validate_config with a missing required key raises ConfigError naming the missing key",
+    "validate_config with an out-of-range numeric value raises ConfigError with the field name"
+  ],
+  "mocks_needed": ["mock open() / filesystem reads using pytest monkeypatch or tmp_path"],
+  "fixtures": ["a minimal valid config dict with all required keys at boundary values"]
+}
+```
+
+---
+
+### `external_packages`
+JSON array of third-party package names this file will import (e.g. `["fastapi", "sqlalchemy"]`). Empty array `[]` if none.
+
+---
+
+## CONTRACT RULES
+
 - Include EVERY file from `folder_structure` that contains logic or configuration — source files, entry points, config files, Dockerfile, dependency manifests, test files, `__init__.py` files.
-- For `__init__.py` files: `purpose` should describe what the package exposes/re-exports. `behaviors` should list what is re-exported or initialised. `interfaces.provides` should name the public surface.
-- For `Dockerfile` and dependency manifests: `purpose` should describe the runtime/build environment. `behaviors` should list the key setup steps. `external_packages` should list the key packages.
-- For test files: `purpose` must describe what is being tested, the specific scenarios covered (happy path, edge cases, error handling), and how test data is set up (fixtures, mocks, test DB). `behaviors` should describe each test scenario as a behavioural statement.
-- Do NOT invent function names, class names, or method signatures — describe purpose and behaviour only.
-- Skip only true boilerplate with zero logic: `.gitignore`, `README.md`, `LICENSE`.
-- The contracts must be fully consistent with the architecture document above — every component from the architecture must map to one or more files.
+
+- **Interfaces must name real exports.** You MUST specify concrete function names, class names, method names, and constant names. Vague descriptions like "provides utility functions" are not acceptable. The generator cannot write correct import statements without exact names.
+
+- **dependency_context is mandatory when dependencies is non-empty.** The code generator waits for dependency files to be ready before it starts writing; the dependency_context tells it WHY it needs each one. Do not list export names — the generator receives the actual code skeleton via tree-sitter analysis.
+
+- For `__init__.py` files: `interfaces.provides` must list every symbol the package re-exports by name.
+
+- For `Dockerfile` and dependency manifests: `purpose` describes the runtime/build environment. `behaviors` lists the key setup steps. `external_packages` lists the key packages. `test_contract` may be empty `{}`.
+
+- For test files: the `test_contract.test_class_or_functions` list must name every test function (e.g., `test_load_config_missing_file_raises`). The `behaviors` list must mirror these scenarios.
+
+- The contracts must be fully consistent with the architecture document above — every component, service, and data flow from the architecture must map to one or more files.
+
+- **Do NOT leave any field vague or generic.** Every sentence must be specific to this project. Pretend the engineer reading this contract has never seen the architecture document and must implement the file from the contract alone.

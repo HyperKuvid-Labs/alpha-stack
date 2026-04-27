@@ -55,9 +55,13 @@ def _render_entry(e: Dict[str, Any]) -> str:
     action = e.get("action", "")
     if action == "edit":
         desc = f": \"{e['detail']}\"" if e.get("detail") else ""
-        return f"{session_tag} edit {e.get('file', '')}{desc}"
+        affected = e.get("affected") or ""
+        affected_part = f"  → affected: {affected}" if affected else ""
+        return f"{session_tag} edit {e.get('file', '')}{desc}{affected_part}"
     elif action == "batch_edit":
-        return f"{session_tag} batch_edit [{e.get('file', '')}] ({e.get('detail', '')})"
+        affected = e.get("affected") or ""
+        affected_part = f"  → affected: {affected}" if affected else ""
+        return f"{session_tag} batch_edit [{e.get('file', '')}] ({e.get('detail', '')}){affected_part}"
     elif action == "shell":
         outcome = e.get("outcome", "")
         status = f" [{outcome}]" if outcome else ""
@@ -161,6 +165,7 @@ class MemoryStore:
         file: str = "",
         detail: str = "",
         outcome: str = "",
+        affected: str = "",
     ) -> None:
         error_class, error_hash = ("", "")
         if action == "shell" and outcome == "FAIL":
@@ -197,6 +202,8 @@ class MemoryStore:
             "error_class": error_class,
             "ts": time.time(),
         }
+        if affected:
+            entry["affected"] = affected
         self._working.append(entry)
 
         # Post-hoc importance refinement: a shell OK after a recent edit
@@ -211,21 +218,44 @@ class MemoryStore:
             if len(self._pending_warnings) > 5:
                 self._pending_warnings = self._pending_warnings[-5:]
 
-    def record_edit(self, session: int, file_path: str, description: str) -> None:
+    def record_edit(
+        self,
+        session: int,
+        file_path: str,
+        description: str,
+        affected_files: Optional[List[str]] = None,
+    ) -> None:
+        affected_str = ""
+        if affected_files:
+            names = [os.path.basename(p) for p in affected_files[:5] if p]
+            extra = max(0, len(affected_files) - 5)
+            affected_str = ", ".join(names) + (f" (+{extra} more)" if extra else "")
         self.record(
             session=session,
             action="edit",
             file=os.path.basename(file_path or ""),
             detail=description or "",
+            affected=affected_str,
         )
 
-    def record_batch_edit(self, session: int, tasks: list) -> None:
+    def record_batch_edit(
+        self,
+        session: int,
+        tasks: list,
+        affected_files: Optional[List[str]] = None,
+    ) -> None:
         files = [os.path.basename(t.get("file_path", "")) for t in (tasks or [])]
+        affected_str = ""
+        if affected_files:
+            names = [os.path.basename(p) for p in affected_files[:5] if p]
+            extra = max(0, len(affected_files) - 5)
+            affected_str = ", ".join(names) + (f" (+{extra} more)" if extra else "")
         self.record(
             session=session,
             action="batch_edit",
             file=", ".join(files[:5]),
             detail=f"{len(tasks or [])} files",
+            affected=affected_str,
         )
 
     def record_shell(self, session: int, command: str, output: str, success: bool = True) -> None:

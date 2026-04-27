@@ -241,6 +241,9 @@ class ToolHandler:
         self._web_cache = WebSearchCache()
         self._browse_cache: Dict[str, Dict[str, Any]] = {}
         self._browse_lock = threading.Lock()
+        # Per-round dedupe so a file's DGAT context is auto-attached at most
+        # once per planner round. Cleared by the pipeline at round boundaries.
+        self._recently_shown_context: set = set()
 
     def _mirror_to_sandbox(self, op: str, path: str) -> None:
         """Best-effort mirror of a successful local edit into the sandbox."""
@@ -259,6 +262,19 @@ class ToolHandler:
     def cleanup(self):
         """Kill any running shell processes. Call on pipeline exit."""
         self.shell.cleanup()
+
+    def clear_shown_context(self) -> None:
+        """Reset the per-round 'already shown' set. Called at round boundaries."""
+        self._recently_shown_context.clear()
+
+    def _mark_dgat_dirty(self, file_path: str) -> None:
+        """Flag a file edit so the next planner round runs `dgat update`."""
+        if not file_path or not self.dependency_analyzer:
+            return
+        try:
+            self.dependency_analyzer.mark_dirty(file_path)
+        except Exception:
+            pass
 
     def handle_function_call(self, function_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         self._log_tool_call(function_name, args)
@@ -353,6 +369,8 @@ class ToolHandler:
             )
         elif function_name == "get_file_description":
             return self._get_file_description(args.get("file_path", ""))
+        elif function_name == "get_file_edges":
+            return self._get_file_edges(args.get("file_path", ""))
         elif function_name == "get_project_blueprint":
             return self._get_project_blueprint()
         elif function_name == "search_files":
@@ -434,7 +452,14 @@ class ToolHandler:
         except Exception:
             print(f"[tool_result] {function_name} -> <unavailable>")
 
-    def _get_file_code(self, file_path: str, start_line: Optional[int] = None, end_line: Optional[int] = None) -> Dict[str, Any]:
+    def _get_file_code(
+        self,
+        file_path: str,
+        start_line: Optional[int] = None,
+        end_line: Optional[int] = None,
+        *,
+        attach_context: bool = True,
+    ) -> Dict[str, Any]:
         if not file_path:
             return {"error": "file_path is required"}
 
@@ -447,28 +472,50 @@ class ToolHandler:
                 lines = f.readlines()
 
             total_lines = len(lines)
-            if start_line is not None or end_line is not None:
+            sliced = start_line is not None or end_line is not None
+            if sliced:
                 start = max(int(start_line or 1), 1)
                 end = min(int(end_line or total_lines), total_lines)
                 if start > end:
                     return {"error": "start_line must be <= end_line"}
                 content = "".join(lines[start - 1:end])
-                return {
+                payload = {
                     "success": True,
                     "file_path": file_path,
                     "content": content,
                     "start_line": start,
                     "end_line": end,
-                    "total_lines": total_lines
+                    "total_lines": total_lines,
+                }
+            else:
+                content = "".join(lines)
+                payload = {
+                    "success": True,
+                    "file_path": file_path,
+                    "content": content,
+                    "total_lines": total_lines,
                 }
 
-            content = "".join(lines)
-            return {
-                "success": True,
-                "file_path": file_path,
-                "content": content,
-                "total_lines": total_lines
-            }
+            # Auto-attach DGAT context: only for full-file reads, only first
+            # time per round, only when DGAT actually knows about the file.
+            if attach_context and not sliced and self.dependency_analyzer:
+                norm = file_path.replace("\\", "/").lstrip("./")
+                if norm not in self._recently_shown_context:
+                    try:
+                        ctx = self.dependency_analyzer.get_file_context(file_path)
+                    except Exception:
+                        ctx = {}
+                    if ctx:
+                        if self.dependency_analyzer.is_dirty(file_path):
+                            ctx["stale"] = True
+                            ctx["note"] = (
+                                "This file was edited this round; context "
+                                "reflects pre-edit state and will refresh next round."
+                            )
+                        payload["context"] = ctx
+                        self._recently_shown_context.add(norm)
+
+            return payload
         except Exception as e:
             return {"error": f"Error reading file: {str(e)}"}
 
@@ -534,6 +581,7 @@ class ToolHandler:
                 f.write(new_content)
 
             self._mirror_to_sandbox("push", file_path)
+            self._mark_dgat_dirty(file_path)
 
             return {
                 "success": True,
@@ -593,6 +641,7 @@ class ToolHandler:
         try:
             os.remove(full_path)
             self._mirror_to_sandbox("delete", file_path)
+            self._mark_dgat_dirty(file_path)
             return {
                 "success": True,
                 "file_path": file_path
@@ -822,6 +871,7 @@ class ToolHandler:
             return {"error": f"Error writing patched file: {str(e)}"}
 
         self._mirror_to_sandbox("push", file_path)
+        self._mark_dgat_dirty(file_path)
 
         return {
             "success": True,
@@ -875,6 +925,33 @@ class ToolHandler:
                 rel: self._lookup_dgat_description(rel) for rel in rel_deps
             }
         return payload
+
+    def _get_file_edges(self, file_path: str) -> Dict[str, Any]:
+        """Full edge records for a file in both directions (incoming + outgoing).
+
+        Each edge carries the original `import_stmt` and the LLM-generated
+        edge description. Use this when you need to know *exactly how* one
+        file uses another — richer than `get_file_dependencies` alone.
+        """
+        if not self.dependency_analyzer:
+            return {"error": "Dependency analyzer not available"}
+        if not file_path:
+            return {"error": "file_path is required"}
+        try:
+            edges = self.dependency_analyzer.get_file_edges(file_path)
+        except Exception as e:
+            return {"success": False, "error": f"failed to load edges: {e}"}
+        if not edges.get("outgoing") and not edges.get("incoming"):
+            return {
+                "success": False,
+                "file_path": file_path,
+                "error": "no DGAT edge data for this file (may be new or unscanned)",
+            }
+        return {
+            "success": True,
+            "file_path": file_path,
+            **edges,
+        }
 
     def _get_file_description(self, file_path: str) -> Dict[str, Any]:
         if not self.dependency_analyzer:
@@ -997,7 +1074,9 @@ class ToolHandler:
 
         def _read_one(fp: str) -> Dict[str, Any]:
             try:
-                result = self._get_file_code(fp)
+                # Suppress auto-attached context on batch reads — they're
+                # exploratory and the cumulative context bloat isn't worth it.
+                result = self._get_file_code(fp, attach_context=False)
                 return {"file_path": fp, **result}
             except Exception as e:
                 return {"file_path": fp, "success": False, "error": str(e)}

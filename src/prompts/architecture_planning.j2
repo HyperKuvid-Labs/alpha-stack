@@ -7,6 +7,27 @@ Think deeply before writing. For each section, reason through the trade-offs, co
 {{ system_info | tojson(indent=2) }}
 {% endif %}
 
+{% if previous_attempt and critique_issues %}
+---
+
+### REFINEMENT MODE
+
+You previously produced an architecture document for this same problem statement. A reviewer found the following concrete issues with that document. Your task now is to produce an improved version that resolves EVERY issue listed below while preserving the parts that were correct.
+
+**Previous Architecture Document:**
+
+{{ previous_attempt }}
+
+**Issues to Fix:**
+{% for issue in critique_issues %}
+{{ loop.index }}. {{ issue }}
+{% endfor %}
+
+For each issue, ensure your revised document directly addresses it. Do not introduce new sections or scope creep — fix the specific problems and keep everything else.
+
+---
+{% endif %}
+
 ---
 
 ### Your Task

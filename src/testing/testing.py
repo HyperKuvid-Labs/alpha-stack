@@ -124,7 +124,40 @@ class TestingPipeline:
 
     def _build_planner_prompt(self) -> str:
         self._sync_state()
-        dep_graph = self._build_dependency_graph()
+
+        # Per-round housekeeping: clear "context already shown" so each new
+        # round can re-attach DGAT context to file reads.
+        self.tool_handler.clear_shown_context()
+
+        # If files were edited last round, run `dgat update` synchronously
+        # before composing the prompt — this refreshes file/edge descriptions
+        # and lets us render an accurate blast radius.
+        blast_radius = ""
+        force_rebuild = False
+        if self.dependency_analyzer and self.dependency_analyzer.has_dirty():
+            edited = self.dependency_analyzer.pop_dirty()
+            self._emit(
+                "step",
+                f"DGAT update: {len(edited)} edited file(s) → re-describing...",
+            )
+            update_res = self.dependency_analyzer.run_update()
+            if update_res.get("ok"):
+                self._emit(
+                    "step",
+                    f"DGAT update complete in {update_res.get('elapsed', 0):.1f}s",
+                )
+                force_rebuild = True
+            else:
+                self._emit(
+                    "warning",
+                    f"DGAT update skipped: {update_res.get('message', 'unknown')}",
+                )
+            try:
+                blast_radius = self.dependency_analyzer.compute_blast_radius(edited)
+            except Exception as exc:
+                self._emit("warning", f"blast-radius render failed: {exc}")
+
+        dep_graph = self._build_dependency_graph(force_rebuild=force_rebuild)
 
         # Prune finished jobs the planner has already seen, then render
         self.tool_handler.shell.prune_finished()
@@ -139,10 +172,28 @@ class TestingPipeline:
             state=self.state,
             memory=self.memory.render(query=self.state.last_test_output) if self.memory else "",
             active_jobs=active_jobs,
+            blast_radius=blast_radius,
         )
 
     EXCLUSIVE_TOOLS = frozenset({"batch_edit_files", "give_up", "mark_complete"})
     READ_TOOLS = frozenset({"get_file_code", "get_file_dependencies", "get_file_dependents", "batch_read_files"})
+
+    def _affected_files_for(self, rel_path: str) -> list:
+        """DGAT dependents of `rel_path`, used to enrich memory edit entries.
+
+        Reads the analyzer's pre-update state — accurate enough for working
+        memory; the post-update view becomes available next round via
+        the blast-radius section.
+        """
+        if not rel_path or not self.dependency_analyzer:
+            return []
+        try:
+            node = self.dependency_analyzer.find_node(rel_path)
+        except Exception:
+            return []
+        if node is None:
+            return []
+        return list(getattr(node, "depended_by", []) or [])
 
     def _record_tool_to_memory(self, func_name: str, func_args: dict, result):
         """Record a tool call to memory. Skips read-only tools."""
@@ -150,13 +201,29 @@ class TestingPipeline:
             return
 
         if func_name == "update_file_code":
-            self.memory.record_edit(0, func_args.get("file_path", ""), func_args.get("change_description", ""))
+            fp = func_args.get("file_path", "")
+            self.memory.record_edit(
+                0, fp, func_args.get("change_description", ""),
+                affected_files=self._affected_files_for(fp),
+            )
 
         elif func_name == "patch_file":
-            self.memory.record_edit(0, func_args.get("file_path", ""), func_args.get("description", ""))
+            fp = func_args.get("file_path", "")
+            self.memory.record_edit(
+                0, fp, func_args.get("description", ""),
+                affected_files=self._affected_files_for(fp),
+            )
 
         elif func_name == "batch_edit_files":
-            self.memory.record_batch_edit(0, func_args.get("tasks", []))
+            tasks = func_args.get("tasks", []) or []
+            affected: list = []
+            seen: set = set()
+            for t in tasks:
+                for a in self._affected_files_for(t.get("file_path", "")):
+                    if a not in seen:
+                        seen.add(a)
+                        affected.append(a)
+            self.memory.record_batch_edit(0, tasks, affected_files=affected)
 
         elif func_name == "run_shell_command":
             if isinstance(result, dict):

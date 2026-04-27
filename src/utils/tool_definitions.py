@@ -76,6 +76,26 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
             },
         },
         {
+            "name": "get_file_edges",
+            "description": (
+                "PRIMARY tool. Full directional edges for a file — both "
+                "outgoing (what it imports) and incoming (what imports it), "
+                "each with the original import statement and an LLM-generated "
+                "description of *how* one file uses another. Use this when "
+                "`get_file_dependencies`/`get_file_dependents` is too thin."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Relative path to the file",
+                    },
+                },
+                "required": ["file_path"],
+            },
+        },
+        {
             "name": "get_project_blueprint",
             "description": (
                 "PRIMARY tool. Return the dgat-synthesized architectural "
@@ -484,6 +504,7 @@ PLANNER_TOOL_NAMES = {
     "get_file_description",
     "get_file_dependencies",
     "get_file_dependents",
+    "get_file_edges",
     "get_project_blueprint",
     "search_files",
     # external context
@@ -508,6 +529,7 @@ EXECUTOR_TOOL_NAMES = {
     "get_file_description",
     "get_file_dependencies",
     "get_file_dependents",
+    "get_file_edges",
     "search_files",
     # structural / mutation
     "get_file_code",

@@ -28,6 +28,16 @@ The following processes are currently running or recently completed. You MUST ma
 ```
 {% endif %}
 
+{% if blast_radius %}
+## Blast Radius (your last edits)
+DGAT re-described the files you edited last round. Below is each edited file's
+current description plus its callers — the files most likely to break or need
+follow-up changes. Read these callers before declaring success.
+```
+{{ blast_radius }}
+```
+{% endif %}
+
 {% if memory %}
 ## Memory
 Below: your recent working buffer, distilled lessons from past runs, similar past episodes retrieved by the current failure, and warnings about repeated actions. Use these to avoid repeating mistakes.
@@ -69,11 +79,12 @@ Each file lists its classes, functions, internal dependencies (deps), external p
 
 ## Tools
 - `run_shell_command(command)` — Run any shell command. If a command stalls (no output for 60s), it stays alive in the background and you get a `job_id`. Use `check_job <job_id>` to see new output, `kill_job <job_id>` to stop it, or `list_jobs` to see all jobs. You can run other commands while a job is stalled.
-- `get_file_code(file_path)` — Read a file's contents. Supports `start_line`/`end_line` for slicing.
+- `get_file_code(file_path)` — Read a file's contents. Supports `start_line`/`end_line` for slicing. **When you read a full file (no slice), the result is auto-augmented with a `context` block: DGAT description, deps with edge descriptions, and dependents.** Repeat reads in the same round skip this to save tokens. If you just edited the file this round, `context.stale = true` — descriptions will refresh next round.
 - `update_file_code(file_path, new_content, change_description)` — Replace entire file content with fixed code.
 - `patch_file(file_path, fix_type, description, ...)` — Surgical edit: `replace_lines`, `delete_lines`, `insert_after_line`, or `full_rewrite`.
 - `get_file_dependencies(file_path)` — What internal files this file imports.
 - `get_file_dependents(file_path)` — What files import this file.
+- `get_file_edges(file_path)` — Full directional edges (incoming + outgoing) with the original `import_stmt` and a one-sentence description of *how* one file uses another. Use when you need to know exactly what's used across an edge.
 - `batch_edit_files(tasks)` — **Parallel multi-file editing.** Provide a list of `{file_path, instructions}` tasks. Each task spawns an independent corrector agent — all in parallel. Use this when you need to edit 2+ files at once.
 - `batch_read_files(file_paths)` — **Parallel multi-file reading.** Much faster than calling `get_file_code` repeatedly.
 - `web_search(query, max_results)` — Cheap DuckDuckGo search. Returns {title, url, snippet}. Use first when you need info outside the repo.

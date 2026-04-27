@@ -214,7 +214,7 @@ def cmd_blueprint_smoke(args):
         print("Project description is required!")
         return 1
 
-    provider_name = getattr(args, "provider", None) or "vllm"
+    provider_name = getattr(args, "provider", None) or "openrouter"
     problem_statement_language = normalize_problem_statement_language(getattr(args, "language", None)) or "others"
 
     print("=" * 80)
@@ -279,7 +279,7 @@ class _RPCStreamWriter(io.TextIOBase):
 
 def _load_provider_options_local():
     config_path = Path(__file__).with_name("providers.json")
-    fallback = (["openrouter", "google", "openai", "vllm", "prime_intellect"], "openrouter")
+    fallback = (["openrouter", "google", "openai", "prime_intellect"], "openrouter")
     try:
         with open(config_path, "r") as f:
             config = json.load(f)
@@ -306,7 +306,7 @@ def _rpc_list_providers(req):
     model_defaults = _load_provider_model_defaults()
     payload = []
     for name in providers:
-        needs_key = name not in {"vllm"}
+        needs_key = True
         has_key = bool(get_provider_api_key(name)) if needs_key else True
         payload.append({
             "name": name,

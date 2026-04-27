@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alphastack"
-version = "0.1.6"
+version = "0.1.7"
 description = "AI-powered project generator with sandboxed testing"
 readme = "README.md"
 requires-python = ">=3.11"
