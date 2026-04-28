@@ -547,3 +547,17 @@ def get_planner_tool_definitions() -> List[Dict[str, Any]]:
 def get_executor_tool_definitions() -> List[Dict[str, Any]]:
     """Get tool definitions filtered for the executor agent (file read/write only)."""
     return [t for t in get_tool_definitions() if t["name"] in EXECUTOR_TOOL_NAMES]
+
+
+# Tools available to the architecture planning agent (Phase 0).
+# Research-only: no file mutation, no project-specific tools.
+ARCH_PLANNER_TOOL_NAMES = {
+    "web_search",
+    "browse_url",
+    "run_shell_command",
+}
+
+
+def get_arch_planner_tool_definitions() -> List[Dict[str, Any]]:
+    """Get tool definitions for the Phase 0 architecture planning agent."""
+    return [t for t in get_tool_definitions() if t["name"] in ARCH_PLANNER_TOOL_NAMES]

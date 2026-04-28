@@ -719,9 +719,15 @@ def generate_file(
 def generate_architecture_plan(prompt: str, pm, provider_name: Optional[str] = None, previous_attempt: Optional[str] = None, critique_issues: Optional[list] = None) -> Optional[str]:
     """Generate a comprehensive architecture document (Markdown) from the user prompt.
 
-    If `previous_attempt` and `critique_issues` are provided, runs in refinement mode:
-    the prompt asks the LLM to revise the previous attempt to fix the listed issues.
+    Runs as an agentic loop with web_search, browse_url, and run_shell_command so
+    the agent can research before writing. The final assistant message that contains
+    no tool calls is treated as the architecture document.
+
+    If `previous_attempt` and `critique_issues` are provided, runs in refinement mode.
     """
+    from .utils.tool_definitions import get_arch_planner_tool_definitions
+    from .utils.tools import ToolHandler
+
     provider = InferenceManager.get_active_provider()
     provider_name = InferenceManager._active_provider_name or ""
     system_info = get_system_info()
@@ -732,37 +738,26 @@ def generate_architecture_plan(prompt: str, pm, provider_name: Optional[str] = N
         critique_issues=critique_issues,
     )
 
-    if provider_name == "google":
-        from google.genai import types
-        from .utils.inference import retry_api_call
-        client = provider.get_client()
-        response = retry_api_call(
-            client.models.generate_content,
-            model=provider.model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                systemInstruction=system_instruction,
-            )
-        )
-        if not response or not response.text:
-            return None
-        return response.text.strip()
-    else:
-        messages = [
-            {"role": "system", "content": system_instruction},
-            {"role": "user", "content": prompt}
-        ]
+    tools = get_arch_planner_tool_definitions()
+    executor = ToolHandler(project_root=os.getcwd())
+
+    def execute_tool(name: str, args: dict) -> str:
         try:
-            client = provider.get_client()
-            completion = client.chat.completions.create(
-                model=provider.model,
-                messages=messages,
-            )
-            text = completion.choices[0].message.content
-            return text.strip() if text else None
+            result = executor.handle_function_call(name, args)
+            if isinstance(result, dict):
+                return json.dumps(result)
+            return str(result)
         except Exception as e:
-            print(f"Error generating architecture plan: {e}")
-            return None
+            return f"Tool error: {e}"
+
+    result = _run_agentic_loop(
+        system_prompt=system_instruction,
+        user_message=prompt,
+        tools=tools,
+        execute_tool=execute_tool,
+        max_turns=8,
+    )
+    return result.strip() if result else None
 
 
 # ---------------------------------------------------------------------------
@@ -776,8 +771,16 @@ class ProjectBlueprint(BaseModel):
 
 
 def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = None, architecture_content: Optional[str] = None, previous_attempt: Optional[str] = None, critique_issues: Optional[list] = None) -> Optional[ProjectBlueprint]:
-    provider = InferenceManager.get_active_provider()
-    provider_name = InferenceManager._active_provider_name or ""
+    """Generate a project blueprint via an agentic loop.
+
+    The model can call web_search, browse_url, and run_shell_command to research
+    library versions and patterns before committing to a contract. The final
+    assistant message (no tool calls) must be a raw JSON object — parsed into
+    ProjectBlueprint here.
+    """
+    from .utils.tool_definitions import get_arch_planner_tool_definitions
+    from .utils.tools import ToolHandler
+
     system_info = get_system_info()
     system_instruction = pm.render_project_blueprint(
         user_prompt=prompt,
@@ -787,99 +790,49 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
         critique_issues=critique_issues,
     )
 
-    if provider_name == "google":
-        from google.genai import types
-        from .utils.inference import retry_api_call
-        client = provider.get_client()
-        response = retry_api_call(
-            client.models.generate_content,
-            model=provider.model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                systemInstruction=system_instruction,
-                response_mime_type="application/json",
-                response_schema=ProjectBlueprint,
-            )
-        )
-        if not response or not response.text:
-            return None
+    tools = get_arch_planner_tool_definitions()
+    executor = ToolHandler(project_root=os.getcwd())
+
+    def execute_tool(name: str, args: dict) -> str:
         try:
-            data = json.loads(response.text)
-            return ProjectBlueprint(**data)
-        except (json.JSONDecodeError, ValueError):
-            return None
+            result = executor.handle_function_call(name, args)
+            return json.dumps(result) if isinstance(result, dict) else str(result)
+        except Exception as e:
+            return f"Tool error: {e}"
 
-    else:
-        messages = [
-            {"role": "system", "content": system_instruction},
-            {"role": "user", "content": prompt},
-        ]
-        client = provider.get_client()
+    raw = _run_agentic_loop(
+        system_prompt=system_instruction,
+        user_message=prompt,
+        tools=tools,
+        execute_tool=execute_tool,
+        max_turns=10,
+    )
 
-        # NOTE: we deliberately skip `client.beta.chat.completions.parse(
-        # response_format=ProjectBlueprint)`. OpenAI's strict-schema mode
-        # rejects `Dict[str, Any]` fields (no fixed property set) and most
-        # providers silently return an empty `{}` for `file_formats` rather
-        # than raising — which produces a valid Pydantic object with no
-        # content and zero files to generate. Plain JSON-mode completion +
-        # manual extraction is the reliable path for this schema.
+    if not raw:
+        print("[blueprint] agentic loop returned no output", file=sys.stderr)
+        return None
 
-        json_nudge = (
-            "Respond with EXACTLY one JSON object matching the schema described in the system "
-            "instruction. No markdown fences, no prose before or after, no explanations."
+    json_str = _extract_json_object(raw)
+    if not json_str:
+        snippet = raw[:400].replace("\n", " ")
+        print(
+            f"[blueprint] could not locate JSON object in response. "
+            f"First 400 chars: {snippet!r}",
+            file=sys.stderr,
         )
-        nudged = messages + [{"role": "system", "content": json_nudge}]
+        return None
 
-        raw_content: Optional[str] = None
-        last_err: Optional[Exception] = None
-        for kwargs in (
-            {"response_format": {"type": "json_object"}},
-            {},
-        ):
-            try:
-                completion = client.chat.completions.create(
-                    model=provider.model,
-                    messages=nudged,
-                    **kwargs,
-                )
-                raw_content = (completion.choices[0].message.content or "").strip()
-                break
-            except Exception as call_err:
-                last_err = call_err
-                print(
-                    f"[blueprint] completion call failed ({kwargs or 'plain'}): {call_err}",
-                    file=sys.stderr,
-                )
-
-        if raw_content is None:
-            print(
-                f"[blueprint] all completion attempts failed for {provider.model}; "
-                f"last error: {last_err}",
-                file=sys.stderr,
-            )
-            return None
-
-        json_str = _extract_json_object(raw_content)
-        if not json_str:
-            snippet = raw_content[:400].replace("\n", " ")
-            print(
-                f"[blueprint] could not locate JSON object in response. "
-                f"Model: {provider.model}. First 400 chars: {snippet!r}",
-                file=sys.stderr,
-            )
-            return None
-
-        try:
-            data = json.loads(json_str)
-            return ProjectBlueprint(**data)
-        except Exception as parse_err:
-            snippet = json_str[:400].replace("\n", " ")
-            print(
-                f"[blueprint] JSON parse/validate failed: {parse_err}. "
-                f"Extracted: {snippet!r}",
-                file=sys.stderr,
-            )
-            return None
+    try:
+        data = json.loads(json_str)
+        return ProjectBlueprint(**data)
+    except Exception as parse_err:
+        snippet = json_str[:400].replace("\n", " ")
+        print(
+            f"[blueprint] JSON parse/validate failed: {parse_err}. "
+            f"Extracted: {snippet!r}",
+            file=sys.stderr,
+        )
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -1279,14 +1232,41 @@ def generate_project(
     folder_tree = generate_tree(folder_struc, project_name="")
     dependency_analyzer = DependencyAnalyzer()
 
-    # Files are written relative to the project root folder (folder_tree.value),
-    # so the orchestrator must write into output_base_dir/<project_name>/.
-    # Guard: if the LLM emitted a flat tree, folder_tree.value may be a filename ("Cargo.toml")
-    # rather than a directory name — fall back to output_base_dir in that case.
-    _root_name = folder_tree.value
-    _is_dir_name = _root_name and '.' not in _root_name
-    project_root_path = os.path.join(output_base_dir, _root_name) if _is_dir_name else output_base_dir
+    # The project must always live at output_base_dir/<project_name>/. Derive the
+    # project name from the blueprint (sanitized), falling back to the parsed folder
+    # tree root only if the blueprint didn't provide one. Then point the orchestrator
+    # at project_root_path and normalize file_formats keys so they're relative to
+    # that root — stripping any project-root prefix the model emitted.
+    def _sanitize_project_name(raw: str) -> str:
+        s = (raw or "").strip()
+        s = re.sub(r'[^A-Za-z0-9._-]+', '_', s)
+        s = s.strip('._-')
+        return s
+
+    _bp_name = _sanitize_project_name(str(software_blueprint.get("name", "")))
+    _tree_root = folder_tree.value or ""
+    _tree_root_is_dir = _tree_root and '.' not in _tree_root
+    project_name = _bp_name or (_tree_root if _tree_root_is_dir else "") or "project"
+    project_root_path = os.path.join(output_base_dir, project_name)
     os.makedirs(project_root_path, exist_ok=True)
+
+    candidate_prefixes = []
+    if _tree_root_is_dir and _tree_root:
+        candidate_prefixes.append(_tree_root + "/")
+    if project_name and project_name + "/" not in candidate_prefixes:
+        candidate_prefixes.append(project_name + "/")
+
+    if candidate_prefixes:
+        normalized_format = {}
+        for k, v in file_format.items():
+            key = k
+            for pfx in candidate_prefixes:
+                if key.startswith(pfx):
+                    key = key[len(pfx):]
+                    break
+            normalized_format[key] = v
+        file_format = normalized_format
+        file_output_format = file_format
 
     # Build orchestrator with full blueprint context
     orchestrator = ParallelOrchestrator(output_base_dir=project_root_path, max_workers=20)
