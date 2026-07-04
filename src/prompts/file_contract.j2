@@ -38,6 +38,7 @@ Return ONE raw JSON object (no fences, no prose) — the contract for the file a
 ### Rules
 
 - Dependency paths must be copied character-for-character from the skeleton — never invent a path.
+- State the exact import statements consumers should use. For Python packages, imports are always absolute from the package root shown in the skeleton (`from <package>.<module> import X` — never `from <module> import X`); tests import the code under test the same way.
 - If the assigned file is an entry point: describe the exact startup sequence — what is instantiated in what order, every method called on every imported module, and each step of any loop (game/server/REPL).
 - If it is a test file: name the exact module under test and every test function.
 - If it is a config file: list every non-default option and why it is needed.

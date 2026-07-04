@@ -117,6 +117,7 @@ GOOD: "Reads the config dict and raises ConfigError if any required key from REQ
 - For manifests/Dockerfile: `behaviors` = key setup steps, `external_packages` = key packages, `test_contract` = `{}`.
 - For test files: `test_contract.test_class_or_functions` must name every test function.
 - Every field must be specific to this project. If you can copy it into any other project unchanged, it is too generic — rewrite it.
+- Contracts must pin the import convention so files agree with each other. For Python: absolute imports from the package root (`from <package>.<module> import X` — never `from <module> import X`), in tests as well.
 - The contracts must be fully consistent with the architecture document — every component and data flow from the architecture must appear in one or more file contracts.
 
 ### Integration & Entry Point Rules (CRITICAL — do not skip)
