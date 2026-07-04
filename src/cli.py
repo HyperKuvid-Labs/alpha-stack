@@ -203,8 +203,9 @@ def cmd_setup(args):
 
 
 def cmd_blueprint_smoke(args):
-    from .generator import generate_project_blueprint
+    from .generator import generate_project_blueprint_adaptive
     from .utils.prompt_manager import PromptManager
+    from .utils.inference import InferenceManager
 
     prompt = args.prompt
     if not prompt:
@@ -215,20 +216,18 @@ def cmd_blueprint_smoke(args):
         return 1
 
     provider_name = getattr(args, "provider", None) or "openrouter"
-    problem_statement_language = normalize_problem_statement_language(getattr(args, "language", None)) or "others"
 
     print("=" * 80)
     print("ALPHASTACK - Blueprint Smoke Test")
     print("=" * 80)
     print(f"Provider: {provider_name}")
-    print(f"Language profile: {problem_statement_language}")
 
+    InferenceManager.initialize(provider_name)
     pm = PromptManager()
-    blueprint = generate_project_blueprint(
+    blueprint = generate_project_blueprint_adaptive(
         prompt=prompt,
         pm=pm,
         provider_name=provider_name,
-        problem_statement_language=problem_statement_language,
     )
     print(f"blueprint: {blueprint}")
 

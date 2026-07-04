@@ -877,6 +877,142 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
 
 
 # ---------------------------------------------------------------------------
+# Adaptive two-pass blueprint (Phase 1a skeleton + Phase 1b per-file contracts)
+# ---------------------------------------------------------------------------
+
+# A single-call blueprint asks the model to emit every contract in one giant
+# JSON object — where weak models drop requirements. Above this many planned
+# files, contracts are generated in separate small calls instead. At or below
+# it, the single-pass path is kept (cheaper, and small outputs don't degrade).
+BLUEPRINT_FANOUT_THRESHOLD = int(os.getenv("ALPHASTACK_BLUEPRINT_FANOUT_THRESHOLD", "8"))
+BLUEPRINT_CONTRACT_WORKERS = int(os.getenv("ALPHASTACK_BLUEPRINT_CONTRACT_WORKERS", "8"))
+
+
+def generate_blueprint_skeleton(prompt: str, pm, provider_name: Optional[str] = None,
+                                architecture_content: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Pass 1a: decide only the file tree and a one-line purpose per file."""
+    from .utils.tool_definitions import get_arch_planner_tool_definitions
+    from .utils.tools import ToolHandler
+
+    system_instruction = pm.render(
+        "blueprint_skeleton.j2",
+        user_prompt=prompt,
+        system_info=get_system_info(),
+        architecture_content=architecture_content,
+    )
+
+    executor = ToolHandler(project_root=os.getcwd())
+
+    def execute_tool(name: str, args: dict) -> str:
+        try:
+            result = executor.handle_function_call(name, args)
+            return json.dumps(result) if isinstance(result, dict) else str(result)
+        except Exception as e:
+            return f"Tool error: {e}"
+
+    raw = _run_agentic_loop(
+        system_prompt=system_instruction,
+        user_message=prompt,
+        tools=get_arch_planner_tool_definitions(),
+        execute_tool=execute_tool,
+        max_turns=8,
+    )
+    if not raw:
+        return None
+
+    json_str = _extract_json_object(raw)
+    if not json_str:
+        return None
+    try:
+        data = json.loads(json_str)
+    except json.JSONDecodeError:
+        return None
+
+    files = data.get("files")
+    if not isinstance(files, dict) or not files or not str(data.get("folder_structure", "")).strip():
+        return None
+    return data
+
+
+def generate_single_file_contract(filepath: str, file_purpose: str, skeleton: Dict[str, Any],
+                                  architecture_content: Optional[str], pm) -> Optional[Dict[str, Any]]:
+    """Pass 1b: write the full generation contract for one file (no tools, small call)."""
+    system_instruction = pm.render(
+        "file_contract.j2",
+        filepath=filepath,
+        file_purpose=file_purpose,
+        architecture_content=architecture_content,
+        folder_structure=skeleton.get("folder_structure", ""),
+        files=skeleton.get("files", {}),
+    )
+    for _attempt in range(2):
+        raw = _call_llm_text(
+            system_instruction,
+            f"Write the contract for `{filepath}` now. Return only the JSON object.",
+            timeout=120,
+        )
+        json_str = _extract_json_object(raw) if raw else None
+        if not json_str:
+            continue
+        try:
+            data = json.loads(json_str)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict) and data.get("purpose"):
+            return data
+    return None
+
+
+def generate_project_blueprint_adaptive(prompt: str, pm, provider_name: Optional[str] = None,
+                                        architecture_content: Optional[str] = None) -> Optional[ProjectBlueprint]:
+    """Complexity-adaptive Phase 1.
+
+    The skeleton pass doubles as the complexity measurement: small planned
+    projects keep the proven single-pass blueprint; large ones fan contracts
+    out to parallel per-file calls so no single emission is big enough for
+    the model to drop requirements. Skeleton failure falls back to single-pass.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    skeleton = generate_blueprint_skeleton(prompt, pm, provider_name, architecture_content)
+    if not skeleton:
+        print("[blueprint] skeleton pass failed — falling back to single-pass blueprint", file=sys.stderr)
+        return generate_project_blueprint(prompt, pm, provider_name, architecture_content=architecture_content)
+
+    files: Dict[str, str] = skeleton["files"]
+    if len(files) <= BLUEPRINT_FANOUT_THRESHOLD:
+        print(f"[blueprint] {len(files)} planned files (<= {BLUEPRINT_FANOUT_THRESHOLD}) — single-pass blueprint")
+        return generate_project_blueprint(prompt, pm, provider_name, architecture_content=architecture_content)
+
+    print(f"[blueprint] {len(files)} planned files (> {BLUEPRINT_FANOUT_THRESHOLD}) — generating contracts in parallel")
+    contracts: Dict[str, Any] = {}
+    with ThreadPoolExecutor(max_workers=BLUEPRINT_CONTRACT_WORKERS) as ex:
+        futures = {
+            ex.submit(generate_single_file_contract, fp, purpose, skeleton, architecture_content, pm): fp
+            for fp, purpose in files.items()
+        }
+        for future in as_completed(futures):
+            fp = futures[future]
+            try:
+                contract = future.result()
+            except Exception as e:
+                print(f"[blueprint] contract generation raised for {fp}: {e}", file=sys.stderr)
+                contract = None
+            if contract is None:
+                # Minimal stub: the structural validator flags its missing
+                # fields, routing this file through the refinement round.
+                print(f"[blueprint] contract failed for {fp} — stubbing for refinement", file=sys.stderr)
+                contract = {"purpose": files[fp]}
+            contracts[fp] = contract
+
+    return ProjectBlueprint(
+        software_blueprint_details=skeleton.get("software_blueprint_details") or {},
+        folder_structure=skeleton["folder_structure"],
+        file_formats=contracts,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Critic helpers (Phase 0 + Phase 1 self-review)
 # ---------------------------------------------------------------------------
 
@@ -1191,7 +1327,7 @@ def generate_project(
     emit("info", f"Architecture document saved to {arch_path}")
 
     emit("step", "Planning file structure and generating project blueprint...")
-    blueprint = generate_project_blueprint(user_prompt, pm, provider_name, architecture_content=architecture_content)
+    blueprint = generate_project_blueprint_adaptive(user_prompt, pm, provider_name, architecture_content=architecture_content)
 
     if blueprint:
         emit("info", "Reviewing blueprint against architecture...")

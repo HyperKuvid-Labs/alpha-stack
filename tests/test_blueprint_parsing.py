@@ -87,9 +87,16 @@ def test_empty_blueprint_triggers_guard(fake_provider):
     from src.generator import generate_project
     from src.utils.prompt_manager import PromptManager
 
-    # architecture, arch critic (no issues), empty blueprint, blueprint critic (no issues)
+    # architecture, arch critic (no issues), skeleton (small -> single-pass),
+    # empty blueprint, blueprint critic (no issues)
     fake_provider.queue("## arch\nplaceholder")
     fake_provider.queue(json.dumps({"issues": []}))
+    skeleton = {
+        "software_blueprint_details": {"project_name": "x"},
+        "folder_structure": "x/\n└── stub.py",
+        "files": {"stub.py": "the only file"},
+    }
+    fake_provider.queue(json.dumps(skeleton))
     empty_blueprint = {
         "software_blueprint_details": {"project_name": "x"},
         "folder_structure": "x/\n└── stub",
