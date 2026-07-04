@@ -8,6 +8,18 @@ You have three inputs: the original user request (requirements and constraints),
 
 {{ user_prompt }}
 
+{% if requirements_checklist %}
+---
+
+### Acceptance Checklist (extracted from the user's request)
+
+Each item below is one requirement with how to verify it and the expected outcome. Review item by item — for every requirement, confirm it is covered; flag each one that is not.
+
+```json
+{{ requirements_checklist }}
+```
+{% endif %}
+
 ---
 
 ### Architecture Document (Phase 0)

@@ -877,6 +877,37 @@ def generate_project_blueprint(prompt: str, pm, provider_name: Optional[str] = N
 
 
 # ---------------------------------------------------------------------------
+# Requirements checklist (Phase -1 — extracted once, checked by every phase)
+# ---------------------------------------------------------------------------
+
+def extract_requirements(user_prompt: str, pm) -> Optional[list]:
+    """Convert the user's prompt into a verifiable acceptance checklist.
+
+    Extracted BEFORE any phase can drop a requirement, then handed to the
+    critics (itemized review) and the planner (runtime verification targets).
+    Returns a list of {id, requirement, verify, expected} dicts, or None —
+    extraction failure never blocks the pipeline.
+    """
+    system_instruction = pm.render("requirements_extraction.j2")
+    raw = _call_llm_text(system_instruction, user_prompt, timeout=90)
+    json_str = _extract_json_object(raw) if raw else None
+    if not json_str:
+        return None
+    try:
+        data = json.loads(json_str)
+    except json.JSONDecodeError:
+        return None
+    reqs = data.get("requirements")
+    if not isinstance(reqs, list) or not reqs:
+        return None
+    cleaned = [
+        r for r in reqs
+        if isinstance(r, dict) and r.get("requirement") and r.get("verify") and r.get("expected")
+    ]
+    return cleaned or None
+
+
+# ---------------------------------------------------------------------------
 # Adaptive two-pass blueprint (Phase 1a skeleton + Phase 1b per-file contracts)
 # ---------------------------------------------------------------------------
 
@@ -1079,17 +1110,18 @@ def _parse_critic_issues(raw: Optional[str]) -> list:
     return []
 
 
-def critique_architecture(user_prompt: str, architecture_content: str, pm) -> list:
+def critique_architecture(user_prompt: str, architecture_content: str, pm, requirements_json: Optional[str] = None) -> list:
     """Run the architecture critic. Returns a list of concrete issues (possibly empty)."""
     system_instruction = pm.render_architecture_critic(
         user_prompt=user_prompt,
         architecture_content=architecture_content,
+        requirements_checklist=requirements_json,
     )
     raw = _call_llm_text(system_instruction, "Review the architecture per the rubric and return JSON.")
     return _parse_critic_issues(raw)
 
 
-def critique_tests(user_prompt: str, architecture_content: str, blueprint: "ProjectBlueprint", pm) -> list:
+def critique_tests(user_prompt: str, architecture_content: str, blueprint: "ProjectBlueprint", pm, requirements_json: Optional[str] = None) -> list:
     """Run the test critic against test file contracts only. Returns a list of concrete issues."""
     test_contracts = {
         path: contract
@@ -1103,12 +1135,13 @@ def critique_tests(user_prompt: str, architecture_content: str, blueprint: "Proj
         user_prompt=user_prompt,
         architecture_content=architecture_content,
         test_contracts_json=test_contracts_json,
+        requirements_checklist=requirements_json,
     )
     raw = _call_llm_text(system_instruction, "Review the test contracts per the rubric and return JSON.")
     return _parse_critic_issues(raw)
 
 
-def critique_blueprint(architecture_content: str, blueprint: "ProjectBlueprint", pm, user_prompt: Optional[str] = None) -> list:
+def critique_blueprint(architecture_content: str, blueprint: "ProjectBlueprint", pm, user_prompt: Optional[str] = None, requirements_json: Optional[str] = None) -> list:
     """Run the blueprint critic. Returns a list of concrete issues (possibly empty)."""
     file_formats_json = json.dumps(blueprint.file_formats, indent=2)
     system_instruction = pm.render_blueprint_critic(
@@ -1116,6 +1149,7 @@ def critique_blueprint(architecture_content: str, blueprint: "ProjectBlueprint",
         folder_structure=blueprint.folder_structure,
         file_formats_json=file_formats_json,
         user_prompt=user_prompt,
+        requirements_checklist=requirements_json,
     )
     raw = _call_llm_text(system_instruction, "Review the blueprint per the rubric and return JSON.")
     return _parse_critic_issues(raw)
@@ -1293,6 +1327,16 @@ def generate_project(
     provider_name = provider_name or InferenceManager.get_default_provider()
     InferenceManager.initialize(provider_name, model_override=model_override)
 
+    emit("step", "Extracting acceptance checklist from requirements...")
+    requirements = extract_requirements(user_prompt, pm)
+    requirements_json = json.dumps(requirements, indent=2) if requirements else None
+    if requirements:
+        emit("info", f"Checklist: {len(requirements)} verifiable requirement(s) extracted.")
+        for r in requirements:
+            emit("info", f"  [{r.get('id', '?')}] {r.get('requirement', '')}")
+    else:
+        emit("warning", "Requirement extraction failed — continuing without a checklist.")
+
     emit("step", "Designing system architecture...")
     architecture_content = generate_architecture_plan(user_prompt, pm, provider_name)
 
@@ -1301,7 +1345,7 @@ def generate_project(
         return None
 
     emit("info", "Reviewing architecture against problem statement...")
-    arch_issues = critique_architecture(user_prompt, architecture_content, pm)
+    arch_issues = critique_architecture(user_prompt, architecture_content, pm, requirements_json=requirements_json)
     if arch_issues:
         emit("info", f"Architecture critic found {len(arch_issues)} issue(s); refining...")
         for i, issue in enumerate(arch_issues, 1):
@@ -1326,12 +1370,18 @@ def generate_project(
         f.write(architecture_content)
     emit("info", f"Architecture document saved to {arch_path}")
 
+    if requirements_json:
+        req_path = os.path.join(alpha_stack_dir, "requirements.json")
+        with open(req_path, "w") as f:
+            f.write(requirements_json)
+        emit("info", f"Acceptance checklist saved to {req_path}")
+
     emit("step", "Planning file structure and generating project blueprint...")
     blueprint = generate_project_blueprint_adaptive(user_prompt, pm, provider_name, architecture_content=architecture_content)
 
     if blueprint:
         emit("info", "Reviewing blueprint against architecture...")
-        bp_issues = critique_blueprint(architecture_content, blueprint, pm, user_prompt=user_prompt)
+        bp_issues = critique_blueprint(architecture_content, blueprint, pm, user_prompt=user_prompt, requirements_json=requirements_json)
         if bp_issues:
             emit("info", f"Blueprint critic found {len(bp_issues)} issue(s); refining...")
             for i, issue in enumerate(bp_issues, 1):
@@ -1356,7 +1406,7 @@ def generate_project(
             emit("info", "Blueprint review: no blocking issues.")
 
         emit("info", "Reviewing test contracts against architecture and requirements...")
-        test_issues = critique_tests(user_prompt, architecture_content, blueprint, pm)
+        test_issues = critique_tests(user_prompt, architecture_content, blueprint, pm, requirements_json=requirements_json)
         if test_issues:
             emit("info", f"Test critic found {len(test_issues)} issue(s); refining test contracts...")
             for i, issue in enumerate(test_issues, 1):
@@ -1532,6 +1582,7 @@ def generate_project(
         dependency_analyzer=dependency_analyzer,
         on_status=on_status,
         provider_name=provider_name,
+        requirements_json=requirements_json,
     )
 
     end_time = time.time()

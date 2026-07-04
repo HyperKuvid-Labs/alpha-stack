@@ -64,8 +64,16 @@ Figure out the right test command from the project structure:
 
 For Python, NEVER `pip install` into the system or user environment — always create and use the project-local `.venv` shown above. Installing the project globally can shadow the user's own packages.
 
+{% if requirements_checklist %}
+## Acceptance Checklist (the user's actual requirements)
+This checklist was extracted from the user's original request — it is the definition of done. Each item states the requirement, how to verify it against the running project, and the expected observable outcome. During Runtime Verification you MUST execute each item's `verify` action and confirm its `expected` outcome. Your `runtime_verification` argument to `mark_complete` must report per-item status (e.g. "R1: PASS — ..., R2: PASS — ..."). If an item fails, it is a bug: fix it before marking complete.
+```json
+{{ requirements_checklist }}
+```
+{% endif %}
+
 ## Runtime Verification (REQUIRED before mark_complete)
-After the test suite passes, run the actual project. Derive realistic invocations from the blueprint's behaviors and the test scenarios, and exercise every declared feature at least once:
+After the test suite passes, run the actual project. {% if requirements_checklist %}Work through the Acceptance Checklist above item by item — its `verify` actions are your script. Additionally{% else %}Derive realistic invocations from the blueprint's behaviors and the test scenarios, and{% endif %} exercise every declared feature at least once:
 
 - **CLI tool** → invoke EVERY subcommand with realistic arguments (including optional-flag-omitted variants, e.g. an `add` command without its optional `--date`). Check exit codes; any traceback/panic in output is a failure even if the exit code is 0.
 - **Server / API** → start it as a background job, wait for the ready line, hit every declared endpoint (curl), check status codes and response bodies, then `kill_job` it.

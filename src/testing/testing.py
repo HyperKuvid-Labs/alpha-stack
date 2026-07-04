@@ -34,6 +34,7 @@ class TestingPipeline:
         on_status=None,
         tool_log_path: Optional[str] = None,
         provider_name: Optional[str] = None,
+        requirements_json: Optional[str] = None,
     ):
         self.project_root = project_root
         self.software_blueprint = software_blueprint
@@ -42,6 +43,7 @@ class TestingPipeline:
         self.pm = pm or PromptManager(templates_dir="prompts")
         self.dependency_analyzer = dependency_analyzer
         self.on_status = on_status
+        self.requirements_json = requirements_json
 
         self.provider = InferenceManager.get_active_provider()
         self.provider_name = InferenceManager._active_provider_name or ""
@@ -169,6 +171,7 @@ class TestingPipeline:
             folder_structure=self.folder_structure,
             dependency_graph=dep_graph,
             project_root=self.project_root,
+            requirements_checklist=self.requirements_json,
             state=self.state,
             memory=self.memory.render(query=self.state.last_test_output) if self.memory else "",
             active_jobs=active_jobs,
@@ -427,6 +430,7 @@ def run_testing_pipeline(
     on_status=None,
     tool_log_path: Optional[str] = None,
     provider_name: Optional[str] = None,
+    requirements_json: Optional[str] = None,
 ) -> Dict:
     pipeline = TestingPipeline(
         project_root=project_root,
@@ -439,5 +443,6 @@ def run_testing_pipeline(
         on_status=on_status,
         tool_log_path=tool_log_path,
         provider_name=provider_name,
+        requirements_json=requirements_json,
     )
     return pipeline.run_testing_pipeline()

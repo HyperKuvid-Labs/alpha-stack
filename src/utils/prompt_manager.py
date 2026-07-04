@@ -62,14 +62,14 @@ class PromptManager:
     def render_project_blueprint(self, user_prompt: Optional[str] = None, system_info: Optional[Dict[str, Any]] = None, architecture_content: Optional[str] = None, previous_attempt: Optional[str] = None, critique_issues: Optional[list] = None) -> str:
         return self.render('project_blueprint.j2', user_prompt=user_prompt, system_info=system_info, architecture_content=architecture_content, previous_attempt=previous_attempt, critique_issues=critique_issues)
 
-    def render_architecture_critic(self, user_prompt: str, architecture_content: str) -> str:
-        return self.render('architecture_critic.j2', user_prompt=user_prompt, architecture_content=architecture_content)
+    def render_architecture_critic(self, user_prompt: str, architecture_content: str, requirements_checklist: Optional[str] = None) -> str:
+        return self.render('architecture_critic.j2', user_prompt=user_prompt, architecture_content=architecture_content, requirements_checklist=requirements_checklist)
 
-    def render_blueprint_critic(self, architecture_content: str, folder_structure: str, file_formats_json: str, user_prompt: Optional[str] = None) -> str:
-        return self.render('blueprint_critic.j2', architecture_content=architecture_content, folder_structure=folder_structure, file_formats_json=file_formats_json, user_prompt=user_prompt)
+    def render_blueprint_critic(self, architecture_content: str, folder_structure: str, file_formats_json: str, user_prompt: Optional[str] = None, requirements_checklist: Optional[str] = None) -> str:
+        return self.render('blueprint_critic.j2', architecture_content=architecture_content, folder_structure=folder_structure, file_formats_json=file_formats_json, user_prompt=user_prompt, requirements_checklist=requirements_checklist)
 
-    def render_test_critic(self, user_prompt: str, architecture_content: str, test_contracts_json: str) -> str:
-        return self.render('test_critic.j2', user_prompt=user_prompt, architecture_content=architecture_content, test_contracts_json=test_contracts_json)
+    def render_test_critic(self, user_prompt: str, architecture_content: str, test_contracts_json: str, requirements_checklist: Optional[str] = None) -> str:
+        return self.render('test_critic.j2', user_prompt=user_prompt, architecture_content=architecture_content, test_contracts_json=test_contracts_json, requirements_checklist=requirements_checklist)
     
     def list_templates(self) -> list:
         return self.env.list_templates()
