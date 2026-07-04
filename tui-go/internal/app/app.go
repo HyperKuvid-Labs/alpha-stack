@@ -21,7 +21,6 @@ const (
 	StateModel
 	StatePrompt
 	StateOutputDir
-	StateProfile
 	StateConfirm
 	StateGenerating
 	StateDone
@@ -36,7 +35,6 @@ type selection struct {
 	model        string
 	prompt       string
 	outDir       string
-	profile      string
 }
 
 type App struct {
@@ -49,6 +47,7 @@ type App struct {
 	selected selection
 
 	pendingProviders *rpc.ProvidersLoadedMsg
+	providersInfo    *rpc.ProvidersLoadedMsg
 
 	currentReqID string
 	cancelTimer  time.Time
@@ -57,7 +56,7 @@ type App struct {
 }
 
 func New(client *rpc.Client) *App {
-	a := &App{client: client, selected: selection{profile: "others"}}
+	a := &App{client: client}
 	a.sub = screens.NewWelcome()
 	return a
 }
@@ -96,6 +95,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.goBack()
 		}
 	case rpc.ProvidersLoadedMsg:
+		msgKeep := m
+		a.providersInfo = &msgKeep
 		if ps, ok := a.sub.(*screens.ProviderScreen); ok {
 			if m.Err != nil {
 				ps.SetError(m.Err)
@@ -171,9 +172,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case screens.SubmitOutDirMsg:
 		a.selected.outDir = m.OutDir
 		return a, nil
-	case screens.SubmitProfileMsg:
-		a.selected.profile = m.Profile
-		return a, nil
+	case screens.OpenSettingsMsg:
+		return a, a.gotoProviderScreen()
+	case screens.NewProjectMsg:
+		a.selected.prompt = ""
+		a.selected.outDir = ""
+		a.state = StatePrompt
+		a.sub = screens.NewPrompt()
+		return a, tea.Batch(a.sub.Init(), a.windowResizeCmd())
 	case screens.ConfirmStartMsg:
 		return a, a.startGenerationCmd()
 	case screens.QuitFromDoneMsg:
@@ -220,18 +226,27 @@ func (a *App) View() string {
 func (a *App) advance() tea.Cmd {
 	switch a.state {
 	case StateWelcome:
-		a.state = StateProvider
-		ps := screens.NewProvider()
-		a.sub = ps
-		if a.pendingProviders != nil {
-			if a.pendingProviders.Err != nil {
-				ps.SetError(a.pendingProviders.Err)
-			} else {
-				ps.SetProviders(a.pendingProviders.Result.Providers, a.pendingProviders.Result.Default)
+		// Quick start: when the default provider already has a saved key,
+		// jump straight to the prompt with its default model. 's' on the
+		// welcome screen still opens the full wizard.
+		if info := a.providersInfo; info != nil && info.Err == nil {
+			for _, p := range info.Result.Providers {
+				if p.Name != info.Result.Default {
+					continue
+				}
+				if !p.NeedsAPIKey || p.HasAPIKey {
+					a.selected.provider = p.Name
+					a.selected.providerNeed = p.NeedsAPIKey
+					a.selected.providerKey = p.HasAPIKey
+					a.selected.defaultModel = p.DefaultModel
+					a.selected.model = p.DefaultModel
+					a.state = StatePrompt
+					a.sub = screens.NewPrompt()
+					return tea.Batch(a.sub.Init(), a.windowResizeCmd())
+				}
 			}
-			a.pendingProviders = nil
 		}
-		return tea.Batch(ps.Init(), a.windowResizeCmd())
+		return a.gotoProviderScreen()
 	case StateProvider:
 		if a.selected.providerNeed {
 			a.state = StateAPIKey
@@ -253,17 +268,12 @@ func (a *App) advance() tea.Cmd {
 		a.sub = screens.NewOutDir(def)
 		return tea.Batch(a.sub.Init(), a.windowResizeCmd())
 	case StateOutputDir:
-		a.state = StateProfile
-		a.sub = screens.NewProfile()
-		return tea.Batch(a.sub.Init(), a.windowResizeCmd())
-	case StateProfile:
 		a.state = StateConfirm
 		a.sub = screens.NewConfirm(screens.ConfirmSummary{
 			Provider: a.selected.provider,
 			Model:    a.selected.model,
 			Prompt:   a.selected.prompt,
 			OutDir:   a.selected.outDir,
-			Profile:  a.selected.profile,
 		})
 		return tea.Batch(a.sub.Init(), a.windowResizeCmd())
 	case StateConfirm:
@@ -272,6 +282,21 @@ func (a *App) advance() tea.Cmd {
 		return tea.Batch(a.sub.Init(), a.windowResizeCmd())
 	}
 	return nil
+}
+
+func (a *App) gotoProviderScreen() tea.Cmd {
+	a.state = StateProvider
+	ps := screens.NewProvider()
+	a.sub = ps
+	if a.providersInfo != nil {
+		if a.providersInfo.Err != nil {
+			ps.SetError(a.providersInfo.Err)
+		} else {
+			ps.SetProviders(a.providersInfo.Result.Providers, a.providersInfo.Result.Default)
+		}
+	}
+	a.pendingProviders = nil
+	return tea.Batch(ps.Init(), a.windowResizeCmd())
 }
 
 func (a *App) goBack() tea.Cmd {
@@ -300,13 +325,9 @@ func (a *App) goBack() tea.Cmd {
 		a.state = StatePrompt
 		a.sub = screens.NewPrompt()
 		return tea.Batch(a.sub.Init(), a.windowResizeCmd())
-	case StateProfile:
-		a.state = StateOutputDir
-		a.sub = screens.NewOutDir(a.selected.outDir)
-		return tea.Batch(a.sub.Init(), a.windowResizeCmd())
 	case StateConfirm:
-		a.state = StateProfile
-		a.sub = screens.NewProfile()
+		a.state = StateOutputDir
+		a.sub = screens.NewOutDir(defaultOutDir(a.selected.prompt))
 		return tea.Batch(a.sub.Init(), a.windowResizeCmd())
 	}
 	return nil
@@ -358,7 +379,6 @@ func (a *App) startGenerationCmd() tea.Cmd {
 				"output_dir": a.selected.outDir,
 				"provider":   a.selected.provider,
 				"model":      a.selected.model,
-				"language":   a.selected.profile,
 			},
 		})
 		return nil

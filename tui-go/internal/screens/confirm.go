@@ -12,7 +12,6 @@ type ConfirmSummary struct {
 	Model    string
 	Prompt   string
 	OutDir   string
-	Profile  string
 }
 
 type ConfirmScreen struct {
@@ -46,7 +45,6 @@ func (c *ConfirmScreen) View() string {
 		"",
 		row("provider", c.summary.Provider),
 		row("model   ", c.summary.Model),
-		row("profile ", c.summary.Profile),
 		row("output  ", c.summary.OutDir),
 		"",
 		theme.HintStyle.Render("prompt"),

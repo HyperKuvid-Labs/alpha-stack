@@ -58,10 +58,13 @@ type SubmitOutDirMsg struct {
 	OutDir string
 }
 
-// SubmitProfileMsg is sent by the profile screen.
-type SubmitProfileMsg struct {
-	Profile string
-}
+// NewProjectMsg is sent from the done screen to start another generation
+// without quitting (provider/model are kept).
+type NewProjectMsg struct{}
+
+// OpenSettingsMsg is sent from the welcome screen to walk the full
+// provider/key/model wizard instead of quick-starting with saved defaults.
+type OpenSettingsMsg struct{}
 
 // ConfirmStartMsg is sent when the user confirms generation start.
 type ConfirmStartMsg struct{}

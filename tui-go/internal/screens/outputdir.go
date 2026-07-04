@@ -11,21 +11,21 @@ import (
 )
 
 type OutDirScreen struct {
-	input textinput.Model
-	err   string
+	input      textinput.Model
+	defaultVal string
+	err        string
 }
 
 func NewOutDir(defaultPath string) *OutDirScreen {
 	in := textinput.New()
-	in.Placeholder = "/absolute/path/to/output"
+	in.Placeholder = defaultPath
 	in.Prompt = ""
 	in.TextStyle = lipgloss.NewStyle().Foreground(theme.Accent)
 	in.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Muted)
-	in.SetValue(defaultPath)
 	in.CharLimit = 1024
 	in.Width = 70
 	in.Focus()
-	return &OutDirScreen{input: in}
+	return &OutDirScreen{input: in, defaultVal: defaultPath}
 }
 
 func (o *OutDirScreen) Init() tea.Cmd { return textinput.Blink }
@@ -37,6 +37,9 @@ func (o *OutDirScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.String() {
 		case "enter":
 			val := strings.TrimSpace(o.input.Value())
+			if val == "" {
+				val = o.defaultVal
+			}
 			if val == "" {
 				o.err = "output directory cannot be empty"
 				return o, nil
@@ -56,7 +59,7 @@ func (o *OutDirScreen) View() string {
 	caret := theme.PromptCaret.Render("›")
 	body := lipgloss.JoinVertical(lipgloss.Left,
 		theme.LabelStyle.Render("output directory"),
-		theme.HintStyle.Render("absolute path · the project will be created inside"),
+		theme.HintStyle.Render("press ↵ to accept the suggested path, or type your own"),
 		"",
 		caret+" "+o.input.View(),
 	)
@@ -68,7 +71,7 @@ func (o *OutDirScreen) View() string {
 
 func (o *OutDirScreen) KeyHints() [][2]string {
 	return [][2]string{
-		{"↵", "continue"},
+		{"↵", "accept/continue"},
 		{"esc", "back"},
 		{"ctrl+c", "quit"},
 	}

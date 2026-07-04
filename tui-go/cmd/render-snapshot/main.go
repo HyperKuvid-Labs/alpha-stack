@@ -40,12 +40,10 @@ func main() {
 	dump("api key", screens.NewAPIKey("openai", false))
 	dump("prompt", screens.NewPrompt())
 	dump("output dir", screens.NewOutDir("./created_projects/my-flask-app"))
-	dump("profile", screens.NewProfile())
 	dump("confirm", screens.NewConfirm(screens.ConfirmSummary{
 		Provider: "openrouter",
 		Prompt:   "build a flask hello world app with a /health endpoint",
 		OutDir:   "./created_projects/flask-hello",
-		Profile:  "others",
 	}))
 
 	gen := screens.NewGenerating()

@@ -27,6 +27,8 @@ func (w *Welcome) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.String() {
 		case "enter", " ":
 			return w, func() tea.Msg { return TransitionMsg{Direction: Forward} }
+		case "s":
+			return w, func() tea.Msg { return OpenSettingsMsg{} }
 		}
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -43,7 +45,7 @@ func (w *Welcome) View() string {
 		"",
 		theme.HintStyle.Render(w.spinner.View()+"  ready when you are"),
 		"",
-		theme.PromptCaret.Render("›")+" "+theme.HintStyle.Render("press ↵ to begin"),
+		theme.PromptCaret.Render("›")+" "+theme.HintStyle.Render("↵ start · s provider/model settings"),
 	)
 	return theme.Frame.Render(body)
 }
@@ -53,6 +55,7 @@ func (w *Welcome) Title() string { return "welcome" }
 func (w *Welcome) KeyHints() [][2]string {
 	return [][2]string{
 		{"↵", "begin"},
+		{"s", "settings"},
 		{"ctrl+c", "quit"},
 	}
 }

@@ -33,6 +33,8 @@ func (d *DoneScreen) Title() string { return "done" }
 func (d *DoneScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m, ok := msg.(tea.KeyMsg); ok {
 		switch m.String() {
+		case "n":
+			return d, func() tea.Msg { return NewProjectMsg{} }
 		case "enter", "q", "esc":
 			return d, func() tea.Msg { return QuitFromDoneMsg{} }
 		}
@@ -64,12 +66,13 @@ func (d *DoneScreen) View() string {
 	if d.errMsg != "" {
 		body += "\n\n" + theme.EventErr.Render("error: "+d.errMsg)
 	}
-	body += "\n\n" + theme.PromptCaret.Render("›") + " " + theme.HintStyle.Render("press ↵ or q to exit")
+	body += "\n\n" + theme.PromptCaret.Render("›") + " " + theme.HintStyle.Render("press n for a new project · ↵ or q to exit")
 	return theme.Frame.Render(body)
 }
 
 func (d *DoneScreen) KeyHints() [][2]string {
 	return [][2]string{
+		{"n", "new project"},
 		{"↵/q", "exit"},
 	}
 }
