@@ -65,6 +65,11 @@ class FileGenerationResult(BaseModel):
 
 MAX_DEP_CONTENT_LINES = 200
 MAX_CHILD_TURNS = 8
+# Max seconds a file agent blocks waiting for a dependency file. Bounded so a
+# full ThreadPoolExecutor can't starve when every running worker waits on a
+# file whose worker is still queued. On expiry the agent gets the dependency's
+# blueprint contract instead of its code.
+READ_FILE_WAIT_TIMEOUT = float(os.getenv("ALPHASTACK_READ_WAIT_TIMEOUT", "180"))
 MAX_ORCHESTRATOR_TURNS = 8
 
 # Base tools — shared by both child and orchestrator agents
@@ -241,8 +246,34 @@ ORCHESTRATOR_TOOLS = BASE_TOOLS + _ORCHESTRATOR_ACTION_TOOLS
 # Tool executor factory
 # ---------------------------------------------------------------------------
 
-def _make_base_tool_executor(tracker, dep_registry, output_base_dir, registered_files):
-    """Returns a callable(name, args) -> str that handles the 3 base tools."""
+def _make_base_tool_executor(tracker, dep_registry, output_base_dir, registered_files,
+                             blueprint_context=None, waiter=None):
+    """Returns a callable(name, args) -> str that handles the 3 base tools.
+
+    `waiter` is the filepath of the agent that owns this executor — it lets the
+    tracker detect wait cycles between concurrent file agents. When a dependency
+    is not ready (failed / timeout / cycle), the tool degrades to returning the
+    dependency's blueprint contract so the agent can code against the planned
+    interface instead of blocking forever.
+    """
+
+    def _contract_fallback(req_path: str, reason: str) -> str:
+        contract = None
+        if blueprint_context:
+            file_formats = blueprint_context.get("file_formats") or {}
+            contract = file_formats.get(req_path)
+            if contract is None:
+                for key, value in file_formats.items():
+                    if os.path.normpath(key) == req_path:
+                        contract = value
+                        break
+        if contract is not None:
+            return (
+                f"'{req_path}' is not readable yet ({reason}). "
+                f"Write your code against its planned contract instead:\n"
+                f"{json.dumps(contract, indent=2)}"
+            )
+        return f"'{req_path}' is not available ({reason}). Proceed without it."
 
     def execute(name: str, args: Dict) -> str:
         if name == "read_file":
@@ -252,9 +283,13 @@ def _make_base_tool_executor(tracker, dep_registry, output_base_dir, registered_
                     f"'{req_path}' is not a file in this project. "
                     f"Available files: {sorted(registered_files)}"
                 )
-            available = tracker.wait_for_file(req_path)
-            if not available:
-                return f"'{req_path}' is not available (generation failed). Proceed without it."
+            status = tracker.wait_for_file(req_path, waiter=waiter, timeout=READ_FILE_WAIT_TIMEOUT)
+            if status == "failed":
+                return _contract_fallback(req_path, "generation failed")
+            if status == "timeout":
+                return _contract_fallback(req_path, "still being generated — timed out waiting")
+            if status == "deadlock":
+                return _contract_fallback(req_path, "it is waiting on this file in turn")
             full = os.path.join(output_base_dir, req_path)
             if not os.path.exists(full):
                 return f"'{req_path}' does not exist on disk."
@@ -423,7 +458,10 @@ def _make_orchestrator_tool_executor(tracker, dep_registry, output_base_dir, reg
     """
     from .utils.tools import ToolHandler
 
-    base_execute = _make_base_tool_executor(tracker, dep_registry, output_base_dir, registered_files)
+    base_execute = _make_base_tool_executor(
+        tracker, dep_registry, output_base_dir, registered_files,
+        blueprint_context=getattr(orchestrator_ref, "blueprint_context", None),
+    )
 
     # ToolHandler for file write operations — uses output_base_dir as root
     # so filepaths like 'myproject/src/main.py' resolve correctly
@@ -665,7 +703,10 @@ def generate_file(
     gen_log: Optional[GenerationLog] = None,
 ) -> Optional[FileGenerationResult]:
     # Base tool executor (read_file, get_external_packages, list_generated_files)
-    execute_base = _make_base_tool_executor(tracker, dep_registry, output_base_dir, registered_files)
+    execute_base = _make_base_tool_executor(
+        tracker, dep_registry, output_base_dir, registered_files,
+        blueprint_context=blueprint_context, waiter=filepath,
+    )
 
     # Log callback for this file
     def log_cb(event, data):

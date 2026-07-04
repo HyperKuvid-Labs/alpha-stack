@@ -123,6 +123,7 @@ class _FakeCompletions:
         class _Msg:
             def __init__(self, c):
                 self.content = c
+                self.tool_calls = None
 
         class _Choice:
             def __init__(self, c):

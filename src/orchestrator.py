@@ -29,6 +29,8 @@ class FileTracker:
         self._condition = Condition(Lock())
         self._done: set = set()
         self._failed: set = set()
+        # waiter filepath -> filepath it is blocked on (for cycle detection)
+        self._waiting_on: Dict[str, str] = {}
 
     def mark_done(self, filepath: str):
         with self._condition:
@@ -42,13 +44,51 @@ class FileTracker:
             logger.warning(f"[Tracker] Failed: {filepath}")
             self._condition.notify_all()
 
-    def wait_for_file(self, filepath: str) -> bool:
-        """Block until file is done or failed. No timeout — LLM inference
-        time varies per model, so we wait however long it takes."""
+    def _creates_cycle(self, waiter: str, target: str) -> bool:
+        """Follow the waiting chain from target; a path back to waiter is a cycle.
+        Caller must hold self._condition."""
+        seen = set()
+        current = target
+        while current is not None and current not in seen:
+            if current == waiter:
+                return True
+            seen.add(current)
+            current = self._waiting_on.get(current)
+        return False
+
+    def wait_for_file(self, filepath: str, waiter: Optional[str] = None,
+                      timeout: Optional[float] = None) -> str:
+        """Block until `filepath` is done or failed.
+
+        Returns "done", "failed", "timeout", or "deadlock".
+
+        Workers run inside a bounded ThreadPoolExecutor, so an unbounded wait
+        can starve the pool: every running worker blocks on a file whose worker
+        is still queued, and nothing ever runs. Two guards prevent that:
+        - `waiter` (the filepath of the worker doing the waiting) registers the
+          wait edge; if the new edge closes a cycle (A waits on B, B waits on A)
+          the closer gets "deadlock" back immediately.
+        - `timeout` bounds the wait for the non-cyclic starvation case.
+        Callers treat "timeout"/"deadlock" as "proceed without the file's code".
+        """
+        deadline = None if timeout is None else time.monotonic() + timeout
         with self._condition:
-            while filepath not in self._done and filepath not in self._failed:
-                self._condition.wait()
-            return filepath in self._done
+            if waiter is not None:
+                if self._creates_cycle(waiter, filepath):
+                    logger.warning(f"[Tracker] Wait cycle: {waiter} -> {filepath} — breaking")
+                    return "deadlock"
+                self._waiting_on[waiter] = filepath
+            try:
+                while filepath not in self._done and filepath not in self._failed:
+                    remaining = None if deadline is None else deadline - time.monotonic()
+                    if remaining is not None and remaining <= 0:
+                        logger.warning(f"[Tracker] Wait timed out: {waiter or '?'} -> {filepath}")
+                        return "timeout"
+                    self._condition.wait(timeout=remaining)
+                return "done" if filepath in self._done else "failed"
+            finally:
+                if waiter is not None:
+                    self._waiting_on.pop(waiter, None)
 
     def reset_file(self, filepath: str):
         """Remove a file from the failed set so it can be retried."""
@@ -376,6 +416,26 @@ class ParallelOrchestrator:
     # Execute
     # ------------------------------------------------------------------
 
+    def _dependency_order(self) -> List[str]:
+        """Order files so likely dependencies get worker threads first.
+
+        Heuristic: a file whose basename stem appears in many other files'
+        contracts (e.g. utils, models, config) is likely read by their workers,
+        so it should generate early. Ties keep tests after source via path sort.
+        """
+        paths = list(self._tasks)
+
+        def ref_count(path: str) -> int:
+            stem = os.path.splitext(os.path.basename(path))[0]
+            if len(stem) < 3:
+                return 0
+            return sum(
+                1 for other in paths
+                if other != path and stem in self._tasks[other]["prompt_rules"]
+            )
+
+        return sorted(paths, key=lambda p: (-ref_count(p), "test" in p.lower(), p))
+
     def _run_workers(self, filepaths):
         """Spawn workers for the given filepaths in parallel."""
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
@@ -399,8 +459,8 @@ class ParallelOrchestrator:
         orch_thread = Thread(target=self._orchestrator_thread, daemon=True)
         orch_thread.start()
 
-        # --- First pass: all files ---
-        self._run_workers(self._tasks)
+        # --- First pass: all files, dependencies scheduled first ---
+        self._run_workers(self._dependency_order())
 
         # --- Retry failed files until all succeed or no progress is made ---
         retry_round = 0

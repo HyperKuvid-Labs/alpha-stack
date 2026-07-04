@@ -45,7 +45,7 @@
 ## How It Works
 
 ```mermaid
-graptLR:> LR
+graph LR
     A[Natural Language Input] --> B[AI Analysis & Blueprint]
     B --> C[Multi-File Code Generation]
     C --> D[Dependency Resolution]

@@ -37,7 +37,7 @@ func main() {
 	}, "openrouter")
 	dump("provider", prov)
 
-	dump("api key", screens.NewAPIKey("openai"))
+	dump("api key", screens.NewAPIKey("openai", false))
 	dump("prompt", screens.NewPrompt())
 	dump("output dir", screens.NewOutDir("./created_projects/my-flask-app"))
 	dump("profile", screens.NewProfile())
