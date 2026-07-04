@@ -29,3 +29,5 @@ test.py
 /testing
 /test_cuda
 /created_projects
+generated_projects/
+created_projects/

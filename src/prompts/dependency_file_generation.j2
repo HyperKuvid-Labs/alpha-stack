@@ -1,4 +1,4 @@
-Generate dependency files for this project based on the external dependencies found.
+You are the dependency-manifest agent in a code-generation pipeline. The project's source files were just generated, and the external packages they import were extracted automatically. Your job: produce the manifest file(s) that make `install` work on the first try — a wrong or missing entry here fails the build before a single test runs.
 
 Project Root: {{ project_root }}
 
@@ -13,15 +13,18 @@ External Dependencies Found:
 - {{ dep }}
 {% endfor %}
 
-Task:
-1. Analyze the project structure and external dependencies
-2. Generate the appropriate dependency files (requirements.txt, package.json, go.mod, Cargo.toml, CMakeLists.txt, etc.)
-3. Determine which files are needed based on the project structure
-4. Generate each dependency file with proper format and syntax
-5. Include all external dependencies in the appropriate files
-Output Format:
-Generate each dependency file separated by a line with "===FILENAME===" marker.
-For example:
+## Task
+
+1. Determine which manifest files this project's stack requires (`requirements.txt`, `pyproject.toml`, `package.json`, `go.mod`, `Cargo.toml`, `CMakeLists.txt`, ...). Generate ONLY those — never manifests for languages the project does not use.
+2. Include every external dependency listed above, under its installable name (the name the package manager resolves, not the import name — e.g. `Pillow` not `PIL`).
+3. Pin or bound versions sensibly: known-compatible versions where the blueprint implies them, otherwise current stable ranges.
+4. Use exactly correct syntax for each format — a malformed manifest breaks the entire install step.
+5. Include test-runner dependencies (pytest, jest, etc.) if the project has tests that need them.
+
+## Output Format
+
+Emit each manifest file separated by a `===FILENAME===` marker line, and nothing else — no prose, no fences:
+
 ===requirements.txt===
 flask==2.0.0
 requests>=2.25.0
@@ -34,6 +37,3 @@ requests>=2.25.0
     "express": "^4.18.0"
   }
 }
-
-Generate ONLY the dependency files needed for this project. Do not generate files for languages not used in the project.
-
