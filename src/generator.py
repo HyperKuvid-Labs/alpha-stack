@@ -972,13 +972,14 @@ def critique_tests(user_prompt: str, architecture_content: str, blueprint: "Proj
     return _parse_critic_issues(raw)
 
 
-def critique_blueprint(architecture_content: str, blueprint: "ProjectBlueprint", pm) -> list:
+def critique_blueprint(architecture_content: str, blueprint: "ProjectBlueprint", pm, user_prompt: Optional[str] = None) -> list:
     """Run the blueprint critic. Returns a list of concrete issues (possibly empty)."""
     file_formats_json = json.dumps(blueprint.file_formats, indent=2)
     system_instruction = pm.render_blueprint_critic(
         architecture_content=architecture_content,
         folder_structure=blueprint.folder_structure,
         file_formats_json=file_formats_json,
+        user_prompt=user_prompt,
     )
     raw = _call_llm_text(system_instruction, "Review the blueprint per the rubric and return JSON.")
     return _parse_critic_issues(raw)
@@ -1194,7 +1195,7 @@ def generate_project(
 
     if blueprint:
         emit("info", "Reviewing blueprint against architecture...")
-        bp_issues = critique_blueprint(architecture_content, blueprint, pm)
+        bp_issues = critique_blueprint(architecture_content, blueprint, pm, user_prompt=user_prompt)
         if bp_issues:
             emit("info", f"Blueprint critic found {len(bp_issues)} issue(s); refining...")
             for i, issue in enumerate(bp_issues, 1):
@@ -1242,6 +1243,40 @@ def generate_project(
                 emit("info", "Test refinement failed; keeping current test contracts.")
         else:
             emit("info", "Test review: no blocking issues.")
+
+        # Deterministic structural validation — code-enforced rules the LLM
+        # critics can miss (unit-test coverage, wiring, entry point, dangling
+        # dependency paths). Issues loop back through the refinement path.
+        from .utils.blueprint_validator import validate_blueprint
+        for _validation_round in range(2):
+            struct_issues = validate_blueprint(blueprint.file_formats, blueprint.folder_structure)
+            if not struct_issues:
+                emit("info", "Blueprint structural validation: passed.")
+                break
+            emit("info", f"Structural validation found {len(struct_issues)} issue(s); refining...")
+            for i, issue in enumerate(struct_issues, 1):
+                emit("info", f"  [{i}] {issue}")
+            previous_bp_json = json.dumps({
+                "software_blueprint_details": blueprint.software_blueprint_details,
+                "folder_structure": blueprint.folder_structure,
+                "file_formats": blueprint.file_formats,
+            }, indent=2)
+            refined_bp = generate_project_blueprint(
+                user_prompt, pm, provider_name,
+                architecture_content=architecture_content,
+                previous_attempt=previous_bp_json,
+                critique_issues=struct_issues,
+            )
+            if refined_bp and refined_bp.file_formats and refined_bp.folder_structure.strip():
+                blueprint = refined_bp
+                emit("info", "Blueprint refined from structural issues.")
+            else:
+                emit("info", "Structural refinement failed; keeping current blueprint.")
+                break
+        else:
+            remaining = validate_blueprint(blueprint.file_formats, blueprint.folder_structure)
+            if remaining:
+                emit("warning", f"{len(remaining)} structural issue(s) remain after refinement; proceeding anyway.")
 
     if not blueprint:
         emit(
