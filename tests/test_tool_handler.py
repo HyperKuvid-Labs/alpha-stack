@@ -164,3 +164,36 @@ def test_browse_url_falls_back_to_http(handler, monkeypatch):
 def test_browse_url_requires_url(handler):
     r = handler.handle_function_call("browse_url", {"url": ""})
     assert "error" in r
+
+
+def test_mark_complete_rejected_without_any_shell_run(handler):
+    result = handler.handle_function_call(
+        "mark_complete",
+        {"reason": "done", "runtime_verification": "ran python main.py add/list/summary, all exit 0"},
+    )
+    assert result["success"] is False
+    assert "no shell commands" in result["error"]
+
+
+def test_mark_complete_rejected_without_runtime_verification(handler):
+    handler.last_test_output = "===== 11 passed in 0.25s ====="
+    result = handler.handle_function_call("mark_complete", {"reason": "tests pass"})
+    assert result["success"] is False
+    assert "runtime verification" in result["error"].lower()
+    assert handler.tests_passed is False
+
+
+def test_mark_complete_accepts_with_runtime_verification(handler):
+    handler.last_test_output = "===== 11 passed in 0.25s ====="
+    result = handler.handle_function_call(
+        "mark_complete",
+        {
+            "reason": "tests pass",
+            "runtime_verification": (
+                "Executed python main.py add --amount 5 --category food (exit 0, printed "
+                "confirmation); python main.py summary --month 2026-07 printed the category table."
+            ),
+        },
+    )
+    assert result["success"] is True
+    assert handler.tests_passed is True

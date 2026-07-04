@@ -481,16 +481,20 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
         },
         {
             "name": "mark_complete",
-            "description": "Call this tool ONLY after running your test command and confirming all tests pass. The pipeline will NOT stop until you call this. It verifies your recent shell output contains passing test results before accepting.",
+            "description": "Call this tool ONLY after (1) running the test suite and confirming all tests pass AND (2) actually running the project itself — executing the entry point / CLI commands / server endpoints with realistic inputs — and confirming it works. The pipeline will NOT stop until you call this. It rejects the call if runtime verification is missing.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "reason": {
                         "type": "string",
                         "description": "Summary of what was done: what was fixed, how many tests pass, etc.",
-                    }
+                    },
+                    "runtime_verification": {
+                        "type": "string",
+                        "description": "Exactly which commands you executed to run the real project (not the tests), and what output you observed. E.g. 'ran python main.py add --amount 5 --category food (exit 0, printed confirmation); python main.py summary --month 2026-07 (printed category table)'.",
+                    },
                 },
-                "required": ["reason"],
+                "required": ["reason", "runtime_verification"],
             },
         },
     ]

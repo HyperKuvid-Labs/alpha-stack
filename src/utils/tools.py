@@ -395,7 +395,10 @@ class ToolHandler:
         elif function_name == "give_up":
             return self._give_up(reason=args.get("reason", "No reason provided."))
         elif function_name == "mark_complete":
-            return self._mark_complete(reason=args.get("reason", "No reason provided."))
+            return self._mark_complete(
+                reason=args.get("reason", "No reason provided."),
+                runtime_verification=args.get("runtime_verification", ""),
+            )
         else:
             return {"error": f"Unknown function: {function_name}"}
 
@@ -418,14 +421,29 @@ class ToolHandler:
             "message": "Session terminated because the agent gave up."
         }
 
-    def _mark_complete(self, reason: str) -> Dict[str, Any]:
-        """Agent signals tests pass. Requires that at least one shell command has been run."""
+    def _mark_complete(self, reason: str, runtime_verification: str = "") -> Dict[str, Any]:
+        """Agent signals the project works. Requires that shell commands have
+        been run AND that the agent attests to a runtime smoke check — passing
+        tests alone don't prove the program runs (unit tests can be green while
+        the entry point crashes on module seams)."""
         if not self.last_test_output:
             return {
                 "success": False,
                 "error": (
                     "Cannot mark complete: no shell commands have been run yet. "
                     "Run your test command first and confirm the output shows tests passing."
+                ),
+            }
+
+        if len((runtime_verification or "").strip()) < 40:
+            return {
+                "success": False,
+                "error": (
+                    "Cannot mark complete: missing runtime verification. After tests pass, "
+                    "you must actually RUN the project (execute the entry point / start the "
+                    "server / invoke each CLI command with realistic inputs) and confirm it "
+                    "works. Then call mark_complete again with `runtime_verification` "
+                    "describing exactly which commands you executed and what output you saw."
                 ),
             }
 
