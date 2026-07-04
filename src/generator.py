@@ -299,6 +299,14 @@ def _make_base_tool_executor(tracker, dep_registry, output_base_dir, registered_
                 content = "".join(lines[:MAX_DEP_CONTENT_LINES])
                 if len(lines) > MAX_DEP_CONTENT_LINES:
                     content += f"\n... ({len(lines) - MAX_DEP_CONTENT_LINES} more lines truncated)"
+                if req_path.endswith(".py") and registered_files:
+                    from .utils.import_map import python_import_addresses
+                    addr = python_import_addresses(registered_files).get(req_path)
+                    if addr:
+                        content = (
+                            f"[import address: `{addr}` — import its names as "
+                            f"`from {addr} import <name>`, never by bare module name]\n\n" + content
+                        )
                 return content
             except Exception as e:
                 return f"Error reading file: {e}"
@@ -1307,8 +1315,13 @@ def generate_tree(resp, project_name="root"):
 # Main entry point
 # ---------------------------------------------------------------------------
 
-def _build_prompt_rules(filepath: str, details: dict) -> str:
+def _build_prompt_rules(filepath: str, details: dict, all_paths=None) -> str:
     import json as _json
+    if all_paths and str(filepath).endswith(".py") and isinstance(details, dict):
+        from .utils.import_map import import_guidance
+        guidance = import_guidance(filepath, details.get("dependencies") or [], all_paths)
+        if guidance:
+            details = {**details, "python_import_guidance": guidance}
     return _json.dumps(details, indent=2)
 
 
@@ -1556,8 +1569,9 @@ def generate_project(
             f"For a fresh generation, delete {project_root_path} first.",
         )
 
+    all_planned_paths = list(file_format.keys())
     for filepath, details in file_format.items():
-        prompt_rules = _build_prompt_rules(filepath, details)
+        prompt_rules = _build_prompt_rules(filepath, details, all_paths=all_planned_paths)
         orchestrator.add_node(filepath, prompt_rules)
 
     start_time = time.time()
