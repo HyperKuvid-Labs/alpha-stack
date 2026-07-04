@@ -76,7 +76,10 @@ Rules:
 - ALWAYS include the language's dependency manifest (`requirements.txt`, `pyproject.toml`, `package.json`, `go.mod`, `Cargo.toml`, etc.).
 - Include `Dockerfile` ONLY if the project requires containerization (external services, specific OS env). Pure library/script projects do NOT need one.
 - ALWAYS include a `tests/` directory: unit tests per module + at least one integration test.
-- ALWAYS include the primary entry point (`main.py`, `app.py`, `main.go`, etc.).
+- ALWAYS include the primary entry point (`main.py`, `app.py`, `main.go`, `main.ts`, `index.ts`, etc.).
+- For browser/frontend projects: ALWAYS include `index.html` and a top-level entry script (e.g. `main.ts`, `index.ts`) that bootstraps the app.
+- For CLI tools: ALWAYS include the top-level runner/entry file that parses args and starts the program.
+- ALWAYS include all tooling config files required to build and run the project: `tsconfig.json`, `vite.config.ts`, `webpack.config.js`, `jest.config.js`, `.babelrc`, etc. — whichever the stack requires. These are NOT optional.
 - Do NOT include `README.md`, `LICENSE`, `.gitignore`.
 
 ---
@@ -115,3 +118,23 @@ GOOD: "Reads the config dict and raises ConfigError if any required key from REQ
 - For test files: `test_contract.test_class_or_functions` must name every test function.
 - Every field must be specific to this project. If you can copy it into any other project unchanged, it is too generic — rewrite it.
 - The contracts must be fully consistent with the architecture document — every component and data flow from the architecture must appear in one or more file contracts.
+
+### Integration & Entry Point Rules (CRITICAL — do not skip)
+
+The most common failure mode is generating library modules that are never wired together. Every project MUST have a complete integration layer. These files are NOT optional extras — they are the most important files in the project:
+
+**Entry points** (`main.ts`, `main.py`, `main.go`, `index.ts`, `app.py`, etc.):
+- The contract MUST describe the exact startup sequence: what gets instantiated, in what order, and how the event/game/request loop runs.
+- List every module it imports and exactly what it calls on each. "Imports X and calls X.start()" is not enough — name every method call, every callback wired, every handler registered.
+- If there is a loop (game loop, server loop, REPL), describe it step by step: what runs each tick/request/iteration.
+
+**HTML entry (`index.html`)** — required for ALL browser/frontend/canvas/WebGL projects:
+- Must reference the entry script with the correct `type="module"` attribute and exact path.
+- Describe every DOM element the JS code depends on (canvas id, root div id, etc.).
+- Include any inline styles or meta tags needed to make the layout work.
+
+**Config files** (`tsconfig.json`, `vite.config.ts`, `webpack.config.js`, `jest.config.js`, etc.):
+- The contract must list every non-default option and why it is needed.
+- Wrong config silently breaks builds — be exact.
+
+**Wiring rule:** For every module X that is designed in the blueprint, there must be exactly one file whose contract explicitly says "imports X and calls [specific method] to wire it into the application". If no file's contract does this for module X, the project will not run. Check this before finalising the blueprint.
