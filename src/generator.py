@@ -1488,6 +1488,18 @@ def generate_project(
         file_formats=file_format,
     )
 
+    preexisting = [
+        fp for fp in file_format
+        if os.path.exists(os.path.join(project_root_path, os.path.normpath(fp)))
+    ]
+    if preexisting:
+        emit(
+            "warning",
+            f"Output directory already contains {len(preexisting)} of {len(file_format)} "
+            f"planned files — these will be REUSED as-is (checkpoint mode), not regenerated. "
+            f"For a fresh generation, delete {project_root_path} first.",
+        )
+
     for filepath, details in file_format.items():
         prompt_rules = _build_prompt_rules(filepath, details)
         orchestrator.add_node(filepath, prompt_rules)
