@@ -54,10 +54,12 @@ Your `run_shell_command` calls execute inside a CubeSandbox microVM. The working
 
 ## How to Run Tests
 Figure out the right test command from the project structure:
-- **Python** → `pip install -e .[dev] && pytest -v` (or `pip install -r requirements.txt && pytest -v`)
+- **Python** → `python3 -m venv .venv && .venv/bin/pip install -e .[dev] && .venv/bin/pytest -v` (or `.venv/bin/pip install -r requirements.txt`)
 - **Node.js** → `npm install && npm test`
 - **Go** → `go test ./...`
 - **Rust** → `cargo test`
+
+For Python, NEVER `pip install` into the system or user environment — always create and use the project-local `.venv` shown above. Installing the project globally can shadow the user's own packages.
 
 When in doubt, read `pyproject.toml`, `package.json`, or the project config to understand the test setup.
 
