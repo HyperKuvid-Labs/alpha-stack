@@ -116,12 +116,10 @@ def test_file_contract_prompt_renders(pm):
     sk = _skeleton(3)
     rendered = pm.render(
         "file_contract.j2",
-        filepath="main.py",
-        file_purpose=sk["files"]["main.py"],
         architecture_content="## arch",
         folder_structure=sk["folder_structure"],
         files=sk["files"],
     )
-    assert "main.py" in rendered
+    assert "main.py" in rendered  # from the skeleton file list
     assert "interfaces" in rendered
     assert "external_packages" in rendered

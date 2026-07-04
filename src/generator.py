@@ -967,11 +967,16 @@ def generate_blueprint_skeleton(prompt: str, pm, provider_name: Optional[str] = 
 
 def generate_single_file_contract(filepath: str, file_purpose: str, skeleton: Dict[str, Any],
                                   architecture_content: Optional[str], pm) -> Optional[Dict[str, Any]]:
-    """Pass 1b: write the full generation contract for one file (no tools, small call)."""
+    """Pass 1b: write the full generation contract for one file (no tools, small call).
+
+    The system prompt contains only shared content (role, architecture,
+    skeleton) and is byte-identical across every fan-out call; the per-file
+    assignment travels in the user message. Identical prefixes let provider
+    prompt caches (Gemini/OpenAI implicit caching) serve calls 2..N at a
+    discount and lower latency.
+    """
     system_instruction = pm.render(
         "file_contract.j2",
-        filepath=filepath,
-        file_purpose=file_purpose,
         architecture_content=architecture_content,
         folder_structure=skeleton.get("folder_structure", ""),
         files=skeleton.get("files", {}),
@@ -979,6 +984,7 @@ def generate_single_file_contract(filepath: str, file_purpose: str, skeleton: Di
     for _attempt in range(2):
         raw = _call_llm_text(
             system_instruction,
+            f"Your assigned file: `{filepath}`\nIts role: {file_purpose}\n\n"
             f"Write the contract for `{filepath}` now. Return only the JSON object.",
             timeout=120,
         )
