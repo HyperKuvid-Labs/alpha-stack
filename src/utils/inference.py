@@ -206,9 +206,17 @@ class GoogleProvider(InferenceProvider):
             if param in kwargs:
                 call_kwargs[param] = kwargs[param]
 
-        response = retry_api_call(self.get_client().models.generate_content, **call_kwargs)
+        from .telemetry import TELEMETRY
+        import time as _time
+        started = _time.monotonic()
+        try:
+            response = retry_api_call(self.get_client().models.generate_content, **call_kwargs)
+        except Exception:
+            TELEMETRY.record_llm_usage(error=True, latency_s=_time.monotonic() - started)
+            raise
+        TELEMETRY.record_google_response(response, latency_s=_time.monotonic() - started)
         if hasattr(response, "usage_metadata") and hasattr(response.usage_metadata, "total_token_count"):
-            self.total_tokens_used += response.usage_metadata.total_token_count
+            self.total_tokens_used += response.usage_metadata.total_token_count or 0
         return response
 
     def extract_function_calls(self, response: Any) -> List[Dict[str, Any]]:
@@ -279,19 +287,34 @@ class OpenAICompatibleProvider(InferenceProvider):
             for tool_def in tool_definitions
         ]
 
+    # Providers that honor OpenRouter-style usage accounting (returns actual
+    # cost + cached token counts in the usage block) set this True.
+    usage_accounting = False
+
     def call_model(
         self, messages: List[Dict], tools: List[Dict] = None, **kwargs
     ) -> Any:
+        from .telemetry import TELEMETRY
+        import time as _time
+
         call_kwargs = {
             "model": self.model,
             "messages": messages,
         }
         if tools:
             call_kwargs["tools"] = tools
+        if self.usage_accounting:
+            call_kwargs["extra_body"] = {"usage": {"include": True}}
         for param in ["temperature", "max_tokens", "top_p"]:
             if param in kwargs:
                 call_kwargs[param] = kwargs[param]
-        response = retry_api_call(self.get_client().chat.completions.create, **call_kwargs)
+        started = _time.monotonic()
+        try:
+            response = retry_api_call(self.get_client().chat.completions.create, **call_kwargs)
+        except Exception:
+            TELEMETRY.record_llm_usage(error=True, latency_s=_time.monotonic() - started)
+            raise
+        TELEMETRY.record_openai_response(response, latency_s=_time.monotonic() - started)
         if hasattr(response, "usage") and hasattr(response.usage, "total_tokens"):
             self.total_tokens_used += response.usage.total_tokens
         return response
@@ -376,6 +399,8 @@ class OpenAIProvider(OpenAICompatibleProvider):
 
 @register_provider("openrouter")
 class OpenRouterProvider(OpenAICompatibleProvider):
+    usage_accounting = True
+
     def get_client(self):
         if self._client is None:
             from openai import OpenAI

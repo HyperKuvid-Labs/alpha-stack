@@ -12,24 +12,6 @@ from pathlib import Path
 _REAL_STDOUT = sys.__stdout__
 
 
-def normalize_problem_statement_language(raw_value):
-    value = (raw_value or "").strip().lower()
-    if not value:
-        return "others"
-    if value in {"cuda", "others"}:
-        return value
-    return None
-
-
-def prompt_problem_statement_language():
-    while True:
-        choice = input("Project language profile (cuda/others) [others]: ").strip().lower()
-        normalized = normalize_problem_statement_language(choice)
-        if normalized:
-            return normalized
-        print("Please choose either 'cuda' or 'others'.")
-
-
 def status_handler(event_type, message, **kwargs):
     if event_type == "step":
         step_num = getattr(status_handler, "_step_num", 0) + 1
@@ -69,13 +51,8 @@ def cmd_generate(args):
         print("Project description is required!")
         return 1
 
-    problem_statement_language = normalize_problem_statement_language(getattr(args, "language", None))
-    if not problem_statement_language:
-        problem_statement_language = prompt_problem_statement_language()
-
     print(f"\nProject: {user_prompt[:50]}...")
     print(f"Output: {output_dir}")
-    print(f"Language profile: {problem_statement_language}")
     print()
 
     provider_name = getattr(args, "provider", None)
@@ -84,7 +61,6 @@ def cmd_generate(args):
         output_dir,
         on_status=status_handler,
         provider_name=provider_name,
-        problem_statement_language=problem_statement_language,
     )
 
     if not result:
@@ -95,18 +71,11 @@ def cmd_generate(args):
     print("FINAL RESULTS")
     print("=" * 80)
 
-    dep_result = result.get("dependency_resolution", {})
     testing_result = result.get("testing", {})
     success = result.get("success", False)
 
-    print(f"\nDependency Resolution: {'SUCCESS' if dep_result.get('success') else 'FAILED'}")
-    if not dep_result.get('success'):
-        remaining = dep_result.get("remaining_errors", [])
-        if remaining:
-            print(f"   {len(remaining)} remaining issues")
-
     tests_passed = testing_result.get("tests_success", False)
-    print(f"\nSandboxed Tests: {'SUCCESS' if tests_passed else 'FAILED'}")
+    print(f"\nTests & Runtime Verification: {'SUCCESS' if tests_passed else 'FAILED'}")
     print(f"   Tool calls: {testing_result.get('tool_calls', 0)}")
     if testing_result.get("gave_up"):
         print("   Planner gave up before tests passed.")
@@ -114,8 +83,7 @@ def cmd_generate(args):
     print(f"\n{'=' * 80}")
     if success:
         print("PROJECT GENERATION: COMPLETE SUCCESS")
-        print("\n   All dependencies resolved")
-        print("   All tests passed in sandbox")
+        print("\n   All tests passed and runtime verification succeeded")
         print("\n   The project is ready to use!")
     else:
         print("PROJECT GENERATION: INCOMPLETE")
@@ -192,14 +160,23 @@ def cmd_clean(args):
 
 
 def cmd_setup(args):
-    """Command wrapper for API setup."""
-    try:
-        from .tui import setup_api_key
-        setup_api_key()
-        return 0
-    except ImportError:
-        print("⚠️  TUI dependencies missing. Please install 'rich' and 'prompt_toolkit'.")
+    """Interactive API key setup for any configured provider."""
+    from .config import set_provider_api_key
+
+    names, default = _load_provider_options_local()
+    default = default or (names[0] if names else "openrouter")
+    print("Configure an API key.")
+    print(f"Providers: {', '.join(names)}")
+    provider = input(f"Provider [{default}]: ").strip() or default
+    api_key = input(f"API key for {provider}: ").strip()
+    if not api_key:
+        print("No key entered; nothing saved.")
         return 1
+    if set_provider_api_key(provider, api_key):
+        print(f"Saved API key for {provider}.")
+        return 0
+    print("Failed to save key.")
+    return 1
 
 
 def cmd_blueprint_smoke(args):
@@ -240,6 +217,25 @@ def cmd_blueprint_smoke(args):
     print(f"Folder structure length: {len(blueprint.folder_structure)} chars")
     print(f"File format entries: {len(blueprint.file_formats)}")
     return 0
+
+
+def cmd_bench(args):
+    from .bench import run_bench
+
+    setattr(status_handler, "_step_num", 0)
+    try:
+        run_bench(
+            problems_path=args.problems,
+            output_root=args.output or "./bench_results",
+            provider_name=getattr(args, "provider", None),
+            model=getattr(args, "model", None),
+            limit=getattr(args, "limit", None),
+            on_status=status_handler,
+        )
+        return 0
+    except FileNotFoundError:
+        print(f"Problems file not found: {args.problems}")
+        return 1
 
 
 def _emit(req_id, type_, message="", data=None):
@@ -443,7 +439,6 @@ def _rpc_generate(req):
     output_dir = params.get("output_dir", "")
     provider = params.get("provider")
     model = params.get("model") or None
-    language = params.get("language", "others")
 
     def on_status(event_type, message, **kwargs):
         _emit(req_id, event_type, message, data=(kwargs or None))
@@ -458,7 +453,6 @@ def _rpc_generate(req):
                 on_status=on_status,
                 provider_name=provider,
                 model_override=model,
-                problem_statement_language=language,
             )
     finally:
         stdout_writer.flush()
@@ -532,100 +526,9 @@ def interactive_mode():
         except KeyboardInterrupt:
             return 130
 
-    try:
-        from .tui import display_logo, get_user_input, StatusDisplay, print_success, print_error
-    except ImportError:
-        # Fallback if dependencies are missing
-        print("  TUI dependencies missing. Run 'pip install alphastack[tui]' or install rich, pyfiglet, prompt_toolkit.")
-        # Create dummy args for generic flow
-        dummy_args = argparse.Namespace(prompt=None, output=None, language=None)
-        return cmd_generate(dummy_args)
-
-    display_logo()
-
-    try:
-        user_prompt, output_dir, problem_statement_language, provider_name = get_user_input()
-    except KeyboardInterrupt:
-        print("\n Exiting...")
-        return 0
-
-    from .generator import generate_project
-
-    # Create status display
-    status_display = StatusDisplay()
-
-    def tui_status_handler(event_type, message, **kwargs):
-        status_display.update(message, event_type)
-
-    with status_display:
-        try:
-            with contextlib.redirect_stdout(status_display.stdout_stream()), contextlib.redirect_stderr(status_display.stderr_stream()):
-                result = generate_project(
-                    user_prompt,
-                    output_dir,
-                    on_status=tui_status_handler,
-                    provider_name=provider_name,
-                    problem_statement_language=problem_statement_language,
-                )
-        except Exception as exc:
-            status_display.add_exception("Unhandled exception during project generation", exc)
-            result = None
-
-    if not result or not isinstance(result, dict):
-        if status_display.last_error:
-            print_error(f"Project generation failed: {status_display.last_error}")
-        else:
-            print_error("Project generation failed before producing a result.")
-        if status_display.last_traceback:
-            console_preview = "\n".join(status_display.last_traceback.strip().splitlines()[-8:])
-            print_error(f"Recent traceback:\n{console_preview}")
-        return 1
-
-    # After generation, show summary
-    success = result.get("success", False)
-    project_path = result.get('project_path', 'unknown')
-
-    if success:
-        print("Success")
-        print_success(f"Project located at: {project_path}")
-        print_success(f"Elapsed time: {result.get('elapsed_time', 0):.2f}s")
-    else:
-        print_error("Project generation incomplete. Check logs above.")
-        print_error(f"Location: {project_path}")
-
-    return 0 if success else 1
-
-def cmd_sandbox(args):
-    """Configure CubeSandbox connection details."""
-    from .config import set_sandbox_template, get_sandbox_config
-
-    template_id = (getattr(args, "template_id", None) or "").strip()
-    if not template_id:
-        cfg = get_sandbox_config()
-        print("Current CubeSandbox configuration:")
-        print(f"  template_id: {cfg.get('template_id') or '(unset)'}")
-        print(f"  api_url    : {cfg.get('api_url')}")
-        print(f"  api_key    : {cfg.get('api_key')}")
-        print(
-            "\nProvide --template-id <id> to update. "
-            "Create a template with:\n"
-            "  cubemastercli tpl create-from-image --image "
-            "ccr.ccs.tencentyun.com/ags-image/sandbox-code:latest"
-        )
-        return 0
-
-    api_url = getattr(args, "api_url", None) or None
-    api_key = getattr(args, "api_key", None) or None
-    ok = set_sandbox_template(template_id, api_url=api_url, api_key=api_key)
-    if not ok:
-        print("Failed to write sandbox config.")
-        return 1
-    print(f"Saved CubeSandbox template_id={template_id}.")
-    if api_url:
-        print(f"  api_url={api_url}")
-    if api_key:
-        print(f"  api_key={api_key}")
-    return 0
+    # No Go TUI binary available — fall back to the plain CLI flow.
+    dummy_args = argparse.Namespace(prompt=None, output=None)
+    return cmd_generate(dummy_args)
 
 
 def main():
@@ -638,7 +541,7 @@ def main():
 
     parser = argparse.ArgumentParser(
         prog="alphastack",
-        description="ALPHASTACK - AI-powered project generator with sandboxed testing"
+        description="ALPHASTACK - AI-powered project generator with test- and runtime-verified output"
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -648,8 +551,6 @@ def main():
     gen_parser.add_argument("-o", "--output", help="Output directory (default: ./created_projects)")
     gen_parser.add_argument("-p", "--provider", choices=["google", "openai", "vllm", "openrouter", "prime_intellect"],
                             help="Inference provider (default: from providers.json)")
-    gen_parser.add_argument("-l", "--language", choices=["cuda", "others"],
-                            help="Problem language profile: cuda or others (default: asks interactively)")
     gen_parser.set_defaults(func=cmd_generate)
 
     list_parser = subparsers.add_parser("list", help="List generated projects")
@@ -674,24 +575,20 @@ def main():
         choices=["google", "openai", "vllm", "openrouter", "prime_intellect"],
         help="Inference provider (default: vllm)"
     )
-    blueprint_smoke_parser.add_argument(
-        "-l", "--language",
-        choices=["cuda", "others"],
-        help="Problem language profile: cuda or others (default: others)"
-    )
     blueprint_smoke_parser.set_defaults(func=cmd_blueprint_smoke)
 
-    sandbox_parser = subparsers.add_parser(
-        "sandbox",
-        help="Configure CubeSandbox connection (template_id, api_url, api_key)"
+    bench_parser = subparsers.add_parser(
+        "bench",
+        help="Run a batch of problems and collect per-run telemetry (JSONL of {id, prompt})"
     )
-    sandbox_parser.add_argument("--template-id", dest="template_id",
-                                help="CubeSandbox template id (created via cubemastercli tpl create-from-image)")
-    sandbox_parser.add_argument("--api-url", dest="api_url",
-                                help="CubeSandbox API URL (default: http://127.0.0.1:3000)")
-    sandbox_parser.add_argument("--api-key", dest="api_key",
-                                help="CubeSandbox API key (default: dummy)")
-    sandbox_parser.set_defaults(func=cmd_sandbox)
+    bench_parser.add_argument("problems", help="Path to problems file (JSONL or JSON array)")
+    bench_parser.add_argument("-o", "--output", help="Results root directory (default: ./bench_results)")
+    bench_parser.add_argument("-p", "--provider", choices=["google", "openai", "vllm", "openrouter", "prime_intellect"],
+                              help="Inference provider (default: configured default)")
+    bench_parser.add_argument("-m", "--model", help="Model override, e.g. openai/gpt-5.4-nano")
+    bench_parser.add_argument("--limit", type=int, help="Run only the first N problems")
+    bench_parser.set_defaults(func=cmd_bench)
+
 
     args = parser.parse_args()
 

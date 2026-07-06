@@ -155,6 +155,8 @@ class OrchestratorMailbox:
 
     def ask(self, question: str, filepath: str) -> str:
         """Submit a query and block until the orchestrator responds."""
+        from .utils.telemetry import TELEMETRY
+        TELEMETRY.incr("orchestrator_escalations")
         query_id = str(uuid.uuid4())[:8]
         event = ThreadEvent()
         with self._lock:
@@ -470,6 +472,8 @@ class ParallelOrchestrator:
                 break
 
             retry_round += 1
+            from .utils.telemetry import TELEMETRY
+            TELEMETRY.incr("file_retry_rounds")
             num_failed = len(failed)
             print(f"[Orchestrator] Retry round {retry_round}: {num_failed} failed files", flush=True)
 

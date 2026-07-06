@@ -344,6 +344,14 @@ def _run_agentic_loop(
     provider = InferenceManager.get_active_provider()
     provider_name = InferenceManager._active_provider_name or ""
 
+    # Normalize tool definitions to the OpenAI envelope. Raw {name, description,
+    # parameters} dicts are rejected with 400 by strict endpoints (OpenAI/Azure)
+    # even though lenient providers accept them.
+    tools = [
+        t if t.get("type") == "function" else {"type": "function", "function": t}
+        for t in (tools or [])
+    ]
+
     if provider_name == "google":
         return _run_google_loop(system_prompt, user_message, tools, execute_tool, provider, max_turns, log_callback)
     else:
@@ -374,7 +382,10 @@ def _run_google_loop(system_prompt, user_message, tools, execute_tool, provider,
 
     contents = [{"role": "user", "parts": [{"text": user_message}]}]
 
+    from .utils.telemetry import TELEMETRY
+
     for _ in range(max_turns):
+        _t0 = time.monotonic()
         response = retry_api_call(
             client.models.generate_content,
             model=provider.model,
@@ -384,6 +395,7 @@ def _run_google_loop(system_prompt, user_message, tools, execute_tool, provider,
                 tools=[google_tools],
             )
         )
+        TELEMETRY.record_google_response(response, latency_s=time.monotonic() - _t0)
         if not response or not response.candidates:
             break
 
@@ -416,17 +428,26 @@ def _run_openai_loop(system_prompt, user_message, tools, execute_tool, provider,
         {"role": "user", "content": user_message},
     ]
 
+    from .utils.telemetry import TELEMETRY
+    extra: Dict = {}
+    if getattr(provider, "usage_accounting", False):
+        extra["extra_body"] = {"usage": {"include": True}}
+
     for _ in range(max_turns):
+        _t0 = time.monotonic()
         try:
             completion = client.chat.completions.create(
                 model=provider.model,
                 messages=messages,
                 tools=tools,
                 tool_choice="auto",
+                **extra,
             )
         except Exception as e:
+            TELEMETRY.record_llm_usage(error=True, latency_s=time.monotonic() - _t0)
             print(f"[agentic_loop] API error: {e}")
             break
+        TELEMETRY.record_openai_response(completion, latency_s=time.monotonic() - _t0)
 
         msg = completion.choices[0].message
 
@@ -1021,14 +1042,19 @@ def generate_project_blueprint_adaptive(prompt: str, pm, provider_name: Optional
 
     skeleton = generate_blueprint_skeleton(prompt, pm, provider_name, architecture_content)
     if not skeleton:
+        from .utils.telemetry import TELEMETRY as _T2
+        _T2.set_metric("blueprint_mode", "single_pass_fallback")
         print("[blueprint] skeleton pass failed — falling back to single-pass blueprint", file=sys.stderr)
         return generate_project_blueprint(prompt, pm, provider_name, architecture_content=architecture_content)
 
     files: Dict[str, str] = skeleton["files"]
+    from .utils.telemetry import TELEMETRY as _T
     if len(files) <= BLUEPRINT_FANOUT_THRESHOLD:
+        _T.set_metric("blueprint_mode", "single_pass")
         print(f"[blueprint] {len(files)} planned files (<= {BLUEPRINT_FANOUT_THRESHOLD}) — single-pass blueprint")
         return generate_project_blueprint(prompt, pm, provider_name, architecture_content=architecture_content)
 
+    _T.set_metric("blueprint_mode", "fanout")
     print(f"[blueprint] {len(files)} planned files (> {BLUEPRINT_FANOUT_THRESHOLD}) — generating contracts in parallel")
     contracts: Dict[str, Any] = {}
     with ThreadPoolExecutor(max_workers=BLUEPRINT_CONTRACT_WORKERS) as ex:
@@ -1070,7 +1096,10 @@ def _call_llm_text(system_instruction: str, user_message: str, timeout: int = 60
     provider = InferenceManager.get_active_provider()
     provider_name = InferenceManager._active_provider_name or ""
 
+    from .utils.telemetry import TELEMETRY
+
     def _do_call():
+        _t0 = time.monotonic()
         try:
             if provider_name == "google":
                 from google.genai import types
@@ -1082,18 +1111,24 @@ def _call_llm_text(system_instruction: str, user_message: str, timeout: int = 60
                     contents=user_message,
                     config=types.GenerateContentConfig(systemInstruction=system_instruction),
                 )
+                TELEMETRY.record_google_response(response, latency_s=time.monotonic() - _t0)
                 if not response or not response.text:
                     return None
                 return response.text.strip()
             else:
                 client = provider.get_client()
+                extra = {}
+                if getattr(provider, "usage_accounting", False):
+                    extra["extra_body"] = {"usage": {"include": True}}
                 completion = client.chat.completions.create(
                     model=provider.model,
                     messages=[
                         {"role": "system", "content": system_instruction},
                         {"role": "user", "content": user_message},
                     ],
+                    **extra,
                 )
+                TELEMETRY.record_openai_response(completion, latency_s=time.monotonic() - _t0)
                 text = completion.choices[0].message.content
                 return text.strip() if text else None
         except Exception as e:
@@ -1344,11 +1379,21 @@ def generate_project(
     pm = PromptManager()
 
     provider_name = provider_name or InferenceManager.get_default_provider()
-    InferenceManager.initialize(provider_name, model_override=model_override)
+    provider_obj = InferenceManager.initialize(provider_name, model_override=model_override)
+
+    from .utils.telemetry import TELEMETRY
+    TELEMETRY.start_run(
+        prompt=user_prompt,
+        provider=provider_name,
+        model=getattr(provider_obj, "model", model_override),
+        output_dir=output_base_dir,
+    )
+    TELEMETRY.set_phase("requirements")
 
     emit("step", "Extracting acceptance checklist from requirements...")
     requirements = extract_requirements(user_prompt, pm)
     requirements_json = json.dumps(requirements, indent=2) if requirements else None
+    TELEMETRY.set_metric("checklist_items", len(requirements) if requirements else 0)
     if requirements:
         emit("info", f"Checklist: {len(requirements)} verifiable requirement(s) extracted.")
         for r in requirements:
@@ -1356,15 +1401,20 @@ def generate_project(
     else:
         emit("warning", "Requirement extraction failed — continuing without a checklist.")
 
+    TELEMETRY.set_phase("architecture")
     emit("step", "Designing system architecture...")
     architecture_content = generate_architecture_plan(user_prompt, pm, provider_name)
 
     if not architecture_content:
         emit("error", "Failed to generate architecture plan.")
+        TELEMETRY.set_metric("failure_stage", "architecture_failed")
+        TELEMETRY.finalize(False)
+        TELEMETRY.save(os.path.join(output_base_dir, ".alpha_stack"))
         return None
 
     emit("info", "Reviewing architecture against problem statement...")
     arch_issues = critique_architecture(user_prompt, architecture_content, pm, requirements_json=requirements_json)
+    TELEMETRY.set_metric("architecture_critic_issues", len(arch_issues))
     if arch_issues:
         emit("info", f"Architecture critic found {len(arch_issues)} issue(s); refining...")
         for i, issue in enumerate(arch_issues, 1):
@@ -1395,12 +1445,14 @@ def generate_project(
             f.write(requirements_json)
         emit("info", f"Acceptance checklist saved to {req_path}")
 
+    TELEMETRY.set_phase("blueprint")
     emit("step", "Planning file structure and generating project blueprint...")
     blueprint = generate_project_blueprint_adaptive(user_prompt, pm, provider_name, architecture_content=architecture_content)
 
     if blueprint:
         emit("info", "Reviewing blueprint against architecture...")
         bp_issues = critique_blueprint(architecture_content, blueprint, pm, user_prompt=user_prompt, requirements_json=requirements_json)
+        TELEMETRY.set_metric("blueprint_critic_issues", len(bp_issues))
         if bp_issues:
             emit("info", f"Blueprint critic found {len(bp_issues)} issue(s); refining...")
             for i, issue in enumerate(bp_issues, 1):
@@ -1426,6 +1478,7 @@ def generate_project(
 
         emit("info", "Reviewing test contracts against architecture and requirements...")
         test_issues = critique_tests(user_prompt, architecture_content, blueprint, pm, requirements_json=requirements_json)
+        TELEMETRY.set_metric("test_critic_issues", len(test_issues))
         if test_issues:
             emit("info", f"Test critic found {len(test_issues)} issue(s); refining test contracts...")
             for i, issue in enumerate(test_issues, 1):
@@ -1455,6 +1508,7 @@ def generate_project(
         from .utils.blueprint_validator import validate_blueprint
         for _validation_round in range(2):
             struct_issues = validate_blueprint(blueprint.file_formats, blueprint.folder_structure)
+            TELEMETRY.append_metric("structural_issues_per_round", len(struct_issues))
             if not struct_issues:
                 emit("info", "Blueprint structural validation: passed.")
                 break
@@ -1484,6 +1538,9 @@ def generate_project(
                 emit("warning", f"{len(remaining)} structural issue(s) remain after refinement; proceeding anyway.")
 
     if not blueprint:
+        TELEMETRY.set_metric("failure_stage", "blueprint_failed")
+        TELEMETRY.finalize(False)
+        TELEMETRY.save(os.path.join(output_base_dir, ".alpha_stack"))
         emit(
             "error",
             "Failed to generate project blueprint. "
@@ -1494,6 +1551,9 @@ def generate_project(
         return None
 
     if not blueprint.file_formats or not blueprint.folder_structure.strip():
+        TELEMETRY.set_metric("failure_stage", "blueprint_empty")
+        TELEMETRY.finalize(False)
+        TELEMETRY.save(os.path.join(output_base_dir, ".alpha_stack"))
         emit(
             "error",
             f"Blueprint returned empty content (file_formats={len(blueprint.file_formats or {})}, "
@@ -1574,12 +1634,19 @@ def generate_project(
         prompt_rules = _build_prompt_rules(filepath, details, all_paths=all_planned_paths)
         orchestrator.add_node(filepath, prompt_rules)
 
+    TELEMETRY.set_phase("file_generation")
+    TELEMETRY.set_metric("planned_files", len(file_format))
+    TELEMETRY.set_metric("preexisting_files", len(preexisting))
+
     start_time = time.time()
     orchestrator.execute()
+    TELEMETRY.set_metric("files_generated", len(orchestrator.tracker.list_done()))
+    TELEMETRY.set_metric("files_failed", len(orchestrator.tracker.list_failed()))
 
     if not os.path.exists(project_root_path):
         return None
 
+    TELEMETRY.set_phase("dependency_resolution")
     emit("step", "Starting dependency analysis for entire project...")
     dependency_analyzer.analyze_project_files(project_root_path, folder_tree=folder_tree, folder_structure=folder_struc, on_status=on_status)
     emit("progress", "Dependency graph scan complete.")
@@ -1590,6 +1657,7 @@ def generate_project(
 
     error_tracker = ErrorTracker(project_root_path, folder_tree)
 
+    TELEMETRY.set_phase("fix_loop")
     emit("step", "Running testing pipeline...")
 
     testing_results = run_testing_pipeline(
@@ -1610,9 +1678,20 @@ def generate_project(
 
     overall_success = testing_results.get("success", False)
 
+    report = TELEMETRY.finalize(overall_success)
+    telemetry_path = TELEMETRY.save(os.path.join(project_root_path, ".alpha_stack"))
+    emit("info", TELEMETRY.summary_line())
+    if telemetry_path:
+        emit("info", f"Telemetry saved to {telemetry_path}")
+
     return {
         "project_path": project_root_path,
         "success": overall_success,
         "testing": testing_results,
-        "elapsed_time": elapsed
+        "elapsed_time": elapsed,
+        "telemetry": {
+            "run_id": report["run_id"],
+            "outcome": report["outcome"],
+            "totals": report["totals"],
+        },
     }

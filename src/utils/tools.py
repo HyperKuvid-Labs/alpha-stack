@@ -220,8 +220,7 @@ class _ShellJob:
 class ToolHandler:
     def __init__(self, project_root: str, error_tracker=None,
                  dependency_analyzer=None, tool_log_path: Optional[str] = None,
-                 agent_name: Optional[str] = None,
-                 sandbox_session=None):
+                 agent_name: Optional[str] = None):
         from .tool_call_log import ToolCallLogger
         from .web_search import WebSearchCache
         self.project_root = project_root
@@ -232,32 +231,13 @@ class ToolHandler:
         self.tests_passed: bool = False
         self.last_test_output: str = ""
         self._gave_up: bool = False
-        self.sandbox_session = sandbox_session
-        if sandbox_session is not None:
-            from ..sandbox.cube import SandboxShellManager
-            self.shell = SandboxShellManager(sandbox_session)
-        else:
-            self.shell = ShellManager(cwd=project_root)
+        self.shell = ShellManager(cwd=project_root)
         self._web_cache = WebSearchCache()
         self._browse_cache: Dict[str, Dict[str, Any]] = {}
         self._browse_lock = threading.Lock()
         # Per-round dedupe so a file's DGAT context is auto-attached at most
         # once per planner round. Cleared by the pipeline at round boundaries.
         self._recently_shown_context: set = set()
-
-    def _mirror_to_sandbox(self, op: str, path: str) -> None:
-        """Best-effort mirror of a successful local edit into the sandbox."""
-        if self.sandbox_session is None or not path:
-            return
-        try:
-            if op == "push":
-                self.sandbox_session.push_file(path)
-            elif op == "delete":
-                self.sandbox_session.delete_file(path)
-            elif op == "mkdir":
-                self.sandbox_session.mkdir(path)
-        except Exception as exc:
-            print(f"[sandbox-mirror] {op} {path} failed: {exc}")
 
     def cleanup(self):
         """Kill any running shell processes. Call on pipeline exit."""
@@ -412,6 +392,10 @@ class ToolHandler:
 
     def _give_up(self, reason: str) -> Dict[str, Any]:
         """Stop everything and signal that the agent has given up."""
+        from .telemetry import TELEMETRY
+        TELEMETRY.incr("planner_gave_up")
+        TELEMETRY.set_metric("give_up_reason", reason[:500])
+
         print(f"\n[!] AGENT GAVE UP: {reason}\n")
         self._gave_up = True
         return {
@@ -446,6 +430,11 @@ class ToolHandler:
                     "describing exactly which commands you executed and what output you saw."
                 ),
             }
+
+        from .telemetry import TELEMETRY
+        TELEMETRY.incr("runtime_verification_accepted")
+        TELEMETRY.set_metric("runtime_verification", runtime_verification.strip()[:2000])
+        TELEMETRY.set_metric("completion_reason", reason[:500])
 
         self.tests_passed = True
         print(f"\n[✓] AGENT MARKED COMPLETE: {reason}\n")
@@ -598,7 +587,6 @@ class ToolHandler:
             with open(full_path, 'w', encoding='utf-8') as f:
                 f.write(new_content)
 
-            self._mirror_to_sandbox("push", file_path)
             self._mark_dgat_dirty(file_path)
 
             return {
@@ -635,7 +623,6 @@ class ToolHandler:
                     return {"error": f"Parent directory does not exist: {os.path.dirname(directory_path)}"}
                 os.mkdir(full_path)
 
-            self._mirror_to_sandbox("mkdir", directory_path)
 
             return {
                 "success": True,
@@ -658,7 +645,6 @@ class ToolHandler:
 
         try:
             os.remove(full_path)
-            self._mirror_to_sandbox("delete", file_path)
             self._mark_dgat_dirty(file_path)
             return {
                 "success": True,
@@ -888,7 +874,6 @@ class ToolHandler:
         except Exception as e:
             return {"error": f"Error writing patched file: {str(e)}"}
 
-        self._mirror_to_sandbox("push", file_path)
         self._mark_dgat_dirty(file_path)
 
         return {
