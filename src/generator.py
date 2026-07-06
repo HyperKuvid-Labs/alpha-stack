@@ -1366,6 +1366,7 @@ def generate_project(
     on_status=None,
     provider_name: Optional[str] = None,
     model_override: Optional[str] = None,
+    oracle_checks: Optional[list] = None,
     **_unused_kwargs,
 ):
     from .utils.dependencies import DependencyAnalyzer
@@ -1671,6 +1672,7 @@ def generate_project(
         on_status=on_status,
         provider_name=provider_name,
         requirements_json=requirements_json,
+        oracle_checks=oracle_checks,
     )
 
     end_time = time.time()

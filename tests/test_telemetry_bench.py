@@ -75,7 +75,7 @@ def test_run_bench_isolates_and_aggregates(tmp_path, monkeypatch):
         '{"id": "bad_one", "prompt": "crashes"}\n'
     )
 
-    def fake_generate(prompt, out_dir, on_status=None, provider_name=None, model_override=None):
+    def fake_generate(prompt, out_dir, on_status=None, provider_name=None, model_override=None, **kwargs):
         TELEMETRY.start_run(prompt, provider_name, model_override, out_dir)
         TELEMETRY.set_phase("architecture")
         TELEMETRY.record_llm_usage(prompt_tokens=10, completion_tokens=5)

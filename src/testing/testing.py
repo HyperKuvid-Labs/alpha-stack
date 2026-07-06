@@ -33,6 +33,7 @@ class TestingPipeline:
         tool_log_path: Optional[str] = None,
         provider_name: Optional[str] = None,
         requirements_json: Optional[str] = None,
+        oracle_checks: Optional[list] = None,
     ):
         self.project_root = project_root
         self.software_blueprint = software_blueprint
@@ -42,6 +43,7 @@ class TestingPipeline:
         self.dependency_analyzer = dependency_analyzer
         self.on_status = on_status
         self.requirements_json = requirements_json
+        self.oracle_checks = oracle_checks or []
 
         self.provider = InferenceManager.get_active_provider()
         self.provider_name = InferenceManager._active_provider_name or ""
@@ -348,6 +350,17 @@ class TestingPipeline:
 
             self._sync_state()
             if self.state.tests_passed:
+                # External oracle gate: author-supplied acceptance checks run
+                # against the real project. Failures reject the completion and
+                # re-enter the SAME conversation with the failure report, so
+                # the planner keeps fixing with full context.
+                oracle_feedback = self._run_oracle_gate()
+                if oracle_feedback is not None:
+                    self.tool_handler.tests_passed = False
+                    self._sync_state()
+                    messages.append(self.provider.create_initial_message(oracle_feedback)[0])
+                    continue
+
                 self._emit("success", "All tests passing")
                 try:
                     self.memory.notify_success()
@@ -361,6 +374,52 @@ class TestingPipeline:
         )
         self._emit("warning", msg)
         return self._build_result(msg, tool_calls_made)
+
+    MAX_ORACLE_REJECTIONS = 3
+
+    def _run_oracle_gate(self) -> Optional[str]:
+        """Run public oracle checks after the planner claims completion.
+
+        Returns None when the gate passes (no checks configured, all pass, or
+        the rejection budget is exhausted — the run then completes on the
+        pipeline's own criteria and the bench grades the miss). Returns the
+        feedback message for the planner when checks fail within budget.
+        """
+        if not self.oracle_checks:
+            return None
+        from ..utils.oracle import run_checks, format_failures_for_agent
+        from ..utils.telemetry import TELEMETRY
+
+        results = run_checks(self.project_root, self.oracle_checks)
+        n_pass = sum(1 for r in results if r.get("passed"))
+        TELEMETRY.set_metric("oracle_public_pass", n_pass)
+        TELEMETRY.set_metric("oracle_public_total", len(results))
+        if n_pass == len(results):
+            self._emit("success", f"Oracle checks: {n_pass}/{len(results)} passed")
+            return None
+
+        self._oracle_rejections = getattr(self, "_oracle_rejections", 0) + 1
+        TELEMETRY.incr("oracle_rejections")
+        if self._oracle_rejections > self.MAX_ORACLE_REJECTIONS:
+            self._emit("warning",
+                       f"Oracle checks still failing after {self.MAX_ORACLE_REJECTIONS} "
+                       f"rejections ({n_pass}/{len(results)}) — accepting run as-is.")
+            return None
+
+        failures = format_failures_for_agent(results)
+        self._emit("warning",
+                   f"Oracle gate rejected completion ({n_pass}/{len(results)} passed) — "
+                   f"rejection {self._oracle_rejections}/{self.MAX_ORACLE_REJECTIONS}")
+        return (
+            "Your completion was REJECTED: the project's tests pass, but external "
+            "acceptance checks against the RUNNING project failed:\n\n"
+            f"{failures}\n\n"
+            "Fix the underlying behavior so these commands produce the expected "
+            "results. Do NOT special-case the exact inputs shown — additional "
+            "unrevealed checks verify the same behavior with different values, "
+            "and hardcoded answers will fail them. When fixed, run the tests and "
+            "call mark_complete again with runtime_verification."
+        )
 
     def _build_result(self, message: str, tool_calls: int = 0) -> Dict:
         """Build the return dict from PipelineState — single source of truth."""
@@ -393,6 +452,7 @@ def run_testing_pipeline(
     tool_log_path: Optional[str] = None,
     provider_name: Optional[str] = None,
     requirements_json: Optional[str] = None,
+    oracle_checks: Optional[list] = None,
 ) -> Dict:
     pipeline = TestingPipeline(
         project_root=project_root,
@@ -406,5 +466,6 @@ def run_testing_pipeline(
         tool_log_path=tool_log_path,
         provider_name=provider_name,
         requirements_json=requirements_json,
+        oracle_checks=oracle_checks,
     )
     return pipeline.run_testing_pipeline()

@@ -18,6 +18,7 @@ import time
 import traceback
 from typing import Any, Dict, List, Optional
 
+from .utils.oracle import gaming_suspected, run_checks
 from .utils.telemetry import TELEMETRY
 
 SUMMARY_COLUMNS = [
@@ -28,6 +29,7 @@ SUMMARY_COLUMNS = [
     "blueprint_mode", "structural_issue_rounds",
     "planner_rounds", "planner_tool_calls", "total_edits", "test_runs",
     "rounds_to_green", "orchestrator_escalations", "file_retry_rounds",
+    "oracle_public", "oracle_hidden", "oracle_gaming_suspected",
     "project_path",
 ]
 
@@ -117,6 +119,9 @@ def _summary_row(problem_id: str, result: Optional[Dict], report: Optional[Dict]
             "rounds_to_green": metrics.get("rounds_to_green", ""),
             "orchestrator_escalations": counters.get("orchestrator_escalations", ""),
             "file_retry_rounds": counters.get("file_retry_rounds", ""),
+            "oracle_public": metrics.get("oracle_public", ""),
+            "oracle_hidden": metrics.get("oracle_hidden", ""),
+            "oracle_gaming_suspected": metrics.get("oracle_gaming_suspected", ""),
         })
     if error:
         row["outcome"] = f"harness_error: {error[:120]}"
@@ -160,6 +165,9 @@ def run_bench(problems_path: str, output_root: str,
                 "started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             }, f, indent=2)
 
+        checks = problem.get("checks") or []
+        public_checks = [c for c in checks if not c.get("hidden")]
+
         TELEMETRY.reset()
         result, report, error = None, None, None
         started = time.time()
@@ -179,6 +187,7 @@ def run_bench(problems_path: str, output_root: str,
                         on_status=log_status,
                         provider_name=provider_name,
                         model_override=model,
+                        oracle_checks=public_checks,
                     )
                 report = TELEMETRY.last_report
             except Exception as exc:
@@ -187,6 +196,24 @@ def run_bench(problems_path: str, output_root: str,
                 print(f"[bench] {pid} crashed the harness: {exc}")
                 traceback.print_exc(file=log_file)
 
+        # Grade against the full oracle — including checks the pipeline never
+        # saw. Public-pass + hidden-fail is the signature of hardcoded answers.
+        oracle_results = []
+        if checks and result and result.get("project_path"):
+            oracle_results = run_checks(result["project_path"], checks)
+            public = [r for r in oracle_results if not r.get("hidden")]
+            hidden = [r for r in oracle_results if r.get("hidden")]
+            gaming = gaming_suspected(oracle_results)
+            if report is not None:
+                m = report.setdefault("metrics", {})
+                m["oracle_public"] = f"{sum(r['passed'] for r in public)}/{len(public)}"
+                m["oracle_hidden"] = f"{sum(r['passed'] for r in hidden)}/{len(hidden)}"
+                m["oracle_gaming_suspected"] = gaming
+            print(f"[bench] {pid} oracle: public "
+                  f"{sum(r['passed'] for r in public)}/{len(public)}, hidden "
+                  f"{sum(r['passed'] for r in hidden)}/{len(hidden)}"
+                  + (" · GAMING SUSPECTED" if gaming else ""))
+
         # Per-problem artifact: everything needed to analyze this run alone.
         with open(os.path.join(problem_dir, "bench_result.json"), "w") as f:
             json.dump({
@@ -194,6 +221,7 @@ def run_bench(problems_path: str, output_root: str,
                 "harness_elapsed_s": round(time.time() - started, 2),
                 "result": result,
                 "telemetry": report,
+                "oracle_results": oracle_results,
                 "harness_error": error,
             }, f, indent=2, default=str)
 
