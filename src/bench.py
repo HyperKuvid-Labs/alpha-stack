@@ -9,9 +9,11 @@ Each problem is fully isolated: telemetry is reset between runs and one
 problem's crash never stops the batch.
 """
 
+import contextlib
 import csv
 import json
 import os
+import subprocess
 import time
 import traceback
 from typing import Any, Dict, List, Optional
@@ -24,24 +26,44 @@ SUMMARY_COLUMNS = [
     "cached_tokens", "cost_usd",
     "checklist_items", "planned_files", "files_generated", "files_failed",
     "blueprint_mode", "structural_issue_rounds",
-    "planner_rounds", "orchestrator_escalations", "file_retry_rounds",
+    "planner_rounds", "planner_tool_calls", "total_edits", "test_runs",
+    "rounds_to_green", "orchestrator_escalations", "file_retry_rounds",
     "project_path",
 ]
 
 
 def load_problems(path: str) -> List[Dict[str, Any]]:
-    """Parse a problems file: JSONL ({"id", "prompt"} per line) or JSON array."""
+    """Parse problems from JSONL ({"id", "prompt"} per line), a JSON array,
+    a directory of .txt files (one problem per file, id = filename stem), or
+    a single .txt file (the whole file is one prompt)."""
+    if os.path.isdir(path):
+        items: List[Any] = []
+        for name in sorted(os.listdir(path)):
+            if name.endswith(".txt"):
+                with open(os.path.join(path, name)) as f:
+                    prompt = f.read().strip()
+                if prompt:
+                    items.append({"id": os.path.splitext(name)[0], "prompt": prompt})
+        if not items:
+            raise ValueError(f"No non-empty .txt problems in directory: {path}")
+        return _normalize_problems(items)
+
     with open(path, "r") as f:
         text = f.read().strip()
     if not text:
         raise ValueError(f"Problems file is empty: {path}")
 
-    items: List[Any]
-    if text.startswith("["):
+    if path.endswith(".txt"):
+        items = [{"id": os.path.splitext(os.path.basename(path))[0], "prompt": text}]
+    elif text.startswith("["):
         items = json.loads(text)
     else:
         items = [json.loads(line) for line in text.splitlines() if line.strip()]
 
+    return _normalize_problems(items)
+
+
+def _normalize_problems(items: List[Any]) -> List[Dict[str, Any]]:
     problems = []
     for i, item in enumerate(items, 1):
         if isinstance(item, str):
@@ -51,6 +73,17 @@ def load_problems(path: str) -> List[Dict[str, Any]]:
         item.setdefault("id", f"problem_{i:02d}")
         problems.append(item)
     return problems
+
+
+def _git_revision() -> str:
+    try:
+        return subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        ).stdout.strip()
+    except Exception:
+        return ""
 
 
 def _summary_row(problem_id: str, result: Optional[Dict], report: Optional[Dict],
@@ -78,6 +111,10 @@ def _summary_row(problem_id: str, result: Optional[Dict], report: Optional[Dict]
             "blueprint_mode": metrics.get("blueprint_mode", ""),
             "structural_issue_rounds": len(metrics.get("structural_issues_per_round", []) or []),
             "planner_rounds": counters.get("planner_rounds", ""),
+            "planner_tool_calls": counters.get("planner_tool_calls", ""),
+            "total_edits": counters.get("total_edits", ""),
+            "test_runs": len(metrics.get("trials", []) or []),
+            "rounds_to_green": metrics.get("rounds_to_green", ""),
             "orchestrator_escalations": counters.get("orchestrator_escalations", ""),
             "file_retry_rounds": counters.get("file_retry_rounds", ""),
         })
@@ -113,23 +150,42 @@ def run_bench(problems_path: str, output_root: str,
         os.makedirs(problem_dir, exist_ok=True)
         print(f"\n[bench] ({idx}/{len(problems)}) {pid}: {problem['prompt'][:80]}...")
 
+        # Reproducibility manifest — the exact inputs this run received.
+        with open(os.path.join(problem_dir, "run_config.json"), "w") as f:
+            json.dump({
+                "problem": problem,
+                "provider": provider_name,
+                "model": model,
+                "alphastack_revision": _git_revision(),
+                "started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            }, f, indent=2)
+
         TELEMETRY.reset()
         result, report, error = None, None, None
         started = time.time()
-        try:
-            result = generate_project(
-                problem["prompt"],
-                problem_dir,
-                on_status=on_status,
-                provider_name=provider_name,
-                model_override=model,
-            )
-            report = TELEMETRY.last_report
-        except Exception as exc:
-            error = str(exc)
-            report = TELEMETRY.last_report
-            print(f"[bench] {pid} crashed the harness: {exc}")
-            traceback.print_exc()
+        log_path = os.path.join(problem_dir, "run.log")
+        with open(log_path, "w") as log_file:
+            def log_status(event_type, message, **kwargs):
+                log_file.write(f"[{event_type}] {message}\n")
+                log_file.flush()
+                if on_status:
+                    on_status(event_type, message, **kwargs)
+
+            try:
+                with contextlib.redirect_stdout(log_file), contextlib.redirect_stderr(log_file):
+                    result = generate_project(
+                        problem["prompt"],
+                        problem_dir,
+                        on_status=log_status,
+                        provider_name=provider_name,
+                        model_override=model,
+                    )
+                report = TELEMETRY.last_report
+            except Exception as exc:
+                error = str(exc)
+                report = TELEMETRY.last_report
+                print(f"[bench] {pid} crashed the harness: {exc}")
+                traceback.print_exc(file=log_file)
 
         # Per-problem artifact: everything needed to analyze this run alone.
         with open(os.path.join(problem_dir, "bench_result.json"), "w") as f:

@@ -105,3 +105,43 @@ def test_run_bench_isolates_and_aggregates(tmp_path, monkeypatch):
     assert (run_dir / "summary.csv").exists()
     per_problem = json.load(open(run_dir / "ok_one" / "bench_result.json"))
     assert per_problem["telemetry"]["totals"]["total_tokens"] == 15
+
+
+def test_trial_cycle_reconstruction(tmp_path):
+    """Planner edits between shell runs are grouped into trials:
+    run -> fail -> N edits -> run again, each boundary recorded."""
+    from src.utils.tools import ToolHandler
+
+    TELEMETRY.reset()
+    handler = ToolHandler(project_root=str(tmp_path), agent_name="planner")
+
+    (tmp_path / "a.py").write_text("x = 1\n")
+    handler.handle_function_call(
+        "update_file_code",
+        {"file_path": "a.py", "new_content": "x = 2\n", "change_description": "fix"},
+    )
+    handler.handle_function_call(
+        "update_file_code",
+        {"file_path": "a.py", "new_content": "x = 3\n", "change_description": "fix again"},
+    )
+    handler.handle_function_call("run_shell_command", {"command": "echo trial-one"})
+    handler.handle_function_call("run_shell_command", {"command": "echo trial-two"})
+    handler.cleanup()
+
+    trials = TELEMETRY.metrics["trials"]
+    assert len(trials) == 2
+    assert trials[0]["edits_since_last_run"] == 2
+    assert trials[1]["edits_since_last_run"] == 0
+    assert TELEMETRY.counters["total_edits"] == 2
+    assert TELEMETRY.counters["planner_tool_calls"] == 4
+    assert TELEMETRY.counters["tool_run_shell_command"] == 2
+
+
+def test_load_problems_txt_directory(tmp_path):
+    d = tmp_path / "problems"
+    d.mkdir()
+    (d / "one.txt").write_text("build one")
+    (d / "two.txt").write_text("build two")
+    probs = load_problems(str(d))
+    assert [p["id"] for p in probs] == ["one", "two"]
+    assert probs[0]["prompt"] == "build one"

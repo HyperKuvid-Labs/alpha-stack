@@ -232,6 +232,7 @@ class ToolHandler:
         self.last_test_output: str = ""
         self._gave_up: bool = False
         self.shell = ShellManager(cwd=project_root)
+        self._edits_since_run = 0  # edits between planner shell runs (trial cycle)
         self._web_cache = WebSearchCache()
         self._browse_cache: Dict[str, Dict[str, Any]] = {}
         self._browse_lock = threading.Lock()
@@ -259,9 +260,41 @@ class ToolHandler:
     def handle_function_call(self, function_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         self._log_tool_call(function_name, args)
         print(f"[tool_call] {function_name} args={list(args.keys())}")
+        self._telemetry_before(function_name, args)
         result = self._execute_tool(function_name, args)
+        self._telemetry_after(function_name, args, result)
         self._print_tool_result(function_name, result)
         return result
+
+    def _telemetry_before(self, function_name: str, args: Dict[str, Any]) -> None:
+        """Count planner tool usage and edits for the trial-cycle metrics."""
+        if self.agent_name != "planner":
+            return
+        from .telemetry import TELEMETRY
+        TELEMETRY.incr("planner_tool_calls")
+        TELEMETRY.incr(f"tool_{function_name}")
+        if function_name in ("update_file_code", "patch_file"):
+            self._edits_since_run += 1
+            TELEMETRY.incr("total_edits")
+        elif function_name == "batch_edit_files":
+            n = max(len(args.get("tasks") or []), 1)
+            self._edits_since_run += n
+            TELEMETRY.incr("total_edits", n)
+
+    def _telemetry_after(self, function_name: str, args: Dict[str, Any], result: Any) -> None:
+        """Each planner shell run is a trial boundary: record how many edits
+        led up to it and how it exited — the run/fail/edit/re-run trajectory."""
+        if self.agent_name != "planner" or function_name != "run_shell_command":
+            return
+        from .telemetry import TELEMETRY
+        exit_code = result.get("exit_code") if isinstance(result, dict) else None
+        TELEMETRY.append_metric("trials", {
+            "command": str(args.get("command", ""))[:120],
+            "edits_since_last_run": self._edits_since_run,
+            "exit_code": exit_code,
+            "stalled": bool(isinstance(result, dict) and result.get("job_id") and exit_code is None),
+        })
+        self._edits_since_run = 0
 
     def _execute_tool(self, function_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         if function_name == "get_file_code":
@@ -435,6 +468,8 @@ class ToolHandler:
         TELEMETRY.incr("runtime_verification_accepted")
         TELEMETRY.set_metric("runtime_verification", runtime_verification.strip()[:2000])
         TELEMETRY.set_metric("completion_reason", reason[:500])
+        TELEMETRY.set_metric("rounds_to_green", TELEMETRY.counters.get("planner_rounds", 0))
+        TELEMETRY.set_metric("trials_to_green", len(TELEMETRY.metrics.get("trials", []) or []))
 
         self.tests_passed = True
         print(f"\n[✓] AGENT MARKED COMPLETE: {reason}\n")
