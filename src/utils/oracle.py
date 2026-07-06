@@ -40,6 +40,7 @@ def run_checks(project_dir: str, checks: List[Dict[str, Any]]) -> List[Dict[str,
             proc = subprocess.run(
                 cmd, shell=True, cwd=project_dir,
                 capture_output=True, text=True, timeout=CHECK_TIMEOUT_S,
+                input=check.get("stdin"),
             )
             output = (proc.stdout or "") + (proc.stderr or "")
             exit_ok = expected_exit is None or proc.returncode == expected_exit
@@ -47,6 +48,7 @@ def run_checks(project_dir: str, checks: List[Dict[str, Any]]) -> List[Dict[str,
             results.append({
                 "name": name,
                 "cmd": cmd,
+                "stdin": check.get("stdin"),
                 "hidden": bool(check.get("hidden")),
                 "passed": exit_ok and output_ok,
                 "exit_code": proc.returncode,
@@ -81,6 +83,22 @@ def format_failures_for_agent(results: List[Dict[str, Any]]) -> str:
             lines.append(f"    expected output to contain: {r['expected_output']!r}")
             lines.append(f"    actual output (tail): {r.get('output_tail', '')[-300:]!r}")
     return "\n".join(lines)
+
+
+def verdict_for_agent(results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Judge-style verdict: pass/fail counts plus the failing cases' inputs
+    (command and stdin) so the agent can reproduce them — but NEVER the
+    expected outputs. With no target values in the conversation, hardcoding
+    answers is impossible rather than merely detectable."""
+    passed = sum(1 for r in results if r.get("passed"))
+    failing = [
+        {"name": r.get("name"), "cmd": r.get("cmd"),
+         **({"stdin": r["stdin"]} if r.get("stdin") else {}),
+         **({"error": r["error"]} if r.get("error") else {})}
+        for r in results if not r.get("passed")
+    ]
+    return {"passed": passed, "failed": len(results) - passed,
+            "total": len(results), "failing_cases": failing}
 
 
 def gaming_suspected(results: List[Dict[str, Any]]) -> bool:

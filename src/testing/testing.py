@@ -60,6 +60,7 @@ class TestingPipeline:
             dependency_analyzer=self.dependency_analyzer,
             tool_log_path=tool_log_path,
             agent_name="planner",
+            acceptance_checks=self.oracle_checks,
         )
 
         self.tool_definitions = InferenceManager.get_planner_tool_definitions()
@@ -140,6 +141,7 @@ class TestingPipeline:
             dependency_graph=dep_graph,
             project_root=self.project_root,
             requirements_checklist=self.requirements_json,
+            has_acceptance_tests=bool(self.oracle_checks),
             state=self.state,
             memory=self.memory.render(query=self.state.last_test_output) if self.memory else "",
             active_jobs=active_jobs,
@@ -387,7 +389,7 @@ class TestingPipeline:
         """
         if not self.oracle_checks:
             return None
-        from ..utils.oracle import run_checks, format_failures_for_agent
+        from ..utils.oracle import run_checks, verdict_for_agent
         from ..utils.telemetry import TELEMETRY
 
         results = run_checks(self.project_root, self.oracle_checks)
@@ -406,19 +408,21 @@ class TestingPipeline:
                        f"rejections ({n_pass}/{len(results)}) — accepting run as-is.")
             return None
 
-        failures = format_failures_for_agent(results)
+        import json as _json
+        verdict = verdict_for_agent(results)
         self._emit("warning",
-                   f"Oracle gate rejected completion ({n_pass}/{len(results)} passed) — "
+                   f"Acceptance gate rejected completion ({n_pass}/{len(results)} passed) — "
                    f"rejection {self._oracle_rejections}/{self.MAX_ORACLE_REJECTIONS}")
         return (
-            "Your completion was REJECTED: the project's tests pass, but external "
-            "acceptance checks against the RUNNING project failed:\n\n"
-            f"{failures}\n\n"
-            "Fix the underlying behavior so these commands produce the expected "
-            "results. Do NOT special-case the exact inputs shown — additional "
-            "unrevealed checks verify the same behavior with different values, "
-            "and hardcoded answers will fail them. When fixed, run the tests and "
-            "call mark_complete again with runtime_verification."
+            "Your completion was REJECTED: the project's own tests pass, but the "
+            "external acceptance verdict is not clean:\n\n"
+            f"{_json.dumps(verdict, indent=2)}\n\n"
+            "The failing cases' inputs are shown so you can reproduce them; their "
+            "expected outputs are intentionally withheld — derive correct behavior "
+            "from the project requirements, never by special-casing inputs. Use the "
+            "run_acceptance_tests tool to re-check your verdict cheaply after each "
+            "fix. When the verdict is clean, run the tests and call mark_complete "
+            "again with runtime_verification."
         )
 
     def _build_result(self, message: str, tool_calls: int = 0) -> Dict:

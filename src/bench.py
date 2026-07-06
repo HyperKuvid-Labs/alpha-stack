@@ -73,8 +73,39 @@ def _normalize_problems(items: List[Any]) -> List[Dict[str, Any]]:
         if not isinstance(item, dict) or not item.get("prompt"):
             raise ValueError(f"Problem #{i} has no 'prompt' field: {item!r}")
         item.setdefault("id", f"problem_{i:02d}")
+        _apply_interface(item)
         problems.append(item)
     return problems
+
+
+def _apply_interface(problem: Dict[str, Any]) -> None:
+    """Plug-and-play judge spec: an `interface` (the exact invocation the
+    project must expose) plus `tests` ({args, stdin, expected_output,
+    expected_exit, hidden}) are declared up-front — the interface line is
+    appended to the prompt so the project is BUILT to it, and each test is
+    synthesized into an oracle check (cmd = interface + args)."""
+    interface = str(problem.get("interface", "")).strip()
+    tests = problem.get("tests") or []
+    if interface:
+        problem["prompt"] = (
+            f"{problem['prompt'].rstrip()}\n\n"
+            f"IMPORTANT: the finished project MUST be invocable exactly as: "
+            f"`{interface}` (from the project root)."
+        )
+    if not tests:
+        return
+    checks = list(problem.get("checks") or [])
+    for i, case in enumerate(tests, 1):
+        cmd = f"{interface} {case.get('args', '')}".strip() if interface else str(case.get("cmd", "")).strip()
+        checks.append({
+            "name": case.get("name", f"case_{i:02d}"),
+            "cmd": cmd,
+            "stdin": case.get("stdin"),
+            "expected_output": case.get("expected_output"),
+            "expected_exit": case.get("expected_exit"),
+            "hidden": bool(case.get("hidden")),
+        })
+    problem["checks"] = checks
 
 
 def _git_revision() -> str:

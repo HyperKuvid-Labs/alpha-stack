@@ -480,6 +480,11 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
             },
         },
         {
+            "name": "run_acceptance_tests",
+            "description": "Run ALL externally-provided acceptance test cases against the real project and return ONLY a verdict: how many passed/failed, and the failing cases' inputs (never their expected outputs). Cheap to call — use it after every meaningful fix. mark_complete will be rejected while any case fails.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+        {
             "name": "mark_complete",
             "description": "Call this tool ONLY after (1) running the test suite and confirming all tests pass AND (2) actually running the project itself — executing the entry point / CLI commands / server endpoints with realistic inputs — and confirming it works. The pipeline will NOT stop until you call this. It rejects the call if runtime verification is missing.",
             "parameters": {
@@ -525,6 +530,7 @@ PLANNER_TOOL_NAMES = {
     "batch_read_files",
     "give_up",
     "mark_complete",
+    "run_acceptance_tests",
 }
 
 # Tools the executor is allowed to use (no recursion).

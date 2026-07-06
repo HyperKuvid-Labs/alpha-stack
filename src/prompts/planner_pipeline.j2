@@ -50,7 +50,7 @@ Below: your recent working buffer, distilled lessons from past runs, similar pas
 {% endif %}
 
 ## Environment
-Your `run_shell_command` calls execute inside a CubeSandbox microVM. The working directory is `/workspace`, which mirrors the project tree below. Use relative paths — they resolve against `/workspace`. No Docker is involved.
+Your `run_shell_command` calls execute on the host with the project root as the working directory. Use relative paths — they resolve against the project root. Stay inside the project directory: never modify files or install anything outside it (Python installs go in the project-local `.venv`).
 
 ## Project Info
 - **Project root**: `{{ project_root }}`
@@ -63,6 +63,11 @@ Figure out the right test command from the project structure:
 - **Rust** → `cargo test`
 
 For Python, NEVER `pip install` into the system or user environment — always create and use the project-local `.venv` shown above. Installing the project globally can shadow the user's own packages.
+
+{% if has_acceptance_tests %}
+## External Acceptance Tests (judge mode)
+This project has externally-provided acceptance test cases. You cannot see their expected outputs — only a verdict. Use the `run_acceptance_tests` tool after every meaningful fix: it runs ALL cases against the real project and returns how many passed/failed plus the failing cases' inputs so you can reproduce them. `mark_complete` is REJECTED while any case fails. Derive correct behavior from the requirements — special-casing the shown inputs is futile because expected outputs are withheld and verified externally.
+{% endif %}
 
 {% if requirements_checklist %}
 ## Acceptance Checklist (the user's actual requirements)

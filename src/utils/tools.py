@@ -220,7 +220,8 @@ class _ShellJob:
 class ToolHandler:
     def __init__(self, project_root: str, error_tracker=None,
                  dependency_analyzer=None, tool_log_path: Optional[str] = None,
-                 agent_name: Optional[str] = None):
+                 agent_name: Optional[str] = None,
+                 acceptance_checks: Optional[List[Dict[str, Any]]] = None):
         from .tool_call_log import ToolCallLogger
         from .web_search import WebSearchCache
         self.project_root = project_root
@@ -232,6 +233,7 @@ class ToolHandler:
         self.last_test_output: str = ""
         self._gave_up: bool = False
         self.shell = ShellManager(cwd=project_root)
+        self.acceptance_checks = acceptance_checks or []
         self._edits_since_run = 0  # edits between planner shell runs (trial cycle)
         self._web_cache = WebSearchCache()
         self._browse_cache: Dict[str, Dict[str, Any]] = {}
@@ -405,6 +407,8 @@ class ToolHandler:
             return self._batch_edit_files(tasks=args.get("tasks", []))
         elif function_name == "batch_read_files":
             return self._batch_read_files(file_paths=args.get("file_paths", []))
+        elif function_name == "run_acceptance_tests":
+            return self._run_acceptance_tests()
         elif function_name == "give_up":
             return self._give_up(reason=args.get("reason", "No reason provided."))
         elif function_name == "mark_complete":
@@ -422,6 +426,20 @@ class ToolHandler:
             self.tool_call_logger.log(self.agent_name, function_name, args)
         except Exception:
             pass
+
+    def _run_acceptance_tests(self) -> Dict[str, Any]:
+        """Judge tool: run every acceptance case, return verdict only —
+        counts plus failing inputs, never expected outputs."""
+        if not self.acceptance_checks:
+            return {"error": "No acceptance tests are configured for this project."}
+        from .oracle import run_checks, verdict_for_agent
+        from .telemetry import TELEMETRY
+        results = run_checks(self.project_root, self.acceptance_checks)
+        verdict = verdict_for_agent(results)
+        TELEMETRY.incr("acceptance_tool_runs")
+        TELEMETRY.append_metric("acceptance_verdicts", {
+            "passed": verdict["passed"], "total": verdict["total"]})
+        return verdict
 
     def _give_up(self, reason: str) -> Dict[str, Any]:
         """Stop everything and signal that the agent has given up."""
