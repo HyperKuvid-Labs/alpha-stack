@@ -230,6 +230,7 @@ def cmd_bench(args):
             provider_name=getattr(args, "provider", None),
             model=getattr(args, "model", None),
             limit=getattr(args, "limit", None),
+            verify_mode=getattr(args, "verify_mode", "inline"),
             on_status=status_handler,
         )
         return 0
@@ -587,6 +588,9 @@ def main():
                               help="Inference provider (default: configured default)")
     bench_parser.add_argument("-m", "--model", help="Model override, e.g. openai/gpt-5.4-nano")
     bench_parser.add_argument("--limit", type=int, help="Run only the first N problems")
+    bench_parser.add_argument("--verify-mode", dest="verify_mode", choices=["inline", "examiner"],
+                              default="inline",
+                              help="inline: planner self-verifies runtime (default); examiner: an independent agent reviews the finished project")
     bench_parser.set_defaults(func=cmd_bench)
 
 

@@ -165,6 +165,7 @@ def run_bench(problems_path: str, output_root: str,
               provider_name: Optional[str] = None,
               model: Optional[str] = None,
               limit: Optional[int] = None,
+              verify_mode: str = "inline",
               on_status=None) -> Dict[str, Any]:
     from .generator import generate_project
 
@@ -192,6 +193,7 @@ def run_bench(problems_path: str, output_root: str,
                 "problem": problem,
                 "provider": provider_name,
                 "model": model,
+                "verify_mode": verify_mode,
                 "alphastack_revision": _git_revision(),
                 "started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             }, f, indent=2)
@@ -219,6 +221,7 @@ def run_bench(problems_path: str, output_root: str,
                         provider_name=provider_name,
                         model_override=model,
                         oracle_checks=public_checks,
+                        verify_mode=verify_mode,
                     )
                 report = TELEMETRY.last_report
             except Exception as exc:
@@ -263,6 +266,7 @@ def run_bench(problems_path: str, output_root: str,
 
     summary = {
         "run_id": run_id,
+        "verify_mode": verify_mode,
         "problems_file": os.path.abspath(problems_path),
         "provider": provider_name,
         "model": model,

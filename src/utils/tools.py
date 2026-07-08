@@ -221,7 +221,8 @@ class ToolHandler:
     def __init__(self, project_root: str, error_tracker=None,
                  dependency_analyzer=None, tool_log_path: Optional[str] = None,
                  agent_name: Optional[str] = None,
-                 acceptance_checks: Optional[List[Dict[str, Any]]] = None):
+                 acceptance_checks: Optional[List[Dict[str, Any]]] = None,
+                 require_runtime_verification: bool = True):
         from .tool_call_log import ToolCallLogger
         from .web_search import WebSearchCache
         self.project_root = project_root
@@ -234,6 +235,7 @@ class ToolHandler:
         self._gave_up: bool = False
         self.shell = ShellManager(cwd=project_root)
         self.acceptance_checks = acceptance_checks or []
+        self.require_runtime_verification = require_runtime_verification
         self._edits_since_run = 0  # edits between planner shell runs (trial cycle)
         self._web_cache = WebSearchCache()
         self._browse_cache: Dict[str, Dict[str, Any]] = {}
@@ -470,7 +472,7 @@ class ToolHandler:
                 ),
             }
 
-        if len((runtime_verification or "").strip()) < 40:
+        if self.require_runtime_verification and len((runtime_verification or "").strip()) < 40:
             return {
                 "success": False,
                 "error": (

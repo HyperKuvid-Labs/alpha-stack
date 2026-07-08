@@ -110,3 +110,26 @@ def test_acceptance_tool_returns_verdict_only(tmp_path):
     assert verdict["passed"] == 1 and verdict["total"] == 2
     assert "HIDDEN-EXPECTED" not in str(verdict)
     assert TELEMETRY.counters["acceptance_tool_runs"] == 1
+
+
+def test_examiner_mode_relaxes_runtime_verification(tmp_path):
+    from src.utils.tools import ToolHandler
+    handler = ToolHandler(project_root=str(tmp_path), agent_name="planner",
+                          require_runtime_verification=False)
+    handler.last_test_output = "===== 3 passed ====="
+    result = handler.handle_function_call("mark_complete", {"reason": "tests pass"})
+    assert result["success"] is True
+
+
+def test_examiner_prompt_renders():
+    from src.utils.prompt_manager import PromptManager
+    rendered = PromptManager().render(
+        "examiner_agent.j2",
+        user_prompt="a fizzbuzz CLI",
+        requirements_checklist='[{"id": "R1"}]',
+        folder_structure="x/\nmain.py",
+        has_acceptance_tests=True,
+    )
+    assert "independent examiner" in rendered
+    assert "run_acceptance_tests" in rendered
+    assert "APPROVE" in rendered and "REJECT" in rendered

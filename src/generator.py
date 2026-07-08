@@ -1367,6 +1367,7 @@ def generate_project(
     provider_name: Optional[str] = None,
     model_override: Optional[str] = None,
     oracle_checks: Optional[list] = None,
+    verify_mode: str = "inline",
     **_unused_kwargs,
 ):
     from .utils.dependencies import DependencyAnalyzer
@@ -1673,6 +1674,8 @@ def generate_project(
         provider_name=provider_name,
         requirements_json=requirements_json,
         oracle_checks=oracle_checks,
+        verify_mode=verify_mode,
+        user_prompt=user_prompt,
     )
 
     end_time = time.time()

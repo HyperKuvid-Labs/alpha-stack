@@ -34,6 +34,8 @@ class TestingPipeline:
         provider_name: Optional[str] = None,
         requirements_json: Optional[str] = None,
         oracle_checks: Optional[list] = None,
+        verify_mode: str = "inline",
+        user_prompt: Optional[str] = None,
     ):
         self.project_root = project_root
         self.software_blueprint = software_blueprint
@@ -44,6 +46,8 @@ class TestingPipeline:
         self.on_status = on_status
         self.requirements_json = requirements_json
         self.oracle_checks = oracle_checks or []
+        self.verify_mode = verify_mode if verify_mode in ("inline", "examiner") else "inline"
+        self.user_prompt = user_prompt or ""
 
         self.provider = InferenceManager.get_active_provider()
         self.provider_name = InferenceManager._active_provider_name or ""
@@ -61,6 +65,7 @@ class TestingPipeline:
             tool_log_path=tool_log_path,
             agent_name="planner",
             acceptance_checks=self.oracle_checks,
+            require_runtime_verification=(self.verify_mode == "inline"),
         )
 
         self.tool_definitions = InferenceManager.get_planner_tool_definitions()
@@ -363,6 +368,14 @@ class TestingPipeline:
                     messages.append(self.provider.create_initial_message(oracle_feedback)[0])
                     continue
 
+                if self.verify_mode == "examiner":
+                    examiner_feedback = self._examiner_gate()
+                    if examiner_feedback is not None:
+                        self.tool_handler.tests_passed = False
+                        self._sync_state()
+                        messages.append(self.provider.create_initial_message(examiner_feedback)[0])
+                        continue
+
                 self._emit("success", "All tests passing")
                 try:
                     self.memory.notify_success()
@@ -378,6 +391,80 @@ class TestingPipeline:
         return self._build_result(msg, tool_calls_made)
 
     MAX_ORACLE_REJECTIONS = 3
+    MAX_EXAMINER_REJECTIONS = 2
+
+    def _examiner_gate(self) -> Optional[str]:
+        """Outer verification: an independent agent uses the finished project
+        and approves or reports defects. Returns None on approval (or when the
+        rejection budget is exhausted); otherwise the feedback for the planner.
+        """
+        from ..generator import _run_agentic_loop
+        from ..utils.telemetry import TELEMETRY
+        from ..utils.tool_definitions import get_tool_definitions
+
+        self._examiner_rejections = getattr(self, "_examiner_rejections", 0)
+        if self._examiner_rejections >= self.MAX_EXAMINER_REJECTIONS:
+            self._emit("warning", "Examiner rejection budget exhausted — accepting run as-is.")
+            return None
+
+        self._emit("step", "Examiner agent reviewing the finished project...")
+        examiner_tools = [
+            t for t in get_tool_definitions()
+            if t["name"] in {"run_shell_command", "get_file_code", "run_acceptance_tests"}
+        ]
+        examiner_handler = ToolHandler(
+            self.project_root,
+            agent_name="examiner",
+            acceptance_checks=self.oracle_checks,
+        )
+        system_prompt = self.pm.render(
+            "examiner_agent.j2",
+            user_prompt=self.user_prompt,
+            requirements_checklist=self.requirements_json,
+            folder_structure=self.folder_structure,
+            has_acceptance_tests=bool(self.oracle_checks),
+        )
+
+        def execute_tool(name, args):
+            result = examiner_handler.handle_function_call(name, args)
+            import json as _json
+            return _json.dumps(result, default=str) if isinstance(result, dict) else str(result)
+
+        try:
+            verdict = _run_agentic_loop(
+                system_prompt=system_prompt,
+                user_message="Examine the project now and deliver your verdict.",
+                tools=examiner_tools,
+                execute_tool=execute_tool,
+                max_turns=14,
+            )
+        finally:
+            examiner_handler.cleanup()
+
+        TELEMETRY.incr("examiner_reviews")
+        verdict = (verdict or "").strip()
+        TELEMETRY.append_metric("examiner_verdicts", verdict[:800])
+
+        if not verdict or verdict.upper().startswith("APPROVE"):
+            if verdict:
+                self._emit("success", f"Examiner: {verdict[:120]}")
+            else:
+                self._emit("warning", "Examiner returned no verdict — accepting.")
+            TELEMETRY.set_metric("examiner_approved", True)
+            return None
+
+        self._examiner_rejections += 1
+        TELEMETRY.incr("examiner_rejections")
+        TELEMETRY.set_metric("examiner_approved", False)
+        self._emit("warning",
+                   f"Examiner rejected the project (rejection "
+                   f"{self._examiner_rejections}/{self.MAX_EXAMINER_REJECTIONS})")
+        return (
+            "An independent examiner used your finished project and found defects "
+            "(each cites a command they actually ran):\n\n"
+            f"{verdict}\n\n"
+            "Fix these behaviors, re-run the tests, then call mark_complete again."
+        )
 
     def _run_oracle_gate(self) -> Optional[str]:
         """Run public oracle checks after the planner claims completion.
@@ -457,6 +544,8 @@ def run_testing_pipeline(
     provider_name: Optional[str] = None,
     requirements_json: Optional[str] = None,
     oracle_checks: Optional[list] = None,
+    verify_mode: str = "inline",
+    user_prompt: Optional[str] = None,
 ) -> Dict:
     pipeline = TestingPipeline(
         project_root=project_root,
@@ -471,5 +560,7 @@ def run_testing_pipeline(
         provider_name=provider_name,
         requirements_json=requirements_json,
         oracle_checks=oracle_checks,
+        verify_mode=verify_mode,
+        user_prompt=user_prompt,
     )
     return pipeline.run_testing_pipeline()
