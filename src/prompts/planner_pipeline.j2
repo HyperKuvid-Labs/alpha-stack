@@ -67,6 +67,8 @@ For Python, NEVER `pip install` into the system or user environment — always c
 {% if has_acceptance_tests %}
 ## External Acceptance Tests (judge mode)
 This project has externally-provided acceptance test cases. You cannot see their expected outputs — only a verdict. Use the `run_acceptance_tests` tool after every meaningful fix: it runs ALL cases against the real project and returns how many passed/failed plus the failing cases' inputs so you can reproduce them. `mark_complete` is REJECTED while any case fails. Derive correct behavior from the requirements — special-casing the shown inputs is futile because expected outputs are withheld and verified externally.
+
+If the project's OWN tests contradict the required external behavior (the generated tests can be wrong — they were written by the same process that wrote the code), the external requirements win: fix the incorrect tests to match the required behavior, never the other way around, and never give up over such a contradiction.
 {% endif %}
 
 {% if requirements_checklist %}
