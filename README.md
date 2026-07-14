@@ -5,10 +5,6 @@
 # AlphaStack
 
 **AI-powered project generator that transforms natural language descriptions into complete, production-ready codebases, validated inside a CubeSandbox microVM.**
-
-> 📄 **Paper submitted to ICML 2026**  
-> A novel approach to autonomous code generation using multi-agent systems with iterative self-healing and comprehensive validation across diverse programming paradigms.
-
 ---
 
 ## 🎯 Key Features
@@ -391,14 +387,3 @@ MIT License - see [LICENSE](LICENSE) file for details
 - **Evaluation Suite**: [src/prompts/eval/](src/prompts/eval/)
 
 ---
-
-## 📧 Contact
-
-For research collaborations or questions about the ICML 2026 submission, please open an issue or contact the AlphaStack Team.
-
----
-
-<div align="center">
-  <p><strong>AlphaStack</strong> - Transforming Ideas into Code</p>
-  <p><em>Submitted to ICML 2026</em></p>
-</div>
