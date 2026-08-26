@@ -91,8 +91,7 @@ graptLR:> LR
 
 **Requirements:** 
 - Python 3.11+
-- [Google Gemini API Key](https://makersuite.google.com/app/apikey)
-- [CubeSandbox](https://github.com/TencentCloud/CubeSandbox) (optional, for sandboxed validation)
+- An API key for [Google Gemini](https://makersuite.google.com/app/apikey), OpenRouter, or OpenAI
 
 ```bash
 # Clone and install
