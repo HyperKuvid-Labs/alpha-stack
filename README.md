@@ -90,7 +90,7 @@ graptLR:> LR
 ## Installation
 
 **Requirements:** 
-- Python 3.9+
+- Python 3.11+
 - [Google Gemini API Key](https://makersuite.google.com/app/apikey)
 - [CubeSandbox](https://github.com/TencentCloud/CubeSandbox) (optional, for sandboxed validation)
 
@@ -98,7 +98,7 @@ graptLR:> LR
 # Clone and install
 git clone https://github.com/HyperKuvid-Labs/alpha-stack.git
 cd alpha-stack
-pip install .
+pip install -e .
 
 # Configure API key
 alphastack setup
