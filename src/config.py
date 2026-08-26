@@ -6,8 +6,6 @@ from typing import Any, Dict, Optional, Tuple
 CONFIG_DIR = Path.home() / ".alphastack"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
-DEFAULT_SANDBOX_API_URL = "http://127.0.0.1:3000"
-DEFAULT_SANDBOX_API_KEY = "dummy"
 
 # Map alpha-stack provider names → dgat provider names.
 # dgat only knows: vllm, ollama, openai, anthropic, openrouter.
@@ -98,59 +96,6 @@ def set_provider_api_key(provider: str, api_key: str) -> bool:
     except Exception:
         pass
     return ok
-
-
-def get_sandbox_config() -> Dict[str, Optional[str]]:
-    """Return CubeSandbox connection config.
-
-    Resolution order: environment variables → ~/.alphastack/config.json under
-    the ``sandbox`` key → built-in defaults for api_url/api_key.
-    ``template_id`` has no default; it must be configured before sandboxed
-    execution can be used.
-    """
-    cfg = load_config()
-    sandbox_cfg = cfg.get("sandbox") if isinstance(cfg.get("sandbox"), dict) else {}
-
-    api_url = (
-        os.environ.get("E2B_API_URL")
-        or sandbox_cfg.get("api_url")
-        or DEFAULT_SANDBOX_API_URL
-    )
-    api_key = (
-        os.environ.get("E2B_API_KEY")
-        or sandbox_cfg.get("api_key")
-        or DEFAULT_SANDBOX_API_KEY
-    )
-    template_id = (
-        os.environ.get("CUBE_TEMPLATE_ID")
-        or sandbox_cfg.get("template_id")
-        or None
-    )
-
-    return {
-        "api_url": api_url,
-        "api_key": api_key,
-        "template_id": template_id,
-    }
-
-
-def set_sandbox_template(
-    template_id: str,
-    api_url: Optional[str] = None,
-    api_key: Optional[str] = None,
-) -> bool:
-    """Persist CubeSandbox template + optional connection details to config."""
-    if not template_id:
-        return False
-    cfg = load_config()
-    sandbox_cfg = cfg.get("sandbox") if isinstance(cfg.get("sandbox"), dict) else {}
-    sandbox_cfg["template_id"] = template_id
-    if api_url:
-        sandbox_cfg["api_url"] = api_url
-    if api_key:
-        sandbox_cfg["api_key"] = api_key
-    cfg["sandbox"] = sandbox_cfg
-    return save_config(cfg)
 
 
 def _load_providers_json() -> Dict[str, Any]:

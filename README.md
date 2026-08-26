@@ -5,27 +5,15 @@ AI project generator experiment — natural language in, validated codebase out.
 ## Setup
 
 ```bash
-git clone https://github.com/AdityaKaleeswarGK/Nuke.git
-cd Nuke
-pip install .
+git clone https://github.com/HyperKuvid-Labs/alpha-stack.git
+cd alpha-stack
+pip install -e .
 
 # Configure API keys (interactive)
 alphastack setup
 ```
 
-**Optional — CubeSandbox for sandboxed validation:**
-
-```bash
-curl -sL https://github.com/tencentcloud/CubeSandbox/raw/master/deploy/one-click/online-install.sh | bash
-
-cubemastercli tpl create-from-image \
-    --image ccr.ccs.tencentyun.com/ags-image/sandbox-code:latest \
-    --writable-layer-size 1G
-
-alphastack sandbox --template-id <id>
-```
-
-If no sandbox template is configured, shell commands fall back to running on the host.
+Validation runs on the host: test installs go into each generated project's local `.venv`, never your global environment.
 
 ## Running
 
