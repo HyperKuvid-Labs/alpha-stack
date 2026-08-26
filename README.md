@@ -41,28 +41,31 @@
 ## How It Works
 
 ```mermaid
-graptLR:> LR
-    A[Natural Language Input] --> B[AI Analysis & Blueprint]
-    B --> C[Multi-File Code Generation]
-    C --> D[Dependency Resolution]
-    D --> E[CubeSandbox Provisioning]
-    E --> F[Build Validation]
-    F --> G{Build Success?}
-    G -->|No| H[Planning Agent]
-    H --> I[Correction Agent]
-    I --> F
-    G -->|Yes| J[Test Execution]
-    J --> K{Tests Pass?}
-    K -->|No| H
-    K -->|Yes| L[Production-Ready Project]
+flowchart LR
+    A["Natural-language prompt"] --> B["Extract requirements"]
+    B --> C["Plan and critique architecture"]
+    C --> D["Generate and validate blueprint"]
+    D --> E["Generate files in parallel"]
+    E --> F["Analyze dependency graph"]
+    F --> G["Run builds and tests locally"]
+    G --> H{"Tests pass?"}
+    H -->|No| I["Planner diagnoses and edits files"]
+    I --> G
+    H -->|Yes| J["Run optional acceptance checks"]
+    J --> K{"Accepted?"}
+    K -->|No| I
+    K -->|Yes| L["Run optional examiner review"]
+    L --> M{"Approved?"}
+    M -->|No| I
+    M -->|Yes| N["Verified project and telemetry"]
 
     style A fill:#4A90E2,stroke:#2E5C8A,stroke-width:2px,color:#fff
-    style B fill:#9B59B6,stroke:#6C3483,stroke-width:2px,color:#fff
-    style C fill:#E67E22,stroke:#A04000,stroke-width:2px,color:#fff
-    style D fill:#3498DB,stroke:#1F618D,stroke-width:2px,color:#fff
-    style E fill:#1ABC9C,stroke:#117A65,stroke-width:2px,color:#fff
-    style F fill:#E74C3C,stroke:#922B21,stroke-width:2px,color:#fff
-    style L fill:#27AE60,stroke:#186A3B,stroke-width:2px,color:#fff
+    style C fill:#9B59B6,stroke:#6C3483,stroke-width:2px,color:#fff
+    style E fill:#E67E22,stroke:#A04000,stroke-width:2px,color:#fff
+    style F fill:#3498DB,stroke:#1F618D,stroke-width:2px,color:#fff
+    style G fill:#1ABC9C,stroke:#117A65,stroke-width:2px,color:#fff
+    style I fill:#E74C3C,stroke:#922B21,stroke-width:2px,color:#fff
+    style N fill:#27AE60,stroke:#186A3B,stroke-width:2px,color:#fff
 ```
 
 ### Architecture Components
